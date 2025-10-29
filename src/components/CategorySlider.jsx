@@ -8,39 +8,39 @@ const CategorySlider = () => {
   const sliderRef = useRef(null);
 
   const categories = [
-    {
-      id: 1,
-      name: 'Benih-Benih',
-      image: '/images/products/benih-cabai.png',
-      description: 'Benih tanaman berkualitas',
-      link: '/products?category=benih',
-      color: 'bg-green-500'
-    },
-    {
-      id: 2,
-      name: 'Pupuk',
-      image: '/images/products/pupuk-organik.png',
-      description: 'Pupuk organik & kimia',
-      link: '/products?category=pupuk',
-      color: 'bg-yellow-500'
-    },
-    {
-      id: 3,
-      name: 'Tanaman',
-      image: '/images/products/anggrek-bulan.png',
-      description: 'Berbagai jenis tanaman',
-      link: '/products?category=tanaman',
-      color: 'bg-purple-500'
-    },
-    {
-      id: 4,
-      name: 'Pot',
-      image: '/images/products/pot-plastik.png',
-      description: 'Berbagai jenis pot',
-      link: '/products?category=pot',
-      color: 'bg-red-500'
-    },
-  ];
+  {
+    id: 1,
+    name: 'Benih-Benih',
+    image: 'https://ycwcbxbytdtmluzalofn.supabase.co/storage/v1/object/public/products/benih-cabai.png',
+    description: 'Benih tanaman berkualitas',
+    link: '/products?category=benih',
+    color: 'bg-green-500'
+  },
+  {
+    id: 2,
+    name: 'Pupuk',
+    image: 'https://ycwcbxbytdtmluzalofn.supabase.co/storage/v1/object/public/products/pupuk-organik.png',
+    description: 'Pupuk organik & kimia',
+    link: '/products?category=pupuk',
+    color: 'bg-yellow-500'
+  },
+  {
+    id: 3,
+    name: 'Tanaman',
+    image: 'https://ycwcbxbytdtmluzalofn.supabase.co/storage/v1/object/public/products/anggrek-bulan.png',
+    description: 'Berbagai jenis tanaman',
+    link: '/products?category=tanaman',
+    color: 'bg-purple-500'
+  },
+  {
+    id: 4,
+    name: 'Pot',
+    image: 'https://ycwcbxbytdtmluzalofn.supabase.co/storage/v1/object/public/products/pot-keramik.png',
+    description: 'Berbagai jenis pot',
+    link: '/products?category=pot',
+    color: 'bg-red-500'
+  },
+];
 
   // Calculate visible items based on screen size
   useEffect(() => {
