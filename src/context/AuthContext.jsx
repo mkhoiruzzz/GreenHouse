@@ -1,5 +1,7 @@
+
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-toastify';
+import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext();
 
@@ -19,176 +21,308 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     checkAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event, session);
+        
+        if (session) {
+          const userData = session.user;
+          setUser(userData);
+          setIsAuthenticated(true);
+          setIsAdmin(userData.user_metadata?.role === 'admin');
+          localStorage.setItem('token', session.access_token);
+          localStorage.setItem('user', JSON.stringify(userData));
+        } else {
+          setUser(null);
+          setIsAuthenticated(false);
+          setIsAdmin(false);
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+        }
+        setLoading(false);
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const checkAuth = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const savedUser = localStorage.getItem('user');
+      const { data: { session }, error } = await supabase.auth.getSession();
       
-      if (savedUser) {
-        const userData = JSON.parse(savedUser);
+      if (error) throw error;
+      
+      if (session) {
+        const userData = session.user;
         setUser(userData);
         setIsAuthenticated(true);
-        setIsAdmin(userData.role === 'admin');
-      } else if (token) {
-        // Jika ada token tapi tidak ada user di localStorage
-        const response = await fetch('http://localhost:5000/api/auth/profile', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          setUser(data.user);
-          setIsAuthenticated(true);
-          setIsAdmin(data.user.role === 'admin');
-          localStorage.setItem('user', JSON.stringify(data.user));
-        } else {
-          localStorage.removeItem('token');
-        }
+        setIsAdmin(userData.user_metadata?.role === 'admin');
+        localStorage.setItem('token', session.access_token);
+        localStorage.setItem('user', JSON.stringify(userData));
+      } else {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
       }
     } catch (error) {
       console.error('Auth check error:', error);
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
     } finally {
       setLoading(false);
     }
   };
 
-  const login = async (email, password) => {
-    try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        setUser(data.user);
-        setIsAuthenticated(true);
-        setIsAdmin(data.user.role === 'admin');
-        toast.success('Login berhasil!');
-        return { success: true };
-      } else {
-        toast.error(data.message);
-        return { success: false, message: data.message };
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      toast.error('Terjadi kesalahan saat login');
-      return { success: false, message: 'Terjadi kesalahan' };
-    }
+  // ✅ FIX: Validasi email sebelum login/register
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
   };
 
-  const updateUser = async (userData) => {
+  const login = async (email, password) => {
     try {
-      // Update state user
-      const updatedUser = { ...user, ...userData };
-      setUser(updatedUser);
+      setLoading(true);
       
-      // Update localStorage
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      
-      // Jika ada API, uncomment kode di bawah
-      /*
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/auth/profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(userData)
+      // ✅ FIX: Validasi email format
+      if (!validateEmail(email)) {
+        toast.error('Format email tidak valid');
+        return { success: false, message: 'Format email tidak valid' };
+      }
+
+      // ✅ FIX: Validasi input
+      if (!email || !password) {
+        toast.error('Email dan password wajib diisi');
+        return { success: false, message: 'Email dan password wajib diisi' };
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(), // ✅ FIX: Convert to lowercase
+        password: password
       });
 
-      const data = await response.json();
-      if (data.success) {
-        setUser(data.user);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        return { success: true };
-      } else {
-        throw new Error(data.message);
+      if (error) {
+        console.error('Login error:', error);
+        
+        // ✅ FIX: Handle berbagai jenis error
+        if (error.message.includes('Email not confirmed')) {
+          toast.error('Email belum dikonfirmasi. Silakan cek email Anda.');
+          return { 
+            success: false, 
+            message: 'Email belum dikonfirmasi',
+            needsConfirmation: true 
+          };
+        } else if (error.message.includes('Invalid login credentials')) {
+          toast.error('Email atau password salah');
+          return { 
+            success: false, 
+            message: 'Email atau password salah' 
+          };
+        } else {
+          toast.error(error.message);
+          return { success: false, message: error.message };
+        }
       }
-      */
-      
-      return { success: true };
+
+      if (data.session && data.user) {
+        const userData = data.user;
+        setUser(userData);
+        setIsAuthenticated(true);
+        setIsAdmin(userData.user_metadata?.role === 'admin');
+        localStorage.setItem('token', data.session.access_token);
+        localStorage.setItem('user', JSON.stringify(userData));
+        
+        toast.success('Login berhasil!');
+        return { success: true, user: userData };
+      }
+
+      return { success: false, message: 'Login gagal' };
+
     } catch (error) {
-      console.error('Update user error:', error);
-      return { success: false, message: error.message };
+      console.error('Login exception:', error);
+      toast.error('Terjadi kesalahan saat login');
+      return { success: false, message: 'Terjadi kesalahan' };
+    } finally {
+      setLoading(false);
     }
   };
 
   const register = async (userData) => {
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(userData),
+      setLoading(true);
+      
+      // ✅ FIX: Validasi lengkap
+      if (!userData.email || !userData.password || !userData.username) {
+        toast.error('Email, username, dan password wajib diisi');
+        return { success: false, message: 'Data wajib belum lengkap' };
+      }
+
+      if (!validateEmail(userData.email)) {
+        toast.error('Format email tidak valid');
+        return { success: false, message: 'Format email tidak valid' };
+      }
+
+      if (userData.password.length < 6) {
+        toast.error('Password minimal 6 karakter');
+        return { success: false, message: 'Password minimal 6 karakter' };
+      }
+
+      // ✅ FIX: Gunakan email lowercase
+      const email = userData.email.trim().toLowerCase();
+
+      const { data, error } = await supabase.auth.signUp({
+        email: email,
+        password: userData.password,
+        options: {
+          data: {
+            username: userData.username,
+            full_name: userData.nama_lengkap || '',
+            phone: userData.no_telepon || '',
+            address: userData.alamat || '',
+            city: userData.kota || '',
+            province: userData.provinsi || '',
+            role: 'customer'
+          },
+          emailRedirectTo: `${window.location.origin}/login`
+        }
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        toast.success('Registrasi berhasil! Silakan login.');
-        return { success: true };
-      } else {
-        toast.error(data.message);
-        return { success: false, message: data.message };
+      if (error) {
+        console.error('Register error:', error);
+        
+        // ✅ FIX: Handle berbagai error register
+        if (error.message.includes('already registered')) {
+          toast.error('Email sudah terdaftar. Silakan gunakan email lain.');
+          return { success: false, message: 'Email sudah terdaftar' };
+        } else if (error.message.includes('invalid')) {
+          toast.error('Format email tidak valid');
+          return { success: false, message: 'Format email tidak valid' };
+        } else {
+          toast.error(error.message);
+          return { success: false, message: error.message };
+        }
       }
+
+      // ✅ FIX: Buat profile dengan error handling yang lebih baik
+      if (data.user) {
+        try {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .upsert({
+              id: data.user.id,
+              email: email,
+              username: userData.username,
+              full_name: userData.nama_lengkap || '',
+              phone: userData.no_telepon || '',
+              address: userData.alamat || '',
+              city: userData.kota || '',
+              province: userData.provinsi || '',
+              role: 'customer'
+            }, {
+              onConflict: 'id'
+            });
+
+          if (profileError) {
+            console.warn('Profile creation warning:', profileError.message);
+            // Lanjutkan saja, tidak critical
+          }
+        } catch (profileError) {
+          console.warn('Profile creation failed:', profileError);
+        }
+      }
+
+      // ✅ FIX: Handle case email sudah terdaftar
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        toast.error('Email sudah terdaftar');
+        return { success: false, message: 'Email sudah terdaftar' };
+      }
+
+      toast.success('Registrasi berhasil! Silakan cek email untuk verifikasi.');
+      return { success: true, user: data.user };
+
     } catch (error) {
-      console.error('Register error:', error);
+      console.error('Register exception:', error);
       toast.error('Terjadi kesalahan saat registrasi');
       return { success: false, message: 'Terjadi kesalahan' };
+    } finally {
+      setLoading(false);
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
-    setIsAuthenticated(false);
-    setIsAdmin(false);
-    toast.info('Anda telah logout');
+  const resendConfirmationEmail = async (email) => {
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim().toLowerCase(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/login`
+        }
+      });
+
+      if (error) {
+        toast.error(error.message);
+        return { success: false, message: error.message };
+      }
+
+      toast.success('Email konfirmasi telah dikirim ulang!');
+      return { success: true };
+    } catch (error) {
+      console.error('Resend confirmation error:', error);
+      toast.error('Gagal mengirim ulang email konfirmasi');
+      return { success: false, message: 'Gagal mengirim ulang email' };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) throw error;
+      
+      setUser(null);
+      setIsAuthenticated(false);
+      setIsAdmin(false);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      toast.info('Anda telah logout');
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast.error('Gagal logout');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const updateProfile = async (profileData) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/auth/profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(profileData)
+      const { data, error } = await supabase.auth.updateUser({
+        data: profileData
       });
 
-      const data = await response.json();
+      if (error) throw error;
 
-      if (data.success) {
+      if (data.user) {
         setUser(data.user);
         localStorage.setItem('user', JSON.stringify(data.user));
         toast.success('Profil berhasil diperbarui!');
         return { success: true };
-      } else {
-        toast.error(data.message);
-        return { success: false, message: data.message };
       }
     } catch (error) {
       console.error('Update profile error:', error);
       toast.error('Terjadi kesalahan saat memperbarui profil');
-      return { success: false, message: 'Terjadi kesalahan' };
+      return { success: false, message: error.message };
+    }
+  };
+
+  const updateUser = async (userData) => {
+    try {
+      const updatedUser = { ...user, ...userData };
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      return { success: true };
+    } catch (error) {
+      console.error('Update user error:', error);
+      return { success: false, message: error.message };
     }
   };
 
@@ -201,7 +335,8 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     updateProfile,
-    updateUser // Pastikan ini diexport
+    updateUser,
+    resendConfirmationEmail
   };
 
   return (
@@ -210,5 +345,3 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
-
-export { AuthContext };
