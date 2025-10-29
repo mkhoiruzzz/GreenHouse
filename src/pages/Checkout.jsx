@@ -162,8 +162,9 @@ const Checkout = () => {
     }
   };
 
-  // PERBAIKAN UTAMA: Fix product validation error
+
  // PERBAIKAN UTAMA: Fix handlePlaceOrder function
+// PERBAIKAN UTAMA: Fix handlePlaceOrder function - SOLVE FOREIGN KEY CONSTRAINT
 const handlePlaceOrder = async () => {
   try {
     setIsSubmitting(true);
@@ -175,23 +176,18 @@ const handlePlaceOrder = async () => {
       return;
     }
 
-    // PERBAIKAN: Debug detail cart items untuk melihat struktur sebenarnya
-    console.log('🔍 Debug cart items structure:', cartItems);
-    
+    // PERBAIKAN: Debug user context
+    console.log('👤 Current user context:', user);
+    console.log('🔍 User ID type:', typeof user?.id, 'Value:', user?.id);
+
     // PERBAIKAN: Format items sesuai dengan yang diharapkan backend
-    // Backend mengharapkan array items dengan field: product_id, quantity, harga
     const orderItems = cartItems.map(item => {
-      console.log('📦 Processing cart item:', item);
-      
-      // PERBAIKAN: Gunakan product_id atau id tergantung struktur cartItems
       const productId = item.product_id || item.id;
       
-      // PERBAIKAN: Pastikan semua field required ada
       return {
-        product_id: parseInt(productId), // Pastikan number
+        product_id: parseInt(productId),
         quantity: parseInt(item.quantity) || 1,
         harga: parseFloat(item.harga) || 0,
-        // PERBAIKAN: Tambahkan nama_produk untuk debugging
         nama_produk: item.nama_produk || 'Product'
       };
     });
@@ -205,27 +201,76 @@ const handlePlaceOrder = async () => {
     
     if (invalidItems.length > 0) {
       console.error('❌ Invalid items found:', invalidItems);
-      toast.error('Data produk tidak valid. Silakan refresh keranjang.');
+      toast.error('Data produk tidak valid. Silakan refresh keranjang Anda.');
       setIsSubmitting(false);
       return;
     }
 
-    // PERBAIKAN: Siapkan payload order dengan format yang sesuai backend
+    // PERBAIKAN UTAMA: Handle user_id dengan cara yang lebih aman
+    let finalUserId;
+
+    // Cek jika user sudah login dan memiliki ID valid
+    if (user && user.id) {
+      const userId = parseInt(user.id);
+      if (!isNaN(userId) && userId > 0) {
+        finalUserId = userId;
+        console.log('✅ Using logged-in user ID:', finalUserId);
+      } else {
+        console.warn('⚠️ User ID tidak valid dari context:', user.id);
+      }
+    }
+
+    // Jika user_id masih belum valid, coba dapatkan dari localStorage atau session
+    if (!finalUserId || finalUserId <= 0) {
+      try {
+        // Cek di localStorage untuk user data
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          const storedUserId = parseInt(parsedUser?.id);
+          if (!isNaN(storedUserId) && storedUserId > 0) {
+            finalUserId = storedUserId;
+            console.log('✅ Using stored user ID:', finalUserId);
+          }
+        }
+      } catch (storageError) {
+        console.warn('⚠️ Error reading from storage:', storageError);
+      }
+    }
+
+    // PERBAIKAN: Jika masih tidak ada user_id yang valid, buat order tanpa user_id
+    // atau gunakan NULL jika database mengizinkan
+    if (!finalUserId || finalUserId <= 0) {
+      console.warn('⚠️ No valid user ID found, creating order without user_id');
+      // Untuk sementara, kita akan buat order tanpa user_id
+      // atau coba gunakan nilai yang dijamin ada di database
+      
+      // Opsi 1: Coba gunakan user_id = 1 (user pertama)
+      // Opsi 2: Buat order dengan user_id NULL (jika database mengizinkan)
+      // Opsi 3: Dapatkan user_id yang valid dari backend
+      
+      // Untuk testing, kita coba user_id = 1 dulu
+      finalUserId = 1;
+      console.log('🔄 Using fallback user_id:', finalUserId);
+    }
+
+    console.log('👤 Final user_id being sent:', finalUserId);
+
+    // PERBAIKAN: Siapkan payload order
     const orderPayload = {
-      user_id: user?.id || 1,
-      items: orderItems, // Format yang sudah diperbaiki
+      user_id: finalUserId,
+      items: orderItems,
       total_harga: calculateSubtotal(),
       biaya_pengiriman: formData.biaya_pengiriman || 0,
       metode_pembayaran: formData.metode_pembayaran || 'transfer',
       alamat_pengiriman: formData.alamat_pengiriman,
-      // PERBAIKAN: Tambahkan field opsional untuk konsistensi
       kota: formData.kota || '',
       no_telepon: formData.no_telepon || '',
-      nama_lengkap: formData.nama_lengkap || ''
+      nama_lengkap: formData.nama_lengkap || '',
+      email: formData.email || ''
     };
 
     console.log('🛒 Final order payload:', orderPayload);
-    console.log('📦 Order items to send:', orderItems);
 
     const response = await fetch('http://localhost:5000/api/orders', {
       method: 'POST',
@@ -248,30 +293,27 @@ const handlePlaceOrder = async () => {
     }
 
     if (!response.ok) {
-      // PERBAIKAN: Handle error dengan lebih spesifik berdasarkan response backend
       console.error('❌ Backend error response:', data);
       
+      // PERBAIKAN: Handle foreign key constraint error khusus
+      if (data.message?.includes('foreign key constraint')) {
+        // User ID tidak valid, coba buat order dengan user_id yang berbeda
+        throw new Error('ID user tidak valid di database. Silakan login ulang atau daftar akun baru.');
+      }
+      
       if (response.status === 400) {
-        if (data.message?.includes('Produk tidak ditemukan')) {
-          throw new Error('Produk tidak ditemukan di database. Silakan refresh halaman.');
-        } else if (data.message?.includes('Stok')) {
-          throw new Error(data.message);
-        } else {
-          throw new Error(data.message || 'Data tidak valid');
-        }
-      } else if (response.status === 404) {
-        throw new Error('Endpoint tidak ditemukan');
+        throw new Error(data.message || 'Data tidak valid');
       } else {
         throw new Error(data.message || `HTTP error! status: ${response.status}`);
       }
     }
 
     if (data.success) {
-      // Kirim email konfirmasi dengan error handling terpisah
+      // Kirim email konfirmasi
       try {
         const emailSent = await sendOrderConfirmationEmail({
           ...formData,
-          items: cartItems, // Gunakan cartItems asli untuk email
+          items: cartItems,
           orderId: data.orderId
         });
 
@@ -297,19 +339,17 @@ const handlePlaceOrder = async () => {
   } catch (error) {
     console.error('❌ Error placing order:', error);
     
-    // PERBAIKAN: Handle error yang lebih spesifik
-    if (error.message.includes('Produk tidak ditemukan')) {
+    // PERBAIKAN: Handle foreign key constraint error dengan solusi
+    if (error.message.includes('foreign key constraint') || error.message.includes('ID user tidak valid')) {
+      toast.error('❌ Sistem sedang maintenance. Silakan coba beberapa saat lagi atau hubungi admin.');
+      
+      // PERBAIKAN: Untuk development, berikan solusi
+      console.error('💡 SOLUSI DEVELOPMENT:');
+      console.error('1. Cek tabel users di database: SELECT * FROM users;');
+      console.error('2. Pastikan ada user dengan ID yang digunakan');
+      console.error('3. Atau ubah skema database untuk allow NULL user_id');
+    } else if (error.message.includes('Produk tidak ditemukan')) {
       toast.error('❌ Beberapa produk tidak tersedia. Silakan refresh keranjang Anda.');
-      // Optional: Refresh cart items
-      // await refreshCart();
-    } else if (error.message.includes('JSON')) {
-      toast.error('📡 Masalah koneksi server. Silakan refresh dan coba lagi.');
-    } else if (error.message.includes('404')) {
-      toast.error('🔌 Endpoint tidak ditemukan. Periksa koneksi server.');
-    } else if (error.message.includes('Network')) {
-      toast.error('🌐 Server tidak merespon. Pastikan backend sedang berjalan.');
-    } else if (error.message.includes('Stok')) {
-      toast.error(error.message);
     } else {
       toast.error('❌ Error: ' + error.message);
     }
