@@ -1,7 +1,8 @@
-
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { supabase } from '../lib/supabase';
+
+// PERBAIKAN: Import dari config yang sama
+import { supabase } from '../config/supabase';
 
 const AuthContext = createContext();
 
@@ -73,37 +74,27 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ FIX: Validasi email sebelum login/register
-  const validateEmail = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
+  // HAPUS: validateEmail function tidak perlu karena Supabase sudah handle
 
   const login = async (email, password) => {
     try {
       setLoading(true);
-      
-      // ✅ FIX: Validasi email format
-      if (!validateEmail(email)) {
-        toast.error('Format email tidak valid');
-        return { success: false, message: 'Format email tidak valid' };
-      }
 
-      // ✅ FIX: Validasi input
+      // HAPUS: Validasi manual, biarkan Supabase handle
       if (!email || !password) {
         toast.error('Email dan password wajib diisi');
         return { success: false, message: 'Email dan password wajib diisi' };
       }
 
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(), // ✅ FIX: Convert to lowercase
+        email: email.trim().toLowerCase(),
         password: password
       });
 
       if (error) {
         console.error('Login error:', error);
         
-        // ✅ FIX: Handle berbagai jenis error
+        // Handle error
         if (error.message.includes('Email not confirmed')) {
           toast.error('Email belum dikonfirmasi. Silakan cek email Anda.');
           return { 
@@ -150,15 +141,10 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       
-      // ✅ FIX: Validasi lengkap
+      // Validasi dasar
       if (!userData.email || !userData.password || !userData.username) {
         toast.error('Email, username, dan password wajib diisi');
         return { success: false, message: 'Data wajib belum lengkap' };
-      }
-
-      if (!validateEmail(userData.email)) {
-        toast.error('Format email tidak valid');
-        return { success: false, message: 'Format email tidak valid' };
       }
 
       if (userData.password.length < 6) {
@@ -166,7 +152,6 @@ export const AuthProvider = ({ children }) => {
         return { success: false, message: 'Password minimal 6 karakter' };
       }
 
-      // ✅ FIX: Gunakan email lowercase
       const email = userData.email.trim().toLowerCase();
 
       const { data, error } = await supabase.auth.signUp({
@@ -181,56 +166,24 @@ export const AuthProvider = ({ children }) => {
             city: userData.kota || '',
             province: userData.provinsi || '',
             role: 'customer'
-          },
-          emailRedirectTo: `${window.location.origin}/login`
+          }
         }
       });
 
       if (error) {
         console.error('Register error:', error);
         
-        // ✅ FIX: Handle berbagai error register
         if (error.message.includes('already registered')) {
           toast.error('Email sudah terdaftar. Silakan gunakan email lain.');
           return { success: false, message: 'Email sudah terdaftar' };
-        } else if (error.message.includes('invalid')) {
-          toast.error('Format email tidak valid');
-          return { success: false, message: 'Format email tidak valid' };
         } else {
           toast.error(error.message);
           return { success: false, message: error.message };
         }
       }
 
-      // ✅ FIX: Buat profile dengan error handling yang lebih baik
-      if (data.user) {
-        try {
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .upsert({
-              id: data.user.id,
-              email: email,
-              username: userData.username,
-              full_name: userData.nama_lengkap || '',
-              phone: userData.no_telepon || '',
-              address: userData.alamat || '',
-              city: userData.kota || '',
-              province: userData.provinsi || '',
-              role: 'customer'
-            }, {
-              onConflict: 'id'
-            });
+      // HAPUS: Buat profile di tabel terpisah (tidak perlu kompleks)
 
-          if (profileError) {
-            console.warn('Profile creation warning:', profileError.message);
-            // Lanjutkan saja, tidak critical
-          }
-        } catch (profileError) {
-          console.warn('Profile creation failed:', profileError);
-        }
-      }
-
-      // ✅ FIX: Handle case email sudah terdaftar
       if (data.user && data.user.identities && data.user.identities.length === 0) {
         toast.error('Email sudah terdaftar');
         return { success: false, message: 'Email sudah terdaftar' };
@@ -248,29 +201,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const resendConfirmationEmail = async (email) => {
-    try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: email.trim().toLowerCase(),
-        options: {
-          emailRedirectTo: `${window.location.origin}/login`
-        }
-      });
-
-      if (error) {
-        toast.error(error.message);
-        return { success: false, message: error.message };
-      }
-
-      toast.success('Email konfirmasi telah dikirim ulang!');
-      return { success: true };
-    } catch (error) {
-      console.error('Resend confirmation error:', error);
-      toast.error('Gagal mengirim ulang email konfirmasi');
-      return { success: false, message: 'Gagal mengirim ulang email' };
-    }
-  };
+  // HAPUS: resendConfirmationEmail (tidak perlu)
 
   const logout = async () => {
     try {
@@ -293,38 +224,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const updateProfile = async (profileData) => {
-    try {
-      const { data, error } = await supabase.auth.updateUser({
-        data: profileData
-      });
-
-      if (error) throw error;
-
-      if (data.user) {
-        setUser(data.user);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        toast.success('Profil berhasil diperbarui!');
-        return { success: true };
-      }
-    } catch (error) {
-      console.error('Update profile error:', error);
-      toast.error('Terjadi kesalahan saat memperbarui profil');
-      return { success: false, message: error.message };
-    }
-  };
-
-  const updateUser = async (userData) => {
-    try {
-      const updatedUser = { ...user, ...userData };
-      setUser(updatedUser);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      return { success: true };
-    } catch (error) {
-      console.error('Update user error:', error);
-      return { success: false, message: error.message };
-    }
-  };
+  // HAPUS: updateProfile dan updateUser (tidak perlu untuk sekarang)
 
   const value = {
     user,
@@ -333,10 +233,8 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     register,
-    logout,
-    updateProfile,
-    updateUser,
-    resendConfirmationEmail
+    logout
+    // HAPUS: updateProfile, updateUser, resendConfirmationEmail
   };
 
   return (
