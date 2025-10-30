@@ -1,10 +1,30 @@
+// src/pages/Orders.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { formatCurrency } from '../utils/formatCurrency';
 import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { supabase } from '../config/supabase'; // Import Supabase client
+
+// Import supabase
+let supabase;
+try {
+  const supabaseModule = await import('../config/supabase');
+  supabase = supabaseModule.supabase;
+  console.log('✅ Supabase loaded successfully');
+} catch (error) {
+  console.warn('⚠️ Supabase config not found, using fallback');
+  supabase = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          order: () => Promise.resolve({ data: [], error: null })
+        }),
+        single: () => Promise.resolve({ data: null, error: new Error('Supabase not configured') })
+      })
+    })
+  };
+}
 
 const Orders = () => {
   const { user, isAuthenticated } = useAuth();
@@ -24,36 +44,78 @@ const Orders = () => {
   const fetchOrders = async () => {
     try {
       setLoading(true);
+      
       if (!user || !user.id) {
         toast.error('User tidak valid');
         return;
       }
 
-      // PERBAIKAN: Gunakan Supabase langsung
-      const { data, error } = await supabase
+      console.log('🔄 Fetching orders for user:', user.id);
+
+      // PERBAIKAN: Query orders sesuai struktur database
+      const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
-        .select(`
-          *,
-          order_items (
-            *,
-            products (
-              nama_produk,
-              gambar_url,
-              icon
-            )
-          )
-        `)
+        .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        throw error;
+      if (ordersError) {
+        console.error('❌ Error fetching orders:', ordersError);
+        throw ordersError;
       }
 
-      setOrders(data || []);
+      console.log('✅ Orders fetched:', ordersData);
+
+      // Jika tidak ada orders, set empty array
+      if (!ordersData || ordersData.length === 0) {
+        setOrders([]);
+        return;
+      }
+
+      // Ambil order items untuk setiap order
+      const ordersWithItems = await Promise.all(
+        ordersData.map(async (order) => {
+          const { data: itemsData, error: itemsError } = await supabase
+            .from('order_items')
+            .select('*')
+            .eq('order_id', order.id);
+
+          if (itemsError) {
+            console.error(`❌ Error fetching items for order ${order.id}:`, itemsError);
+            return { ...order, order_items: [] };
+          }
+
+          // Ambil product info untuk setiap item
+          const itemsWithProducts = await Promise.all(
+            (itemsData || []).map(async (item) => {
+              const { data: productData, error: productError } = await supabase
+                .from('products')
+                .select('nama_produk, gambar_url, icon')
+                .eq('id', item.product_id)
+                .single();
+
+              if (productError) {
+                console.error(`❌ Error fetching product ${item.product_id}:`, productError);
+                return { ...item, products: null };
+              }
+
+              return { ...item, products: productData };
+            })
+          );
+
+          return { 
+            ...order, 
+            order_items: itemsWithProducts,
+            total_items: itemsData?.length || 0,
+            total_quantity: itemsData?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0
+          };
+        })
+      );
+
+      setOrders(ordersWithItems);
       
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error('❌ Error in fetchOrders:', error);
       toast.error('Gagal memuat pesanan: ' + error.message);
       setOrders([]);
     } finally {
@@ -63,34 +125,56 @@ const Orders = () => {
 
   const fetchOrderDetail = async (orderId) => {
     try {
-      // PERBAIKAN: Gunakan Supabase untuk detail order
-      const { data, error } = await supabase
+      console.log('📋 Fetching order detail:', orderId);
+
+      // Ambil data order
+      const { data: orderData, error: orderError } = await supabase
         .from('orders')
-        .select(`
-          *,
-          order_items (
-            *,
-            products (
-              nama_produk,
-              gambar_url,
-              icon
-            )
-          ),
-          users (
-            nama_lengkap,
-            email,
-            no_telepon
-          )
-        `)
+        .select('*')
         .eq('id', orderId)
         .single();
 
-      if (error) {
-        throw error;
-      }
+      if (orderError) throw orderError;
 
-      setSelectedOrder(data);
-      
+      // Ambil order items
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('order_items')
+        .select('*')
+        .eq('order_id', orderId);
+
+      if (itemsError) throw itemsError;
+
+      // Ambil product info untuk setiap item
+      const itemsWithProducts = await Promise.all(
+        (itemsData || []).map(async (item) => {
+          const { data: productData, error: productError } = await supabase
+            .from('products')
+            .select('nama_produk, gambar_url, icon')
+            .eq('id', item.product_id)
+            .single();
+
+          if (productError) {
+            console.error(`❌ Error fetching product ${item.product_id}:`, productError);
+            return { ...item, products: null };
+          }
+
+          return { ...item, products: productData };
+        })
+      );
+
+      // Ambil user info dari tabel users (bukan auth.users)
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('nama_lengkap, email, no_telepon')
+        .eq('id', orderData.user_id)
+        .single();
+
+      setSelectedOrder({
+        ...orderData,
+        order_items: itemsWithProducts,
+        users: userError ? null : userData
+      });
+
     } catch (error) {
       console.error('Error fetching order detail:', error);
       toast.error('Gagal memuat detail pesanan: ' + error.message);
@@ -99,13 +183,21 @@ const Orders = () => {
 
   const getStatusBadge = (status) => {
     const badges = {
-      pending: { text: 'Menunggu', color: 'bg-yellow-100 text-yellow-800' },
-      dikonfirmasi: { text: 'Dikonfirmasi', color: 'bg-blue-100 text-blue-800' },
+      pending: { text: 'Menunggu Pembayaran', color: 'bg-yellow-100 text-yellow-800' },
+      paid: { text: 'Dibayar', color: 'bg-blue-100 text-blue-800' },
+      dikonfirmasi: { text: 'Dikonfirmasi', color: 'bg-green-100 text-green-800' },
       dikirim: { text: 'Dikirim', color: 'bg-purple-100 text-purple-800' },
       selesai: { text: 'Selesai', color: 'bg-green-100 text-green-800' },
       dibatalkan: { text: 'Dibatalkan', color: 'bg-red-100 text-red-800' }
     };
+    
+    // Gunakan status_pengiriman jika ada, fallback ke status_pembayaran
     return badges[status] || badges.pending;
+  };
+
+  // Tentukan status yang akan ditampilkan
+  const getDisplayStatus = (order) => {
+    return order.status_pengiriman || order.status_pembayaran || 'pending';
   };
 
   if (loading) {
@@ -141,8 +233,10 @@ const Orders = () => {
 
         <div className="space-y-3">
           {orders.map((order) => {
-            const statusBadge = getStatusBadge(order.status_pengiriman || order.status);
-            const totalItems = order.order_items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+            const displayStatus = getDisplayStatus(order);
+            const statusBadge = getStatusBadge(displayStatus);
+            const totalItems = order.total_items || 0;
+            const totalQuantity = order.total_quantity || 0;
             
             return (
               <div key={order.id} className="bg-white rounded-lg shadow-md p-4">
@@ -153,7 +247,9 @@ const Orders = () => {
                       {new Date(order.created_at).toLocaleDateString('id-ID', {
                         day: 'numeric',
                         month: 'long',
-                        year: 'numeric'
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
                       })}
                     </p>
                   </div>
@@ -164,7 +260,9 @@ const Orders = () => {
 
                 <div className="border-t pt-3 mb-3">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-600">{totalItems} items</span>
+                    <span className="text-gray-600">
+                      {totalItems} items ({totalQuantity} pcs)
+                    </span>
                     <span className="font-bold text-primary">
                       Total: {formatCurrency(
                         (parseFloat(order.total_harga) || 0) + 
@@ -181,7 +279,7 @@ const Orders = () => {
                   >
                     Lihat Detail
                   </button>
-                  {order.status === 'pending' && (
+                  {(order.status_pembayaran === 'pending' || displayStatus === 'pending') && (
                     <button className="px-4 py-2 border border-red-500 text-red-500 rounded-lg text-sm font-semibold hover:bg-red-50 transition">
                       Batalkan
                     </button>
@@ -211,9 +309,16 @@ const Orders = () => {
               <div className="p-4 space-y-4">
                 {/* Status */}
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Status</span>
-                  <span className={`text-sm font-semibold px-3 py-1 rounded-full ${getStatusBadge(selectedOrder.status_pengiriman || selectedOrder.status).color}`}>
-                    {getStatusBadge(selectedOrder.status_pengiriman || selectedOrder.status).text}
+                  <span className="text-sm text-gray-600">Status Pembayaran</span>
+                  <span className={`text-sm font-semibold px-3 py-1 rounded-full ${getStatusBadge(selectedOrder.status_pembayaran).color}`}>
+                    {getStatusBadge(selectedOrder.status_pembayaran).text}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Status Pengiriman</span>
+                  <span className={`text-sm font-semibold px-3 py-1 rounded-full ${getStatusBadge(selectedOrder.status_pengiriman).color}`}>
+                    {getStatusBadge(selectedOrder.status_pengiriman).text}
                   </span>
                 </div>
 
@@ -222,6 +327,14 @@ const Orders = () => {
                   <p className="text-sm font-semibold text-gray-700 mb-1">Alamat Pengiriman</p>
                   <p className="text-sm text-gray-600">{selectedOrder.alamat_pengiriman || 'Tidak ada alamat'}</p>
                 </div>
+
+                {/* Metode Pembayaran */}
+                {selectedOrder.metode_pembayaran && (
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700 mb-1">Metode Pembayaran</p>
+                    <p className="text-sm text-gray-600 capitalize">{selectedOrder.metode_pembayaran}</p>
+                  </div>
+                )}
 
                 {/* Customer Info */}
                 {selectedOrder.users && (
