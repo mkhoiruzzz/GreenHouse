@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/formatCurrency';
 import { toast } from 'react-toastify';
 import emailjs from '@emailjs/browser';
+ import { supabase } from '../config/supabase';
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -162,36 +163,65 @@ const Checkout = () => {
     }
   };
 
-  // Fungsi createOrder yang sudah diperbaiki
-  const createOrderInSupabase = async (orderData) => {
-    try {
-      console.log('🛒 Creating order in Supabase:', orderData);
-      
-      // Simulasi pembuatan order berhasil (sementara)
-      // Dalam implementasi nyata, ganti dengan koneksi ke Supabase
-      const mockOrder = {
-        id: Math.random().toString(36).substr(2, 9),
-        success: true
-      };
 
-      console.log('✅ Order created:', mockOrder);
 
-      return { 
-        success: true, 
-        orderId: mockOrder.id,
-        message: 'Pesanan berhasil dibuat' 
-      };
+// ✅ GANTI DENGAN FUNGSI REAL YANG SAVE KE SUPABASE
+const createOrderInSupabase = async (orderData) => {
+  try {
+    console.log('🛒 Creating order in Supabase:', orderData);
+    
+    // 1. BUAT ORDER DI TABLE orders
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .insert([{
+        user_id: orderData.user_id,
+        total_harga: orderData.total_harga,
+        biaya_pengiriman: orderData.biaya_pengiriman,
+        status_pembayaran: 'pending',
+        status_pengiriman: 'pending',
+        metode_pembayaran: orderData.metode_pembayaran,
+        alamat_pengiriman: orderData.alamat_pengiriman,
+        catatan: orderData.catatan || ''
+      }])
+      .select();
 
-    } catch (error) {
-      console.error('❌ Error creating order:', error);
-      return { 
-        success: false, 
-        error: error.message,
-        message: 'Gagal membuat pesanan: ' + error.message
-      };
-    }
-  };
+    if (orderError) throw orderError;
+    if (!order || order.length === 0) throw new Error('Order creation failed');
 
+    const orderId = order[0].id;
+    console.log('✅ Order created with ID:', orderId);
+
+    // 2. BUAT ORDER ITEMS DI TABLE order_items
+    const orderItemsData = orderData.items.map(item => ({
+      order_id: orderId,
+      product_id: item.product_id,
+      quantity: item.quantity,
+      harga_satuan: item.harga
+    }));
+
+    const { error: itemsError } = await supabase
+      .from('order_items')
+      .insert(orderItemsData);
+
+    if (itemsError) throw itemsError;
+
+    console.log('✅ Order items created successfully');
+
+    return { 
+      success: true, 
+      orderId: orderId, // ✅ ID ASLI DARI DATABASE
+      message: 'Pesanan berhasil dibuat' 
+    };
+
+  } catch (error) {
+    console.error('❌ Error creating order:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      message: 'Gagal membuat pesanan: ' + error.message
+    };
+  }
+};
   // PERBAIKAN UTAMA: Fix handlePlaceOrder function
   const handlePlaceOrder = async () => {
     try {
@@ -229,6 +259,19 @@ const Checkout = () => {
         setIsSubmitting(false);
         return;
       }
+
+      // Di handlePlaceOrder - tambahkan setelah order created
+console.log('🔄 Checking if order saved in database...');
+
+// Test query order dari Supabase
+const { data: savedOrder, error } = await supabase
+  .from('orders')
+  .select('*')
+  .eq('id', result.orderId)
+  .single();
+
+console.log('✅ Order in database:', savedOrder);
+console.log('❌ Error:', error);
 
       // Siapkan payload untuk Supabase
       const orderPayload = {

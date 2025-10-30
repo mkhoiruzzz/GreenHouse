@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext'; // ✅ GUNAKAN useAuth, BUKAN AuthContext
-import { supabase } from '../lib/supabase';
+import { supabase } from '../config/supabase';
 import { toast } from 'react-toastify';
 
 const Profile = () => {

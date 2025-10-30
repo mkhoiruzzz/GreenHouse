@@ -61,7 +61,9 @@ const Orders = () => {
 
       if (ordersError) {
         console.error('❌ Error fetching orders:', ordersError);
-        throw ordersError;
+        toast.error('Gagal memuat pesanan: ' + ordersError.message);
+        setOrders([]);
+        return;
       }
 
       console.log('✅ Orders fetched:', ordersData);
@@ -88,18 +90,37 @@ const Orders = () => {
           // Ambil product info untuk setiap item
           const itemsWithProducts = await Promise.all(
             (itemsData || []).map(async (item) => {
-              const { data: productData, error: productError } = await supabase
-                .from('products')
-                .select('nama_produk, gambar_url, icon')
-                .eq('id', item.product_id)
-                .single();
+              try {
+                const { data: productData, error: productError } = await supabase
+                  .from('products')
+                  .select('nama_produk, gambar_url, icon')
+                  .eq('id', item.product_id)
+                  .single();
 
-              if (productError) {
-                console.error(`❌ Error fetching product ${item.product_id}:`, productError);
-                return { ...item, products: null };
+                if (productError) {
+                  console.warn(`⚠️ Product ${item.product_id} not available, using default`);
+                  return { 
+                    ...item, 
+                    products: {
+                      nama_produk: 'Product',
+                      gambar_url: null,
+                      icon: '🌿'
+                    }
+                  };
+                }
+
+                return { ...item, products: productData };
+              } catch (error) {
+                console.error(`❌ Error fetching product ${item.product_id}:`, error);
+                return { 
+                  ...item, 
+                  products: {
+                    nama_produk: 'Product',
+                    gambar_url: null,
+                    icon: '🌿'
+                  }
+                };
               }
-
-              return { ...item, products: productData };
             })
           );
 
@@ -124,29 +145,30 @@ const Orders = () => {
   };
 
   const fetchOrderDetail = async (orderId) => {
-    try {
-      console.log('📋 Fetching order detail:', orderId);
+  try {
+    console.log('📋 Fetching order detail:', orderId);
 
-      // Ambil data order
-      const { data: orderData, error: orderError } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('id', orderId)
-        .single();
+    // Ambil data order
+    const { data: orderData, error: orderError } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('id', orderId)
+      .single();
 
-      if (orderError) throw orderError;
+    if (orderError) throw orderError;
 
-      // Ambil order items
-      const { data: itemsData, error: itemsError } = await supabase
-        .from('order_items')
-        .select('*')
-        .eq('order_id', orderId);
+    // Ambil order items
+    const { data: itemsData, error: itemsError } = await supabase
+      .from('order_items')
+      .select('*')
+      .eq('order_id', orderId);
 
-      if (itemsError) throw itemsError;
+    if (itemsError) throw itemsError;
 
-      // Ambil product info untuk setiap item
-      const itemsWithProducts = await Promise.all(
-        (itemsData || []).map(async (item) => {
+    // Ambil product info untuk setiap item
+    const itemsWithProducts = await Promise.all(
+      (itemsData || []).map(async (item) => {
+        try {
           const { data: productData, error: productError } = await supabase
             .from('products')
             .select('nama_produk, gambar_url, icon')
@@ -154,32 +176,55 @@ const Orders = () => {
             .single();
 
           if (productError) {
-            console.error(`❌ Error fetching product ${item.product_id}:`, productError);
-            return { ...item, products: null };
+            console.warn(`⚠️ Product ${item.product_id} not available, using default`);
+            return { 
+              ...item, 
+              products: {
+                nama_produk: 'Product',
+                gambar_url: null,
+                icon: '🌿'
+              }
+            };
           }
 
           return { ...item, products: productData };
-        })
-      );
+        } catch (error) {
+          console.error(`❌ Error fetching product ${item.product_id}:`, error);
+          return { 
+            ...item, 
+            products: {
+              nama_produk: 'Product',
+              gambar_url: null,
+              icon: '🌿'
+            }
+          };
+        }
+      })
+    );
 
-      // Ambil user info dari tabel users (bukan auth.users)
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('nama_lengkap, email, no_telepon')
-        .eq('id', orderData.user_id)
-        .single();
+    // ✅ SOLUSI 4: Skip profiles table, gunakan data dari AuthContext saja
+    const userData = {
+      nama_lengkap: user?.user_metadata?.full_name || user?.email || 'Customer',
+      email: user?.email || '-',
+      no_telepon: user?.user_metadata?.phone || '-',
+      alamat: user?.user_metadata?.address || '-',
+      kota: user?.user_metadata?.city || '-',
+      provinsi: user?.user_metadata?.province || '-'
+    };
 
-      setSelectedOrder({
-        ...orderData,
-        order_items: itemsWithProducts,
-        users: userError ? null : userData
-      });
+    console.log('✅ Using user data from AuthContext:', userData);
 
-    } catch (error) {
-      console.error('Error fetching order detail:', error);
-      toast.error('Gagal memuat detail pesanan: ' + error.message);
-    }
-  };
+    setSelectedOrder({
+      ...orderData,
+      order_items: itemsWithProducts,
+      users: userData
+    });
+
+  } catch (error) {
+    console.error('Error fetching order detail:', error);
+    toast.error('Gagal memuat detail pesanan: ' + error.message);
+  }
+};
 
   const getStatusBadge = (status) => {
     const badges = {
