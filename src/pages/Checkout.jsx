@@ -325,31 +325,67 @@ const Checkout = () => {
         </div>
 
         {/* Progress Steps */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex items-center justify-between">
-            {steps.map((step, index) => (
-              <div key={step.number} className="flex items-center">
-                <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-                  currentStep >= step.number 
-                    ? 'bg-green-600 border-green-600 text-white' 
-                    : 'border-gray-300 text-gray-500'
-                } font-semibold`}>
-                  {step.number}
-                </div>
-                <span className={`ml-2 font-medium ${
-                  currentStep >= step.number ? 'text-green-600' : 'text-gray-500'
-                }`}>
-                  {step.title}
-                </span>
-                {index < steps.length - 1 && (
-                  <div className={`w-16 h-0.5 mx-4 ${
-                    currentStep > step.number ? 'bg-green-600' : 'bg-gray-300'
-                  }`} />
-                )}
-              </div>
-            ))}
-          </div>
+       {/* Progress Steps - RESPONSIVE FIX */}
+<div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
+  {/* Desktop View */}
+  <div className="hidden md:flex items-center justify-between">
+    {steps.map((step, index) => (
+      <div key={step.number} className="flex items-center">
+        <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
+          currentStep >= step.number 
+            ? 'bg-green-600 border-green-600 text-white' 
+            : 'border-gray-300 text-gray-500'
+        } font-semibold`}>
+          {step.number}
         </div>
+        <span className={`ml-2 font-medium ${
+          currentStep >= step.number ? 'text-green-600' : 'text-gray-500'
+        }`}>
+          {step.title}
+        </span>
+        {index < steps.length - 1 && (
+          <div className={`w-16 h-0.5 mx-4 ${
+            currentStep > step.number ? 'bg-green-600' : 'bg-gray-300'
+          }`} />
+        )}
+      </div>
+    ))}
+  </div>
+
+  {/* Mobile View */}
+  <div className="md:hidden">
+    {/* Step Numbers */}
+    <div className="flex justify-between items-center mb-4">
+      {steps.map((step) => (
+        <div 
+          key={step.number} 
+          className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
+            currentStep >= step.number 
+              ? 'bg-green-600 border-green-600 text-white' 
+              : 'border-gray-300 text-gray-500'
+          } font-semibold text-sm`}
+        >
+          {step.number}
+        </div>
+      ))}
+    </div>
+    
+    {/* Progress Bar */}
+    <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
+      <div 
+        className="bg-green-600 h-2 rounded-full transition-all duration-300"
+        style={{ width: `${((currentStep - 1) / (steps.length - 1)) * 100}%` }}
+      ></div>
+    </div>
+    
+    {/* Current Step Title */}
+    <div className="text-center">
+      <span className="text-sm font-medium text-green-600">
+        Langkah {currentStep}: {steps.find(step => step.number === currentStep)?.title}
+      </span>
+    </div>
+  </div>
+</div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}

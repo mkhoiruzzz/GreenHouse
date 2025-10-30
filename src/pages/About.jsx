@@ -70,7 +70,7 @@ const About = () => {
               <div className="w-24 h-24 bg-gradient-to-br from-primary to-accent rounded-full mx-auto mb-4 flex items-center justify-center text-white text-2xl">
                 👨‍💼
               </div>
-              <h3 className="text-xl font-bold text-primary mb-2">Budi Santoso</h3>
+              <h3 className="text-xl font-bold text-primary mb-2">MKhoiruzZ</h3>
               <p className="text-secondary font-semibold mb-2">Founder & CEO</p>
               <p className="text-gray-600 text-sm">
                 Pecinta tanaman dengan pengalaman 10 tahun di industri horticulture
@@ -97,30 +97,6 @@ const About = () => {
               <p className="text-gray-600 text-sm">
                 Spesialis identifikasi dan klasifikasi ketahanan tanaman
               </p>
-            </div>
-          </div>
-        </div>
-
-        {/* CTA */}
-        <div className="text-center">
-          <div className="bg-gradient-to-r from-primary to-accent text-white rounded-lg p-8">
-            <h2 className="text-2xl font-bold mb-4">Siap Memulai Perjalanan Tanaman Anda?</h2>
-            <p className="mb-6 text-lg">
-              Bergabunglah dengan ribuan customer yang sudah mempercayakan tanaman hias mereka kepada kami
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link
-                to="/products"
-                className="bg-white text-primary px-6 py-3 rounded-lg font-bold hover:bg-gray-100 transition"
-              >
-                Lihat Produk
-              </Link>
-              <Link
-                to="/contact"
-                className="bg-transparent border-2 border-white text-white px-6 py-3 rounded-lg font-bold hover:bg-white hover:text-primary transition"
-              >
-                Hubungi Kami
-              </Link>
             </div>
           </div>
         </div>
