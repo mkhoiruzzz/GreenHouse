@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { formatCurrency } from '../utils/formatCurrency';
 import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { supabase } from '../config/supabase'; // Import Supabase client
 
 const Orders = () => {
   const { user, isAuthenticated } = useAuth();
@@ -23,39 +24,38 @@ const Orders = () => {
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      // PERBAIKAN: Tambahkan validasi untuk user.id
       if (!user || !user.id) {
         toast.error('User tidak valid');
         return;
       }
 
-      // PERBAIKAN: Gunakan environment variable untuk base URL
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
-      
-      const response = await fetch(`${API_BASE_URL}/api/orders/${user.id}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        // PERBAIKAN: Tambahkan error handling untuk CORS
-        mode: 'cors'
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
+      // PERBAIKAN: Gunakan Supabase langsung
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            *,
+            products (
+              nama_produk,
+              gambar_url,
+              icon
+            )
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
 
-      if (data.success) {
-        setOrders(data.orders || []); // PERBAIKAN: Pastikan selalu array
-      } else {
-        throw new Error(data.message || 'Gagal memuat pesanan');
+      if (error) {
+        throw error;
       }
+
+      setOrders(data || []);
+      
     } catch (error) {
       console.error('Error fetching orders:', error);
       toast.error('Gagal memuat pesanan: ' + error.message);
-      setOrders([]); // PERBAIKAN: Set ke array kosong jika error
+      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -63,28 +63,34 @@ const Orders = () => {
 
   const fetchOrderDetail = async (orderId) => {
     try {
-      // PERBAIKAN: Gunakan environment variable untuk base URL
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
-      
-      const response = await fetch(`${API_BASE_URL}/api/order/${orderId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        mode: 'cors'
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
+      // PERBAIKAN: Gunakan Supabase untuk detail order
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            *,
+            products (
+              nama_produk,
+              gambar_url,
+              icon
+            )
+          ),
+          users (
+            nama_lengkap,
+            email,
+            no_telepon
+          )
+        `)
+        .eq('id', orderId)
+        .single();
 
-      if (data.success) {
-        setSelectedOrder(data.order);
-      } else {
-        throw new Error(data.message || 'Gagal memuat detail pesanan');
+      if (error) {
+        throw error;
       }
+
+      setSelectedOrder(data);
+      
     } catch (error) {
       console.error('Error fetching order detail:', error);
       toast.error('Gagal memuat detail pesanan: ' + error.message);
@@ -110,7 +116,6 @@ const Orders = () => {
     );
   }
 
-  // PERBAIKAN: Cek jika orders tidak ada atau kosong
   if (!orders || orders.length === 0) {
     return (
       <div className="min-h-screen mt-16 py-12">
@@ -137,6 +142,7 @@ const Orders = () => {
         <div className="space-y-3">
           {orders.map((order) => {
             const statusBadge = getStatusBadge(order.status_pengiriman || order.status);
+            const totalItems = order.order_items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
             
             return (
               <div key={order.id} className="bg-white rounded-lg shadow-md p-4">
@@ -158,7 +164,7 @@ const Orders = () => {
 
                 <div className="border-t pt-3 mb-3">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-600">{order.total_items || 0} items</span>
+                    <span className="text-gray-600">{totalItems} items</span>
                     <span className="font-bold text-primary">
                       Total: {formatCurrency(
                         (parseFloat(order.total_harga) || 0) + 
@@ -217,11 +223,13 @@ const Orders = () => {
                   <p className="text-sm text-gray-600">{selectedOrder.alamat_pengiriman || 'Tidak ada alamat'}</p>
                 </div>
 
-                {/* Catatan */}
-                {selectedOrder.catatan && (
+                {/* Customer Info */}
+                {selectedOrder.users && (
                   <div>
-                    <p className="text-sm font-semibold text-gray-700 mb-1">Catatan</p>
-                    <p className="text-sm text-gray-600">{selectedOrder.catatan}</p>
+                    <p className="text-sm font-semibold text-gray-700 mb-1">Informasi Customer</p>
+                    <p className="text-sm text-gray-600">{selectedOrder.users.nama_lengkap}</p>
+                    <p className="text-sm text-gray-600">{selectedOrder.users.email}</p>
+                    <p className="text-sm text-gray-600">{selectedOrder.users.no_telepon}</p>
                   </div>
                 )}
 
@@ -229,19 +237,20 @@ const Orders = () => {
                 <div>
                   <p className="text-sm font-semibold text-gray-700 mb-2">Items</p>
                   <div className="space-y-2">
-                    {/* PERBAIKAN: Null check untuk items */}
-                    {(selectedOrder.orderItems || []).map((item, index) => (
+                    {(selectedOrder.order_items || []).map((item, index) => (
                       <div key={index} className="flex items-center gap-3 p-2 bg-gray-50 rounded">
                         <div className="w-10 h-10 bg-gradient-to-br from-secondary to-accent rounded flex items-center justify-center text-lg flex-shrink-0">
-                          {item.icon || '🌿'}
+                          {item.products?.icon || '🌿'}
                         </div>
                         <div className="flex-grow">
-                          <p className="font-semibold text-sm">{item.nama_produk || 'Produk'}</p>
+                          <p className="font-semibold text-sm">{item.products?.nama_produk || 'Produk'}</p>
                           <p className="text-xs text-gray-600">
                             {item.quantity || 0} x {formatCurrency(item.harga_satuan || 0)}
                           </p>
                         </div>
-                        <p className="font-bold text-sm">{formatCurrency((item.quantity || 0) * (item.harga_satuan || 0))}</p>
+                        <p className="font-bold text-sm">
+                          {formatCurrency((item.quantity || 0) * (item.harga_satuan || 0))}
+                        </p>
                       </div>
                     ))}
                   </div>
