@@ -25,6 +25,7 @@ import TestSupabase from './components/TestSupabase'
 
 
 
+
 function App() {
   return (
     <AuthProvider>
