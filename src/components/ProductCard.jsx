@@ -5,22 +5,21 @@ const ProductCard = ({ product }) => {
   const navigate = useNavigate();
 
   const handleCardClick = () => {
-    // Navigasi ke halaman detail produk
     navigate(`/product/${product.id}`);
   };
 
   const handleImageClick = (e) => {
-    e.stopPropagation(); // Mencegah event bubbling ke card
+    e.stopPropagation();
     navigate(`/product/${product.id}`);
   };
 
   return (
     <div 
-      className="bg-white rounded-xl shadow-lg overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300"
+      className="bg-white rounded-xl shadow-lg overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300 flex flex-col"
       onClick={handleCardClick}
     >
       {/* Image Container */}
-      <div className="relative h-48 overflow-hidden">
+      <div className="relative w-full h-40 md:h-48 overflow-hidden flex-shrink-0">
         <img 
           src={product.gambar_url || product.gambar} 
           alt={product.nama_produk}
@@ -34,19 +33,19 @@ const ProductCard = ({ product }) => {
       </div>
       
       {/* Product Info */}
-      <div className="p-4">
-        <h3 className="font-semibold text-lg text-gray-800 mb-2 line-clamp-2">
+      <div className="p-3 md:p-4 flex flex-col flex-grow">
+        <h3 className="font-semibold text-sm md:text-base text-gray-800 mb-1 md:mb-2 line-clamp-2 leading-tight">
           {product.nama_produk}
         </h3>
-        <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+        <p className="text-gray-600 text-xs md:text-sm mb-2 md:mb-3 line-clamp-2 leading-relaxed">
           {product.deskripsi}
         </p>
         
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-lg font-bold text-secondary">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-1 md:gap-0 mb-2">
+          <span className="text-base md:text-lg font-bold text-secondary">
             Rp {product.harga?.toLocaleString('id-ID')}
           </span>
-          <span className={`text-sm ${
+          <span className={`text-xs md:text-sm ${
             product.stok > 0 ? 'text-green-600' : 'text-red-600'
           }`}>
             {product.stok > 0 ? `Stok: ${product.stok}` : 'Stok Habis'}
@@ -55,8 +54,8 @@ const ProductCard = ({ product }) => {
 
         {/* Category */}
         {product.categories && (
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-1 md:gap-0 mt-auto">
+            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded inline-block w-fit">
               {product.categories.name_kategori || product.categories.nama_kategori}
             </span>
             {product.durability && (

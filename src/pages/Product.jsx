@@ -1,4 +1,4 @@
-// src/pages/Product.jsx - PERBAIKI ERROR HANDLING
+// src/pages/Product.jsx - IMPROVED LAYOUT & STYLING
 import { useState, useEffect } from 'react';
 import { productsService } from '../services/productsService';
 import ProductCard from '../components/ProductCard';
@@ -16,6 +16,7 @@ const Product = () => {
     sort: 'newest',
     productType: 'all',
   });
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     console.log('🔄 Product component mounted');
@@ -145,119 +146,182 @@ const Product = () => {
   };
 
   return (
-    <div className="min-h-screen mt-16 py-4 md:py-8">
+    <div className="min-h-screen mt-16 py-4 md:py-8 bg-gray-50">
       <div className="max-w-7xl mx-auto px-3 md:px-4">
-        {/* Header */}
-        <div className="mb-6 md:mb-8">
-          <h1 className="text-2xl md:text-4xl font-bold text-primary mb-3 md:mb-4">
+        {/* Header dengan Background Gradient */}
+        <div className="mb-6 md:mb-8 text-center">
+          <h1 className="text-2xl md:text-4xl font-bold text-gray-800 mb-3 md:mb-4 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Katalog Produk
           </h1>
-          <p className="text-gray-600 text-sm md:text-base">
-            Temukan tanaman hias dan aksesoris berkebun favorit Anda
+          <p className="text-gray-600 text-sm md:text-base max-w-2xl mx-auto">
+            Temukan tanaman hias dan aksesoris berkebun favorit Anda dengan kualitas terbaik
           </p>
         </div>
 
-        {/* Product Type Tabs */}
-        <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
-          <h3 className="font-semibold text-primary mb-3">Jenis Produk:</h3>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={() => handleFilterChange('productType', 'all')}
-              className={`py-2 px-3 rounded-lg text-sm font-semibold transition ${
-                filters.productType === 'all' 
-                  ? 'bg-secondary text-white' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Semua Produk
-            </button>
-            <button
-              onClick={() => handleFilterChange('productType', 'plants')}
-              className={`py-2 px-3 rounded-lg text-sm font-semibold transition ${
-                filters.productType === 'plants' 
-                  ? 'bg-secondary text-white' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              🌿 Tanaman Hias
-            </button>
-            <button
-              onClick={() => handleFilterChange('productType', 'accessories')}
-              className={`py-2 px-3 rounded-lg text-sm font-semibold transition ${
-                filters.productType === 'accessories' 
-                  ? 'bg-secondary text-white' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              🛠️ Aksesoris
-            </button>
-          </div>
-        </div>
+        {/* Main Content Grid */}
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Sidebar Filters - Hidden on mobile, shown with toggle */}
+          <div className={`lg:w-1/4 ${showFilters ? 'block' : 'hidden lg:block'}`}>
+            <div className="bg-white rounded-xl shadow-lg p-4 md:p-6 sticky top-24">
+              {/* Filter Toggle for Mobile */}
+              <div className="flex justify-between items-center mb-4 lg:hidden">
+                <h3 className="font-bold text-lg text-gray-800">Filter Produk</h3>
+                <button
+                  onClick={() => setShowFilters(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              </div>
 
-        {/* Search and Filters */}
-        <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            {/* Search */}
-            <div>
-              <input
-                type="text"
-                placeholder="Cari produk..."
-                value={filters.search}
-                onChange={(e) => handleFilterChange('search', e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary"
-              />
-            </div>
+              {/* Product Type */}
+              <div className="mb-6">
+                <h4 className="font-semibold text-gray-800 mb-3">Jenis Produk</h4>
+                <div className="space-y-2">
+                  {[
+                    { value: 'all', label: '🌿 Semua Produk', color: 'bg-blue-100 text-blue-800' },
+                    { value: 'plants', label: '🌱 Tanaman Hias', color: 'bg-green-100 text-green-800' },
+                    { value: 'accessories', label: '🛠️ Aksesoris', color: 'bg-orange-100 text-orange-800' }
+                  ].map((type) => (
+                    <button
+                      key={type.value}
+                      onClick={() => handleFilterChange('productType', type.value)}
+                      className={`w-full text-left p-3 rounded-lg font-medium transition-all ${
+                        filters.productType === type.value 
+                          ? `${type.color} shadow-md` 
+                          : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      {type.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-            {/* Sort */}
-            <div>
-              <select
-                value={filters.sort}
-                onChange={(e) => handleFilterChange('sort', e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary"
+              {/* Categories */}
+              <div className="mb-6">
+                <h4 className="font-semibold text-gray-800 mb-3">Kategori</h4>
+                <select
+                  value={filters.category}
+                  onChange={(e) => handleFilterChange('category', e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary bg-white"
+                >
+                  <option value="">Semua Kategori</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name_kategori || category.nama_kategori}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Durability */}
+              <div className="mb-6">
+                <h4 className="font-semibold text-gray-800 mb-3">Tingkat Perawatan</h4>
+                <select
+                  value={filters.durability}
+                  onChange={(e) => handleFilterChange('durability', e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary bg-white"
+                >
+                  <option value="">Semua Tingkat</option>
+                  <option value="easy">Mudah</option>
+                  <option value="medium">Sedang</option>
+                  <option value="hard">Sulit</option>
+                </select>
+              </div>
+
+              {/* Sort */}
+              <div className="mb-6">
+                <h4 className="font-semibold text-gray-800 mb-3">Urutkan</h4>
+                <select
+                  value={filters.sort}
+                  onChange={(e) => handleFilterChange('sort', e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary bg-white"
+                >
+                  <option value="newest">Terbaru</option>
+                  <option value="price_low">Harga Terendah</option>
+                  <option value="price_high">Harga Tertinggi</option>
+                </select>
+              </div>
+
+              {/* Clear Filters */}
+              <button
+                onClick={clearFilters}
+                className="w-full py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors border border-gray-300"
               >
-                <option value="newest">Terbaru</option>
-                <option value="price_low">Harga Terendah</option>
-                <option value="price_high">Harga Tertinggi</option>
-              </select>
+                🔄 Reset Filter
+              </button>
             </div>
           </div>
 
-          {/* Clear Filters */}
-          <div className="flex justify-between items-center">
-            <button
-              onClick={clearFilters}
-              className="text-secondary hover:underline text-sm"
-            >
-              Hapus Filter
-            </button>
-            <span className="text-gray-600 text-sm">
-              {products.length} produk ditemukan
-            </span>
+          {/* Main Content */}
+          <div className="lg:w-3/4">
+            {/* Top Bar dengan Search dan Filter Toggle */}
+            <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
+              <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                {/* Search Bar */}
+                <div className="flex-1 w-full md:w-auto">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Cari produk, tanaman, aksesoris..."
+                      value={filters.search}
+                      onChange={(e) => handleFilterChange('search', e.target.value)}
+                      className="w-full p-3 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary"
+                    />
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                      🔍
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter Toggle & Results */}
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                  <button
+                    onClick={() => setShowFilters(true)}
+                    className="lg:hidden bg-secondary text-white px-4 py-3 rounded-lg font-semibold hover:bg-secondary-dark transition-colors flex items-center gap-2"
+                  >
+                    <span>📊</span>
+                    Filter
+                  </button>
+                  
+                  <div className="text-sm text-gray-600 bg-gray-100 px-3 py-2 rounded-lg">
+                    📦 {products.length} produk ditemukan
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Products Grid - 2 kolom untuk mobile, 3 kolom untuk desktop */}
+            {loading ? (
+              <div className="flex justify-center items-center py-16">
+                <LoadingSpinner />
+              </div>
+            ) : products.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                {products.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-16 bg-white rounded-xl shadow-lg">
+                <div className="text-6xl mb-4">🌱</div>
+                <h3 className="text-xl font-semibold text-gray-700 mb-2">
+                  Produk Tidak Ditemukan
+                </h3>
+                <p className="text-gray-500 mb-6 max-w-md mx-auto">
+                  Maaf, tidak ada produk yang sesuai dengan filter yang Anda pilih. Coba ubah filter atau kata kunci pencarian.
+                </p>
+                <button
+                  onClick={clearFilters}
+                  className="bg-secondary text-white px-8 py-3 rounded-lg font-semibold hover:bg-secondary-dark transition-colors"
+                >
+                  Tampilkan Semua Produk
+                </button>
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Products Grid */}
-        {loading ? (
-          <div className="flex justify-center py-8">
-            <LoadingSpinner />
-          </div>
-        ) : products.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {products.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <p className="text-gray-500 mb-4">Tidak ada produk yang ditemukan.</p>
-            <button
-              onClick={clearFilters}
-              className="bg-secondary text-white px-6 py-2 rounded-lg hover:bg-secondary-dark"
-            >
-              Reset Filter
-            </button>
-          </div>
-        )}
       </div>
     </div>  
   );

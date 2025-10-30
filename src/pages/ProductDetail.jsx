@@ -35,7 +35,7 @@ const ProductDetail = () => {
     } catch (error) {
       console.error('❌ Error fetching product:', error);
       toast.error('Gagal memuat detail produk');
-      navigate('/products'); // Redirect ke katalog jika produk tidak ditemukan
+      navigate('/products');
     } finally {
       setLoading(false);
     }
@@ -94,24 +94,24 @@ const ProductDetail = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 mt-16">
-      <div className="max-w-7xl mx-auto px-4">
-        {/* Gunakan Link untuk navigasi yang lebih baik */}
+    <div className="min-h-screen bg-gray-50 py-4 md:py-8 mt-16">
+      <div className="max-w-7xl mx-auto px-3 md:px-4">
+        {/* Navigation */}
         <Link 
           to="/products"
-          className="mb-6 text-secondary hover:underline flex items-center"
+          className="mb-4 md:mb-6 text-secondary hover:underline flex items-center text-sm md:text-base"
         >
           ← Kembali ke Katalog
         </Link>
         
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8 p-4 md:p-8">
             {/* Product Image */}
-            <div>
+            <div className="flex justify-center">
               <img 
                 src={product.gambar_url || product.gambar} 
                 alt={product.nama_produk}
-                className="w-full h-96 object-cover rounded-lg"
+                className="w-full max-w-md md:max-w-full h-64 md:h-96 object-cover rounded-lg"
                 onError={(e) => {
                   e.target.src = 'https://placehold.co/600x400/4ade80/white?text=Gambar+Tidak+Tersedia';
                 }}
@@ -119,71 +119,77 @@ const ProductDetail = () => {
             </div>
             
             {/* Product Info */}
-            <div className="flex flex-col justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-4">
+            <div className="flex flex-col justify-between space-y-4 md:space-y-6">
+              <div className="space-y-3 md:space-y-4">
+                <h1 className="text-xl md:text-3xl font-bold text-gray-900 leading-tight">
                   {product.nama_produk}
                 </h1>
-                <p className="text-gray-600 mb-6">{product.deskripsi}</p>
+                <p className="text-gray-600 text-sm md:text-base leading-relaxed">
+                  {product.deskripsi}
+                </p>
                 
-                <div className="mb-6">
-                  <span className="text-2xl font-bold text-secondary">
+                <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+                  <span className="text-xl md:text-2xl font-bold text-secondary">
                     Rp {product.harga?.toLocaleString('id-ID')}
                   </span>
-                  <span className={`ml-4 text-sm ${product.stok > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <span className={`text-sm ${product.stok > 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {product.stok > 0 ? `Stok: ${product.stok}` : 'Stok Habis'}
                   </span>
                 </div>
                 
                 {product.categories && (
-                  <div className="mb-6">
+                  <div className="flex items-center gap-2">
                     <span className="text-sm text-gray-500">Kategori:</span>
-                    <span className="ml-2 text-gray-700 bg-gray-100 px-3 py-1 rounded-full text-sm">
+                    <span className="text-gray-700 bg-gray-100 px-3 py-1 rounded-full text-sm">
                       {product.categories.name_kategori || product.categories.nama_kategori || 'Tanaman'}
                     </span>
                   </div>
                 )}
 
                 {product.durability && (
-                  <div className="mb-6">
+                  <div className="flex items-center gap-2">
                     <span className="text-sm text-gray-500">Tingkat Perawatan:</span>
-                    <span className="ml-2 text-gray-700 capitalize">
+                    <span className="text-gray-700 capitalize text-sm">
                       {product.durability}
                     </span>
                   </div>
                 )}
 
                 {product.cara_perawatan && (
-                  <div className="mb-6">
+                  <div>
                     <span className="text-sm text-gray-500">Cara Perawatan:</span>
-                    <p className="text-gray-700 mt-1">{product.cara_perawatan}</p>
+                    <p className="text-gray-700 mt-1 text-sm leading-relaxed">
+                      {product.cara_perawatan}
+                    </p>
                   </div>
                 )}
               </div>
               
               {/* Add to Cart */}
-              <div className="border-t pt-6">
-                <div className="flex items-center gap-4 mb-4">
-                  <label className="text-gray-700 font-medium">Jumlah:</label>
-                  <input 
-                    type="number" 
-                    min="1"
-                    max={product.stok}
-                    value={quantity}
-                    onChange={(e) => {
-                      const value = parseInt(e.target.value) || 1;
-                      setQuantity(Math.max(1, Math.min(value, product.stok)));
-                    }}
-                    className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary"
-                  />
-                  <span className="text-sm text-gray-500">
-                    Maks: {product.stok}
-                  </span>
+              <div className="border-t pt-4 md:pt-6">
+                <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4">
+                  <label className="text-gray-700 font-medium text-sm md:text-base">Jumlah:</label>
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="number" 
+                      min="1"
+                      max={product.stok}
+                      value={quantity}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value) || 1;
+                        setQuantity(Math.max(1, Math.min(value, product.stok)));
+                      }}
+                      className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary text-sm md:text-base"
+                    />
+                    <span className="text-xs md:text-sm text-gray-500">
+                      Maks: {product.stok}
+                    </span>
+                  </div>
                 </div>
                 <button 
                   onClick={handleAddToCart}
                   disabled={product.stok === 0}
-                  className={`w-full py-3 px-6 rounded-lg font-semibold transition-colors ${
+                  className={`w-full py-3 px-6 rounded-lg font-semibold transition-colors text-sm md:text-base ${
                     product.stok === 0 
                       ? 'bg-gray-400 cursor-not-allowed text-gray-200' 
                       : 'bg-secondary hover:bg-secondary-dark text-white'

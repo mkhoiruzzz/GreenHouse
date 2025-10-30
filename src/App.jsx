@@ -21,7 +21,8 @@ import Contact from './pages/Contact'
 import Profil from './pages/Profile'
 import Success from './pages/Success'
 import Accesories from './pages/Accesories'
-import TestSupabase from './components/TestSupabase' // ✅ PERBAIKI IMPORT
+import TestSupabase from './components/TestSupabase'
+
 
 function App() {
   return (

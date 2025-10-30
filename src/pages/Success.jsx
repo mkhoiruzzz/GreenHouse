@@ -9,30 +9,48 @@ const Success = () => {
   const { orderId } = location.state || {};
 
   useEffect(() => {
-    // PERBAIKAN: Tambahkan timeout untuk redirect
+    // Redirect jika tidak ada orderId setelah 5 detik
     if (!orderId) {
       const timer = setTimeout(() => {
         navigate('/');
-      }, 3000);
+      }, 5000);
       return () => clearTimeout(timer);
     }
   }, [orderId, navigate]);
 
   const openGmail = () => {
-    // Membuka Gmail di tab baru
     window.open('https://mail.google.com', '_blank');
   };
 
-  // PERBAIKAN: Tampilkan pesan jika tidak ada orderId
+  // PESAN YANG DIPERBAIKI: Tampilkan pesan lebih informatif
   if (!orderId) {
     return (
       <div style={styles.container}>
         <div style={styles.card}>
-          <div style={styles.errorIcon}>⚠️</div>
-          <h1 style={styles.title}>Pesanan Tidak Ditemukan</h1>
+          <div style={styles.errorIcon}>❌</div>
+          <h1 style={styles.errorTitle}>Pesanan Gagal Diproses</h1>
           <p style={styles.message}>
-            Mengarahkan kembali ke beranda...
+            Maaf, terjadi kesalahan dalam memproses pesanan Anda.
           </p>
+          <div style={styles.troubleshoot}>
+            <p><strong>Kemungkinan penyebab:</strong></p>
+            <ul style={styles.troubleshootList}>
+              <li>Data pesanan tidak tersimpan dengan benar</li>
+              <li>Koneksi internet terputus saat proses checkout</li>
+              <li>Terjadi kesalahan sistem</li>
+            </ul>
+          </div>
+          <p style={styles.redirectMessage}>
+            Anda akan diarahkan ke beranda dalam 5 detik...
+          </p>
+          <div style={styles.actions}>
+            <Link to="/" style={styles.primaryButton}>
+              Kembali ke Beranda Sekarang
+            </Link>
+            <Link to="/cart" style={styles.secondaryButton}>
+              Coba Lagi
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -61,6 +79,9 @@ const Success = () => {
           <button onClick={openGmail} style={styles.secondaryButton}>
             Lihat Pesanan Di Gmail
           </button>
+          <Link to="/orders" style={styles.tertiaryButton}>
+            Lihat Daftar Pesanan Saya
+          </Link>
         </div>
       </div>
     </div>
@@ -99,17 +120,41 @@ const styles = {
     fontWeight: 'bold',
     marginBottom: '16px'
   },
+  errorTitle: {
+    color: '#dc2626',
+    fontSize: '28px',
+    fontWeight: 'bold',
+    marginBottom: '16px'
+  },
   message: {
     fontSize: '16px',
     color: '#666',
     marginBottom: '24px',
     lineHeight: '1.5'
   },
+  redirectMessage: {
+    fontSize: '14px',
+    color: '#888',
+    fontStyle: 'italic',
+    marginBottom: '20px'
+  },
   orderInfo: {
     backgroundColor: '#f8f9fa',
     padding: '16px',
     borderRadius: '8px',
     marginBottom: '24px',
+    textAlign: 'left'
+  },
+  troubleshoot: {
+    backgroundColor: '#fef2f2',
+    padding: '16px',
+    borderRadius: '8px',
+    marginBottom: '20px',
+    textAlign: 'left'
+  },
+  troubleshootList: {
+    margin: '10px 0',
+    paddingLeft: '20px',
     textAlign: 'left'
   },
   actions: {
@@ -139,6 +184,17 @@ const styles = {
     textAlign: 'center',
     cursor: 'pointer',
     fontSize: '16px'
+  },
+  tertiaryButton: {
+    backgroundColor: '#3b82f6',
+    color: 'white',
+    padding: '12px 24px',
+    borderRadius: '6px',
+    textDecoration: 'none',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    border: 'none',
+    cursor: 'pointer'
   }
 };
 
