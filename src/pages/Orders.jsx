@@ -29,10 +29,20 @@ const Orders = () => {
         return;
       }
 
-      const response = await fetch(`http://localhost:5000/api/orders/${user.id}`);
+      // PERBAIKAN: Gunakan environment variable untuk base URL
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+      
+      const response = await fetch(`${API_BASE_URL}/api/orders/${user.id}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // PERBAIKAN: Tambahkan error handling untuk CORS
+        mode: 'cors'
+      });
       
       if (!response.ok) {
-        throw new Error('Gagal mengambil data pesanan');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
@@ -44,7 +54,7 @@ const Orders = () => {
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
-      toast.error('Gagal memuat pesanan');
+      toast.error('Gagal memuat pesanan: ' + error.message);
       setOrders([]); // PERBAIKAN: Set ke array kosong jika error
     } finally {
       setLoading(false);
@@ -53,10 +63,19 @@ const Orders = () => {
 
   const fetchOrderDetail = async (orderId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/orders/detail/${orderId}`);
+      // PERBAIKAN: Gunakan environment variable untuk base URL
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+      
+      const response = await fetch(`${API_BASE_URL}/api/order/${orderId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        mode: 'cors'
+      });
       
       if (!response.ok) {
-        throw new Error('Gagal mengambil detail pesanan');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
@@ -68,7 +87,7 @@ const Orders = () => {
       }
     } catch (error) {
       console.error('Error fetching order detail:', error);
-      toast.error('Gagal memuat detail pesanan');
+      toast.error('Gagal memuat detail pesanan: ' + error.message);
     }
   };
 
@@ -117,7 +136,7 @@ const Orders = () => {
 
         <div className="space-y-3">
           {orders.map((order) => {
-            const statusBadge = getStatusBadge(order.status);
+            const statusBadge = getStatusBadge(order.status_pengiriman || order.status);
             
             return (
               <div key={order.id} className="bg-white rounded-lg shadow-md p-4">
@@ -187,8 +206,8 @@ const Orders = () => {
                 {/* Status */}
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Status</span>
-                  <span className={`text-sm font-semibold px-3 py-1 rounded-full ${getStatusBadge(selectedOrder.status).color}`}>
-                    {getStatusBadge(selectedOrder.status).text}
+                  <span className={`text-sm font-semibold px-3 py-1 rounded-full ${getStatusBadge(selectedOrder.status_pengiriman || selectedOrder.status).color}`}>
+                    {getStatusBadge(selectedOrder.status_pengiriman || selectedOrder.status).text}
                   </span>
                 </div>
 
@@ -211,7 +230,7 @@ const Orders = () => {
                   <p className="text-sm font-semibold text-gray-700 mb-2">Items</p>
                   <div className="space-y-2">
                     {/* PERBAIKAN: Null check untuk items */}
-                    {(selectedOrder.items || []).map((item, index) => (
+                    {(selectedOrder.orderItems || []).map((item, index) => (
                       <div key={index} className="flex items-center gap-3 p-2 bg-gray-50 rounded">
                         <div className="w-10 h-10 bg-gradient-to-br from-secondary to-accent rounded flex items-center justify-center text-lg flex-shrink-0">
                           {item.icon || '🌿'}
@@ -222,7 +241,7 @@ const Orders = () => {
                             {item.quantity || 0} x {formatCurrency(item.harga_satuan || 0)}
                           </p>
                         </div>
-                        <p className="font-bold text-sm">{formatCurrency(item.subtotal || 0)}</p>
+                        <p className="font-bold text-sm">{formatCurrency((item.quantity || 0) * (item.harga_satuan || 0))}</p>
                       </div>
                     ))}
                   </div>

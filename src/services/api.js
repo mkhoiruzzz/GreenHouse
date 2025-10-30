@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Backend URL - sesuaikan dengan port backend Anda
-const API_BASE_URL = 'http://localhost:5000/api';
+// PERBAIKAN: Gunakan environment variable untuk base URL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -9,6 +9,7 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
   withCredentials: false, // false untuk development
+  timeout: 10000, // PERBAIKAN: Tambahkan timeout
 });
 
 // Interceptor untuk menambahkan token ke header
@@ -35,6 +36,12 @@ api.interceptors.response.use(
       localStorage.removeItem('user');
       window.location.href = '/login';
     }
+    
+    // PERBAIKAN: Handle CORS errors
+    if (error.code === 'ERR_NETWORK') {
+      console.error('Network error - mungkin CORS atau server down');
+    }
+    
     return Promise.reject(error);
   }
 );
