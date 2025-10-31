@@ -41,54 +41,108 @@ const Orders = () => {
     }
   }, [isAuthenticated]);
 
- // Di fetchOrders function, tambahkan error handling:
-const fetchOrders = async () => {
-  try {
-    setLoading(true);
-    
-    if (!user || !user.id) {
-      toast.error('User tidak valid');
-      return;
-    }
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      
+      if (!user || !user.id) {
+        toast.error('User tidak valid');
+        return;
+      }
 
-    console.log('🔄 Fetching orders for user:', user.id);
+      console.log('🔄 Fetching orders for user:', user.id);
 
-    // ✅ ADD TIMEOUT untuk HP yang lambat
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Request timeout')), 10000)
-    );
+      // PERBAIKAN: Query orders sesuai struktur database
+      const { data: ordersData, error: ordersError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
 
-    const fetchPromise = supabase
-      .from('orders')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+      if (ordersError) {
+        console.error('❌ Error fetching orders:', ordersError);
+        toast.error('Gagal memuat pesanan: ' + ordersError.message);
+        setOrders([]);
+        return;
+      }
 
-    const { data: ordersData, error: ordersError } = await Promise.race([fetchPromise, timeoutPromise]);
+      console.log('✅ Orders fetched:', ordersData);
 
-    if (ordersError) {
-      console.error('❌ Error fetching orders:', ordersError);
-      // ✅ TAMPILKAN ERROR DETAIL DI HP
-      alert(`Error: ${ordersError.message}`);
-      toast.error('Gagal memuat pesanan');
+      // Jika tidak ada orders, set empty array
+      if (!ordersData || ordersData.length === 0) {
+        setOrders([]);
+        return;
+      }
+
+      // Ambil order items untuk setiap order
+      const ordersWithItems = await Promise.all(
+        ordersData.map(async (order) => {
+          const { data: itemsData, error: itemsError } = await supabase
+            .from('order_items')
+            .select('*')
+            .eq('order_id', order.id);
+
+          if (itemsError) {
+            console.error(`❌ Error fetching items for order ${order.id}:`, itemsError);
+            return { ...order, order_items: [] };
+          }
+
+          // Ambil product info untuk setiap item
+          const itemsWithProducts = await Promise.all(
+            (itemsData || []).map(async (item) => {
+              try {
+                const { data: productData, error: productError } = await supabase
+                  .from('products')
+                  .select('nama_produk, gambar_url, icon')
+                  .eq('id', item.product_id)
+                  .single();
+
+                if (productError) {
+                  console.warn(`⚠️ Product ${item.product_id} not available, using default`);
+                  return { 
+                    ...item, 
+                    products: {
+                      nama_produk: 'Product',
+                      gambar_url: null,
+                      icon: '🌿'
+                    }
+                  };
+                }
+
+                return { ...item, products: productData };
+              } catch (error) {
+                console.error(`❌ Error fetching product ${item.product_id}:`, error);
+                return { 
+                  ...item, 
+                  products: {
+                    nama_produk: 'Product',
+                    gambar_url: null,
+                    icon: '🌿'
+                  }
+                };
+              }
+            })
+          );
+
+          return { 
+            ...order, 
+            order_items: itemsWithProducts,
+            total_items: itemsData?.length || 0,
+            total_quantity: itemsData?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0
+          };
+        })
+      );
+
+      setOrders(ordersWithItems);
+      
+    } catch (error) {
+      console.error('❌ Error in fetchOrders:', error);
+      toast.error('Gagal memuat pesanan: ' + error.message);
       setOrders([]);
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    console.log('✅ Orders fetched:', ordersData);
-
-    // ... rest of your code ...
-
-  } catch (error) {
-    console.error('❌ Error in fetchOrders:', error);
-    // ✅ TAMPILKAN ERROR DI HP
-    alert(`Fetch Error: ${error.message}`);
-    toast.error('Gagal memuat pesanan: ' + error.message);
-    setOrders([]);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const fetchOrderDetail = async (orderId) => {
   try {
@@ -216,26 +270,6 @@ const fetchOrders = async () => {
       </div>
     );
   }
-
-  // Di App.jsx atau Orders.jsx, tambahkan:
-useEffect(() => {
-  // Cek koneksi internet
-  if (!navigator.onLine) {
-    toast.error('Tidak ada koneksi internet');
-  }
-
-  // Listen untuk online/offline
-  const handleOnline = () => toast.success('Koneksi pulih');
-  const handleOffline = () => toast.error('Koneksi internet terputus');
-
-  window.addEventListener('online', handleOnline);
-  window.addEventListener('offline', handleOffline);
-
-  return () => {
-    window.removeEventListener('online', handleOnline);
-    window.removeEventListener('offline', handleOffline);
-  };
-}, []);
 
   return (
     <div className="min-h-screen mt-16 py-6">

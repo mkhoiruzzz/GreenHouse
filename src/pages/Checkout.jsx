@@ -1,4 +1,4 @@
-// Checkout.jsx - Fixed product validation error
+// Checkout.jsx - Fixed all errors
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
@@ -6,15 +6,18 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/formatCurrency';
 import { toast } from 'react-toastify';
 import emailjs from '@emailjs/browser';
- import { supabase } from '../config/supabase';
+import { supabase } from '../config/supabase';
 
 const Checkout = () => {
   const navigate = useNavigate();
   const { cartItems, clearCart } = useCart();
   const { user } = useAuth();
-  
+
+  const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [orderId, setOrderId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const [formData, setFormData] = useState({
     // Step 1: Informasi Pembeli
     email: user?.email || '',
@@ -34,6 +37,18 @@ const Checkout = () => {
     metode_pembayaran: 'transfer',
     kode_kupon: ''
   });
+
+  // ✅ ADD MISSING FUNCTION
+  const formatOrderItems = () => {
+    const formattedItems = cartItems.map(item => ({
+      product_id: item.id,
+      quantity: item.quantity,
+      harga_satuan: item.harga,
+    }));
+    
+    console.log('📦 Formatted order items:', formattedItems);
+    return formattedItems;
+  };
 
   const steps = [
     { number: 1, title: 'Informasi Pembeli' },
@@ -163,175 +178,173 @@ const Checkout = () => {
     }
   };
 
+  // ✅ GANTI DENGAN FUNGSI REAL YANG SAVE KE SUPABASE
+  const createOrderInSupabase = async (orderData) => {
+    try {
+      console.log('🛒 Creating order in Supabase:', orderData);
+      
+      // 1. BUAT ORDER DI TABLE orders
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert([{
+          user_id: orderData.user_id,
+          total_harga: orderData.total_harga,
+          biaya_pengiriman: orderData.biaya_pengiriman,
+          status_pembayaran: 'pending',
+          status_pengiriman: 'pending',
+          metode_pembayaran: orderData.metode_pembayaran,
+          alamat_pengiriman: orderData.alamat_pengiriman,
+          catatan: orderData.catatan || ''
+        }])
+        .select();
 
+      if (orderError) throw orderError;
+      if (!order || order.length === 0) throw new Error('Order creation failed');
 
-// ✅ GANTI DENGAN FUNGSI REAL YANG SAVE KE SUPABASE
-const createOrderInSupabase = async (orderData) => {
+      const orderId = order[0].id;
+      console.log('✅ Order created with ID:', orderId);
+
+      // 2. BUAT ORDER ITEMS DI TABLE order_items
+      const orderItemsData = orderData.items.map(item => ({
+        order_id: orderId,
+        product_id: item.product_id,
+        quantity: item.quantity,
+        harga_satuan: item.harga
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItemsData);
+
+      if (itemsError) throw itemsError;
+
+      console.log('✅ Order items created successfully');
+
+      return { 
+        success: true, 
+        orderId: orderId, // ✅ ID ASLI DARI DATABASE
+        message: 'Pesanan berhasil dibuat' 
+      };
+
+    } catch (error) {
+      console.error('❌ Error creating order:', error);
+      return { 
+        success: false, 
+        error: error.message,
+        message: 'Gagal membuat pesanan: ' + error.message
+      };
+    }
+  };
+
+  // ✅ FIXED handlePlaceOrder function
+ const handlePlaceOrder = async () => {
   try {
-    console.log('🛒 Creating order in Supabase:', orderData);
-    
-    // 1. BUAT ORDER DI TABLE orders
+    setLoading(true);
+    setIsSubmitting(true);
+    console.log('🔄 Starting order placement...');
+
+    if (!user) {
+      toast.error('Silakan login terlebih dahulu');
+      navigate('/login');
+      return;
+    }
+
+    // Format data order
+    const orderItems = formatOrderItems();
+    const totalHarga = calculateSubtotal();
+    const biayaPengiriman = formData.biaya_pengiriman || 15000;
+
+    const orderData = {
+      user_id: user.id,
+      total_harga: totalHarga,
+      biaya_pengiriman: biayaPengiriman,
+      status_pembayaran: 'pending',
+      status_pengiriman: 'pending',
+      metode_pembayaran: formData.metode_pembayaran,
+      alamat_pengiriman: `${formData.alamat_pengiriman}, ${formData.kota} ${formData.kode_pos}`,
+      catatan: ''
+    };
+
+    console.log('📝 Order data:', orderData);
+    console.log('🔄 Checking if order saved in database...');
+
+    // Insert order ke database
     const { data: order, error: orderError } = await supabase
       .from('orders')
-      .insert([{
-        user_id: orderData.user_id,
-        total_harga: orderData.total_harga,
-        biaya_pengiriman: orderData.biaya_pengiriman,
-        status_pembayaran: 'pending',
-        status_pengiriman: 'pending',
-        metode_pembayaran: orderData.metode_pembayaran,
-        alamat_pengiriman: orderData.alamat_pengiriman,
-        catatan: orderData.catatan || ''
-      }])
-      .select();
+      .insert([orderData])
+      .select()
+      .single();
 
-    if (orderError) throw orderError;
-    if (!order || order.length === 0) throw new Error('Order creation failed');
+    if (orderError) {
+      console.error('❌ Order error:', orderError);
+      throw new Error(`Gagal membuat order: ${orderError.message}`);
+    }
 
-    const orderId = order[0].id;
-    console.log('✅ Order created with ID:', orderId);
+    console.log('✅ Order created:', order);
 
-    // 2. BUAT ORDER ITEMS DI TABLE order_items
-    const orderItemsData = orderData.items.map(item => ({
-      order_id: orderId,
-      product_id: item.product_id,
-      quantity: item.quantity,
-      harga_satuan: item.harga
+    // Insert order items
+    const orderItemsData = orderItems.map(item => ({
+      ...item,
+      order_id: order.id
     }));
 
     const { error: itemsError } = await supabase
       .from('order_items')
       .insert(orderItemsData);
 
-    if (itemsError) throw itemsError;
+    if (itemsError) {
+      console.error('❌ Order items error:', itemsError);
+      throw new Error(`Gagal menambahkan items: ${itemsError.message}`);
+    }
 
-    console.log('✅ Order items created successfully');
+    console.log('✅ Order items created');
 
-    return { 
-      success: true, 
-      orderId: orderId, // ✅ ID ASLI DARI DATABASE
-      message: 'Pesanan berhasil dibuat' 
+    // ✅ KIRIM EMAIL KONFIRMASI SETELAH ORDER BERHASIL
+    console.log('📧 Attempting to send confirmation email...');
+    
+    const emailData = {
+      email: formData.email,
+      nama_lengkap: formData.nama_lengkap,
+      orderId: order.id,
+      items: cartItems,
+      biaya_pengiriman: biayaPengiriman,
+      metode_pembayaran: formData.metode_pembayaran,
+      metode_pengiriman: formData.metode_pengiriman,
+      alamat_pengiriman: `${formData.alamat_pengiriman}, ${formData.kota} ${formData.kode_pos}`,
+      kota: formData.kota,
+      kode_pos: formData.kode_pos,
+      no_telepon: formData.no_telepon
     };
+
+    const emailSent = await sendOrderConfirmationEmail(emailData);
+    
+    if (emailSent) {
+      console.log('✅ Email confirmation sent successfully');
+    } else {
+      console.log('⚠️ Email confirmation failed, but order was created');
+    }
+
+    console.log('🎉 Order placement successful:', order.id);
+    
+    // Clear cart
+    clearCart();
+    
+    // Set order ID untuk ditampilkan
+    setOrderId(order.id);
+    
+    // Move to success step
+    setCurrentStep(4);
+    
+    toast.success('Pesanan berhasil dibuat!');
 
   } catch (error) {
-    console.error('❌ Error creating order:', error);
-    return { 
-      success: false, 
-      error: error.message,
-      message: 'Gagal membuat pesanan: ' + error.message
-    };
+    console.error('❌ Error placing order:', error);
+    toast.error(error.message || 'Terjadi kesalahan saat membuat pesanan');
+  } finally {
+    setLoading(false);
+    setIsSubmitting(false);
   }
 };
-  // PERBAIKAN UTAMA: Fix handlePlaceOrder function
-  const handlePlaceOrder = async () => {
-    try {
-      setIsSubmitting(true);
-
-      // Validasi email
-      if (!formData.email || formData.email.trim() === '') {
-        toast.error('Email harus diisi untuk menerima konfirmasi');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Format order items
-      const orderItems = cartItems.map(item => {
-        const productId = item.product_id || item.id;
-        
-        return {
-          product_id: parseInt(productId) || 1,
-          quantity: parseInt(item.quantity) || 1,
-          harga: parseFloat(item.harga) || 0,
-          nama_produk: item.nama_produk || 'Product'
-        };
-      });
-
-      console.log('📦 Formatted order items:', orderItems);
-
-      // Validasi items
-      const invalidItems = orderItems.filter(item => 
-        !item.product_id || item.product_id === 0 || isNaN(item.product_id)
-      );
-      
-      if (invalidItems.length > 0) {
-        console.error('❌ Invalid items found:', invalidItems);
-        toast.error('Data produk tidak valid. Silakan refresh keranjang Anda.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Di handlePlaceOrder - tambahkan setelah order created
-console.log('🔄 Checking if order saved in database...');
-
-// Test query order dari Supabase
-const { data: savedOrder, error } = await supabase
-  .from('orders')
-  .select('*')
-  .eq('id', result.orderId)
-  .single();
-
-console.log('✅ Order in database:', savedOrder);
-console.log('❌ Error:', error);
-
-      // Siapkan payload untuk Supabase
-      const orderPayload = {
-        user_id: user?.id || '00000000-0000-0000-0000-000000000000',
-        items: orderItems,
-        total_harga: calculateSubtotal(),
-        biaya_pengiriman: formData.biaya_pengiriman || 0,
-        metode_pembayaran: formData.metode_pembayaran || 'transfer',
-        alamat_pengiriman: formData.alamat_pengiriman,
-        // Data tambahan untuk database
-        nama_lengkap: formData.nama_lengkap || '',
-        email: formData.email || '',
-        no_telepon: formData.no_telepon || '',
-        kota: formData.kota || ''
-      };
-
-      console.log('🛒 Final order payload for Supabase:', orderPayload);
-
-      // Gunakan Supabase untuk create order
-      const result = await createOrderInSupabase(orderPayload);
-
-      if (result.success) {
-        console.log('✅ Order created successfully:', result.orderId);
-        
-        // Kirim email konfirmasi
-        try {
-          const emailSent = await sendOrderConfirmationEmail({
-            ...formData,
-            items: cartItems,
-            orderId: result.orderId
-          });
-
-          if (emailSent) {
-            toast.success('🎉 Pesanan berhasil dibuat! Email konfirmasi telah dikirim.');
-          } else {
-            toast.success('🎉 Pesanan berhasil dibuat! (Email konfirmasi gagal dikirim)');
-          }
-        } catch (emailError) {
-          console.error('Email error:', emailError);
-          toast.success('🎉 Pesanan berhasil dibuat!');
-        }
-
-        // Clear cart dan redirect
-        clearCart();
-        navigate('/orders/success', { 
-          state: { 
-            orderId: result.orderId
-          } 
-        });
-      } else {
-        console.error('❌ Order creation failed:', result.error);
-        toast.error(result.message || 'Gagal membuat pesanan');
-      }
-    } catch (error) {
-      console.error('❌ Error placing order:', error);
-      toast.error('❌ Error: ' + error.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const calculateSubtotal = () => {
     return cartItems.reduce((total, item) => total + (item.harga * item.quantity), 0);
@@ -341,7 +354,7 @@ console.log('❌ Error:', error);
     return calculateSubtotal() + formData.biaya_pengiriman;
   };
 
-  if (cartItems.length === 0) {
+  if (cartItems.length === 0 && currentStep !== 4) {
     return (
       <div className="min-h-screen mt-16 flex items-center justify-center">
         <div className="text-center">
@@ -358,6 +371,33 @@ console.log('❌ Error:', error);
     );
   }
 
+  if (currentStep === 4) {
+    return (
+      <div className="min-h-screen mt-16 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-6xl mb-4">🎉</div>
+          <h2 className="text-2xl font-bold text-green-600 mb-4">Pesanan Berhasil!</h2>
+          <p className="text-gray-600 mb-2">Order ID: <strong>#{orderId}</strong></p>
+          <p className="text-gray-600 mb-6">Terima kasih telah berbelanja. Pesanan Anda sedang diproses.</p>
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={() => navigate('/orders')}
+              className="bg-green-600 text-white px-6 py-2 rounded-lg font-semibold"
+            >
+              Lihat Pesanan
+            </button>
+            <button
+              onClick={() => navigate('/products')}
+              className="border border-green-600 text-green-600 px-6 py-2 rounded-lg font-semibold"
+            >
+              Lanjut Belanja
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen mt-16 bg-gray-50 py-6">
       <div className="max-w-4xl mx-auto px-4">
@@ -368,67 +408,66 @@ console.log('❌ Error:', error);
         </div>
 
         {/* Progress Steps */}
-       {/* Progress Steps - RESPONSIVE FIX */}
-<div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
-  {/* Desktop View */}
-  <div className="hidden md:flex items-center justify-between">
-    {steps.map((step, index) => (
-      <div key={step.number} className="flex items-center">
-        <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-          currentStep >= step.number 
-            ? 'bg-green-600 border-green-600 text-white' 
-            : 'border-gray-300 text-gray-500'
-        } font-semibold`}>
-          {step.number}
-        </div>
-        <span className={`ml-2 font-medium ${
-          currentStep >= step.number ? 'text-green-600' : 'text-gray-500'
-        }`}>
-          {step.title}
-        </span>
-        {index < steps.length - 1 && (
-          <div className={`w-16 h-0.5 mx-4 ${
-            currentStep > step.number ? 'bg-green-600' : 'bg-gray-300'
-          }`} />
-        )}
-      </div>
-    ))}
-  </div>
+        <div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
+          {/* Desktop View */}
+          <div className="hidden md:flex items-center justify-between">
+            {steps.map((step, index) => (
+              <div key={step.number} className="flex items-center">
+                <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
+                  currentStep >= step.number 
+                    ? 'bg-green-600 border-green-600 text-white' 
+                    : 'border-gray-300 text-gray-500'
+                } font-semibold`}>
+                  {step.number}
+                </div>
+                <span className={`ml-2 font-medium ${
+                  currentStep >= step.number ? 'text-green-600' : 'text-gray-500'
+                }`}>
+                  {step.title}
+                </span>
+                {index < steps.length - 1 && (
+                  <div className={`w-16 h-0.5 mx-4 ${
+                    currentStep > step.number ? 'bg-green-600' : 'bg-gray-300'
+                  }`} />
+                )}
+              </div>
+            ))}
+          </div>
 
-  {/* Mobile View */}
-  <div className="md:hidden">
-    {/* Step Numbers */}
-    <div className="flex justify-between items-center mb-4">
-      {steps.map((step) => (
-        <div 
-          key={step.number} 
-          className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
-            currentStep >= step.number 
-              ? 'bg-green-600 border-green-600 text-white' 
-              : 'border-gray-300 text-gray-500'
-          } font-semibold text-sm`}
-        >
-          {step.number}
+          {/* Mobile View */}
+          <div className="md:hidden">
+            {/* Step Numbers */}
+            <div className="flex justify-between items-center mb-4">
+              {steps.map((step) => (
+                <div 
+                  key={step.number} 
+                  className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
+                    currentStep >= step.number 
+                      ? 'bg-green-600 border-green-600 text-white' 
+                      : 'border-gray-300 text-gray-500'
+                  } font-semibold text-sm`}
+                >
+                  {step.number}
+                </div>
+              ))}
+            </div>
+            
+            {/* Progress Bar */}
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
+              <div 
+                className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${((currentStep - 1) / (steps.length - 1)) * 100}%` }}
+              ></div>
+            </div>
+            
+            {/* Current Step Title */}
+            <div className="text-center">
+              <span className="text-sm font-medium text-green-600">
+                Langkah {currentStep}: {steps.find(step => step.number === currentStep)?.title}
+              </span>
+            </div>
+          </div>
         </div>
-      ))}
-    </div>
-    
-    {/* Progress Bar */}
-    <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
-      <div 
-        className="bg-green-600 h-2 rounded-full transition-all duration-300"
-        style={{ width: `${((currentStep - 1) / (steps.length - 1)) * 100}%` }}
-      ></div>
-    </div>
-    
-    {/* Current Step Title */}
-    <div className="text-center">
-      <span className="text-sm font-medium text-green-600">
-        Langkah {currentStep}: {steps.find(step => step.number === currentStep)?.title}
-      </span>
-    </div>
-  </div>
-</div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}

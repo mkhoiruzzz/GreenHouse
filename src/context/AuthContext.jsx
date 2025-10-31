@@ -1,7 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-toastify';
-
-// PERBAIKAN: Import dari config yang sama
 import { supabase } from '../config/supabase';
 
 const AuthContext = createContext();

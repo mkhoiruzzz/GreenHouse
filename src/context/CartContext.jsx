@@ -1,11 +1,13 @@
-// src/context/CartContext.jsx - JIKA BELUM ADA, BUAT FILE INI
+// src/context/CartContext.jsx - WITH LOCALSTORAGE
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 
 const CartContext = createContext();
 
 const cartReducer = (state, action) => {
+  let newState;
+  
   switch (action.type) {
-    case 'SET_CART':
+    case 'LOAD_CART':
       return {
         ...state,
         cartItems: action.payload || []
@@ -14,7 +16,7 @@ const cartReducer = (state, action) => {
     case 'ADD_TO_CART':
       const existingItem = state.cartItems.find(item => item.id === action.payload.id);
       if (existingItem) {
-        return {
+        newState = {
           ...state,
           cartItems: state.cartItems.map(item =>
             item.id === action.payload.id
@@ -22,37 +24,56 @@ const cartReducer = (state, action) => {
               : item
           )
         };
+      } else {
+        newState = {
+          ...state,
+          cartItems: [...state.cartItems, { ...action.payload, quantity: action.payload.quantity }]
+        };
       }
-      return {
-        ...state,
-        cartItems: [...state.cartItems, { ...action.payload, quantity: action.payload.quantity }]
-      };
+      break;
     
     case 'REMOVE_FROM_CART':
-      return {
+      newState = {
         ...state,
         cartItems: state.cartItems.filter(item => item.id !== action.payload)
       };
+      break;
     
     case 'UPDATE_QUANTITY':
-      return {
-        ...state,
-        cartItems: state.cartItems.map(item =>
-          item.id === action.payload.id
-            ? { ...item, quantity: action.payload.quantity }
-            : item
-        )
-      };
+      if (action.payload.quantity <= 0) {
+        newState = {
+          ...state,
+          cartItems: state.cartItems.filter(item => item.id !== action.payload.id)
+        };
+      } else {
+        newState = {
+          ...state,
+          cartItems: state.cartItems.map(item =>
+            item.id === action.payload.id
+              ? { ...item, quantity: action.payload.quantity }
+              : item
+          )
+        };
+      }
+      break;
     
     case 'CLEAR_CART':
-      return {
+      newState = {
         ...state,
         cartItems: []
       };
+      break;
     
     default:
       return state;
   }
+
+  // ✅ SIMPAN KE LOCALSTORAGE SETIAP PERUBAHAN
+  if (newState) {
+    localStorage.setItem('cart', JSON.stringify(newState.cartItems));
+  }
+  
+  return newState || state;
 };
 
 const initialState = {
@@ -62,9 +83,29 @@ const initialState = {
 export const CartProvider = ({ children }) => {
   const [state, dispatch] = useReducer(cartReducer, initialState);
 
+  // ✅ LOAD CART DARI LOCALSTORAGE SAAT KOMPONEN MOUNT
+  useEffect(() => {
+    const savedCart = localStorage.getItem('cart');
+    if (savedCart) {
+      try {
+        const cartItems = JSON.parse(savedCart);
+        dispatch({ type: 'LOAD_CART', payload: cartItems });
+        console.log('🛒 Cart loaded from localStorage:', cartItems);
+      } catch (error) {
+        console.error('❌ Error loading cart from localStorage:', error);
+        localStorage.removeItem('cart');
+      }
+    }
+  }, []);
+
   // Calculate cart total
   const cartTotal = state.cartItems.reduce((total, item) => {
     return total + (item.harga * item.quantity);
+  }, 0);
+
+  // Calculate cart count
+  const cartCount = state.cartItems.reduce((total, item) => {
+    return total + item.quantity;
   }, 0);
 
   const addToCart = async (product, quantity = 1) => {
@@ -79,7 +120,6 @@ export const CartProvider = ({ children }) => {
         payload: { 
           ...product, 
           quantity,
-          // Pastikan gambar_url tersedia
           gambar_url: product.gambar_url || product.gambar || 'https://placehold.co/400x300/4ade80/white?text=Gambar+Tidak+Tersedia'
         }
       });
@@ -99,11 +139,6 @@ export const CartProvider = ({ children }) => {
   };
 
   const updateCartQuantity = (productId, quantity) => {
-    if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-    
     dispatch({
       type: 'UPDATE_QUANTITY',
       payload: { id: productId, quantity }
@@ -112,16 +147,29 @@ export const CartProvider = ({ children }) => {
 
   const clearCart = () => {
     dispatch({ type: 'CLEAR_CART' });
+    // ✅ HAPUS JUGA DARI LOCALSTORAGE
+    localStorage.removeItem('cart');
+  };
+
+  const getCartTotal = () => {
+    return cartTotal;
+  };
+
+  const getCartCount = () => {
+    return cartCount;
   };
 
   return (
     <CartContext.Provider value={{
       cartItems: state.cartItems,
       cartTotal,
+      cartCount,
       addToCart,
       removeFromCart,
       updateCartQuantity,
-      clearCart
+      clearCart,
+      getCartTotal,
+      getCartCount
     }}>
       {children}
     </CartContext.Provider>
