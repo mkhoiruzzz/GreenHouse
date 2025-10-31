@@ -19,9 +19,9 @@ import AdminOrders from './pages/AdminOrders'
 import About from './pages/About'
 import Contact from './pages/Contact'
 import Profil from './pages/Profile'
-import Success from './pages/Success'
 import Accesories from './pages/Accesories'
 import TestSupabase from './components/TestSupabase'
+import DeleteAccount from './components/DeleteAccount';
 
 
 
@@ -49,12 +49,9 @@ function App() {
                 <Route path="/about" element={<About />} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/profile" element={<Profil />} />
-                  <Route path="/success" element={<Success />} />
-                   <Route path="/orders/success" element={<Success />} /> 
                 <Route path="/accesories" element={<Accesories />} />
                 <Route path="/testsupabase" element={<TestSupabase />} /> {/* ✅ PERBAIKI TYPO */}
-                
-                {/* ADD THIS - Allow static files to pass through */}
+                <Route path="/delete-account" element={<DeleteAccount />} /> {/* ✅ TAMBAHKAN ROUTE MODAL */}
                 <Route path="/images/*" element={null} />
               </Routes>
             </main>

@@ -1,5 +1,5 @@
-// Checkout.jsx - Fixed all errors
-import React, { useState } from 'react';
+// Checkout.jsx - Fixed all errors with auto-fill profile
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
@@ -19,14 +19,14 @@ const Checkout = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [formData, setFormData] = useState({
-    // Step 1: Informasi Pembeli
-    email: user?.email || '',
+    // Default values akan diisi oleh useEffect
+    email: '',
     subscribe_newsletter: false,
-    nama_lengkap: user?.nama_lengkap || '',
+    nama_lengkap: '',
     kota: '',
     alamat_pengiriman: '',
     kode_pos: '',
-    no_telepon: user?.no_telepon || '',
+    no_telepon: '',
     is_dropshipper: false,
     
     // Step 2: Metode Pengiriman
@@ -37,6 +37,23 @@ const Checkout = () => {
     metode_pembayaran: 'transfer',
     kode_kupon: ''
   });
+
+  // ✅ NEW: Auto-fill form dari user profile
+  useEffect(() => {
+    if (user) {
+      console.log('🔄 Auto-filling form from user profile:', user);
+      
+      setFormData(prev => ({
+        ...prev,
+        email: user.email || '',
+        nama_lengkap: user.user_metadata?.full_name || user.user_metadata?.nama_lengkap || '',
+        kota: user.user_metadata?.city || user.user_metadata?.kota || '',
+        alamat_pengiriman: user.user_metadata?.address || user.user_metadata?.alamat_pengiriman || '',
+        kode_pos: user.user_metadata?.postal_code || user.user_metadata?.kode_pos || '',
+        no_telepon: user.user_metadata?.phone || user.user_metadata?.no_telepon || ''
+      }));
+    }
+  }, [user]);
 
   // ✅ ADD MISSING FUNCTION
   const formatOrderItems = () => {
@@ -175,64 +192,6 @@ const Checkout = () => {
   const handlePrevStep = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
-    }
-  };
-
-  // ✅ GANTI DENGAN FUNGSI REAL YANG SAVE KE SUPABASE
-  const createOrderInSupabase = async (orderData) => {
-    try {
-      console.log('🛒 Creating order in Supabase:', orderData);
-      
-      // 1. BUAT ORDER DI TABLE orders
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert([{
-          user_id: orderData.user_id,
-          total_harga: orderData.total_harga,
-          biaya_pengiriman: orderData.biaya_pengiriman,
-          status_pembayaran: 'pending',
-          status_pengiriman: 'pending',
-          metode_pembayaran: orderData.metode_pembayaran,
-          alamat_pengiriman: orderData.alamat_pengiriman,
-          catatan: orderData.catatan || ''
-        }])
-        .select();
-
-      if (orderError) throw orderError;
-      if (!order || order.length === 0) throw new Error('Order creation failed');
-
-      const orderId = order[0].id;
-      console.log('✅ Order created with ID:', orderId);
-
-      // 2. BUAT ORDER ITEMS DI TABLE order_items
-      const orderItemsData = orderData.items.map(item => ({
-        order_id: orderId,
-        product_id: item.product_id,
-        quantity: item.quantity,
-        harga_satuan: item.harga
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItemsData);
-
-      if (itemsError) throw itemsError;
-
-      console.log('✅ Order items created successfully');
-
-      return { 
-        success: true, 
-        orderId: orderId, // ✅ ID ASLI DARI DATABASE
-        message: 'Pesanan berhasil dibuat' 
-      };
-
-    } catch (error) {
-      console.error('❌ Error creating order:', error);
-      return { 
-        success: false, 
-        error: error.message,
-        message: 'Gagal membuat pesanan: ' + error.message
-      };
     }
   };
 
@@ -475,7 +434,8 @@ const Checkout = () => {
             {currentStep === 1 && (
               <InformasiPembeli 
                 formData={formData} 
-                onInputChange={handleInputChange} 
+                onInputChange={handleInputChange}
+                user={user} // ✅ PASS USER PROP
               />
             )}
             
@@ -512,74 +472,97 @@ const Checkout = () => {
 };
 
 // Fungsi untuk menentukan zona pengiriman berdasarkan kota
+// Fungsi untuk menentukan zona pengiriman berdasarkan kota - UPDATED FOR SURABAYA STORE
 const getShippingZone = (kota) => {
   if (!kota) return 'luar_jawa';
   
   const kotaLower = kota.toLowerCase();
   
-  // Zona Jawa Tengah
+  // Zona Surabaya & Sekitarnya (TERMURAH)
+  const surabayaCities = ['surabaya', 'sidoarjo', 'gresik', 'mojokerto', 'lamongan', 'bangil'];
+  
+  // Zona Jawa Timur Lainnya
+  const jatimCities = ['malang', 'jember', 'banyuwangi', 'madiun', 'kediri', 'blitar', 'pasuruan', 'probolinggo', 'lumajang', 'bondowoso', 'situbondo', 'tulungagung', 'trenggalek', 'nganjuk', 'magetan', 'ponorogo', 'pacitan', 'tuban', 'bojonegoro', 'ngawi', 'batu', 'pamekasan', 'sampang', 'sumenep'];
+  
+  // Zona Jawa Tengah & DIY
   const jatengCities = ['semarang', 'solo', 'surakarta', 'magelang', 'salatiga', 'pekalongan', 'tegal', 'purwokerto', 'cilacap', 'klaten', 'boyolali', 'sukoharjo', 'wonogiri', 'kebumen', 'purworejo', 'temanggung', 'kendal', 'batang', 'blora', 'rembang', 'pati', 'kudus', 'jepara', 'demak', 'grobogan', 'sragen', 'karanganyar', 'wonosobo', 'maguwoharjo', 'yogyakarta'];
   
   // Zona Jawa Barat
   const jabarCities = ['bandung', 'bekasi', 'bogor', 'depok', 'sukabumi', 'cimahi', 'tasikmalaya', 'cirebon', 'garut', 'cianjur', 'subang', 'sumedang', 'indramayu', 'karawang', 'purwakarta', 'banjar', 'majalengka', 'pangandaran', 'cilegon', 'serang', 'tangerang', 'tangerang selatan', 'south tangerang'];
   
-  // Zona Jawa Timur
-  const jatimCities = ['surabaya', 'malang', 'sidoarjo', 'mojokerto', 'jember', 'banyuwangi', 'madiun', 'kediri', 'blitar', 'pasuruan', 'probolinggo', 'lumajang', 'bondowoso', 'situbondo', 'tulungagung', 'trenggalek', 'nganjuk', 'magetan', 'ponorogo', 'pacitan', 'gresik', 'lamongan', 'tuban', 'bojonegoro', 'ngawi', 'batu', 'pamekasan', 'sampang', 'sumenep', 'bangil'];
+  // Zona Jabodetabek & Banten
+  const jabodetabekCities = ['jakarta', 'bogor', 'depok', 'tangerang', 'bekasi', 'banten', 'cilegon', 'serang', 'tangerang selatan'];
   
-  // Cek zona
+  // Cek zona - PRIORITAS: Surabaya > Jatim > Jateng > Jabar > Jabodetabek > Luar Jawa
+  if (surabayaCities.some(city => kotaLower.includes(city))) {
+    return 'surabaya_sekitarnya';
+  }
+  if (jatimCities.some(city => kotaLower.includes(city))) {
+    return 'jawa_timur';
+  }
   if (jatengCities.some(city => kotaLower.includes(city))) {
     return 'jawa_tengah';
   }
   if (jabarCities.some(city => kotaLower.includes(city))) {
     return 'jawa_barat';
   }
-  if (jatimCities.some(city => kotaLower.includes(city))) {
-    return 'jawa_timur';
-  }
-  if (kotaLower.includes('jakarta') || kotaLower.includes('banten')) {
+  if (jabodetabekCities.some(city => kotaLower.includes(city))) {
     return 'jabodetabek';
   }
   
   return 'luar_jawa';
 };
 
-// Fungsi untuk mendapatkan estimasi pengiriman berdasarkan zona dan kurir
+// Fungsi untuk mendapatkan estimasi pengiriman berdasarkan zona dan kurir - UPDATED FOR SURABAYA STORE
 const getShippingEstimation = (zone, courier) => {
   const estimations = {
-    jabodetabek: {
+    surabaya_sekitarnya: {
       jne: '1-2 hari',
-      tiki: '1 hari',
-      pos: '2-3 hari',
-      jnt: '1-2 hari'
-    },
-    jawa_barat: {
-      jne: '2-3 hari',
-      tiki: '1-2 hari',
-      pos: '3-4 hari',
-      jnt: '2-3 hari'
-    },
-    jawa_tengah: {
-      jne: '2-3 hari',
-      tiki: '2 hari',
-      pos: '3-4 hari',
-      jnt: '2-3 hari'
+      tiki: '1 hari', 
+      pos: '1-2 hari',
+      jnt: '1 hari',
+      sicepat: '1 hari'
     },
     jawa_timur: {
+      jne: '2-3 hari',
+      tiki: '2 hari',
+      pos: '2-3 hari',
+      jnt: '2 hari',
+      sicepat: '2 hari'
+    },
+    jawa_tengah: {
       jne: '3-4 hari',
-      tiki: '2-3 hari',
+      tiki: '3 hari',
+      pos: '3-4 hari',
+      jnt: '3 hari',
+      sicepat: '3 hari'
+    },
+    jawa_barat: {
+      jne: '4-5 hari',
+      tiki: '4 hari',
       pos: '4-5 hari',
-      jnt: '3-4 hari'
+      jnt: '4 hari',
+      sicepat: '4 hari'
+    },
+    jabodetabek: {
+      jne: '4-5 hari',
+      tiki: '4 hari',
+      pos: '4-5 hari',
+      jnt: '4 hari',
+      sicepat: '4 hari'
     },
     luar_jawa: {
-      jne: '5-7 hari',
-      tiki: '4-6 hari',
-      pos: '7-10 hari',
-      jnt: '5-8 hari'
+      jne: '5-10 hari',
+      tiki: '7-10 hari',
+      pos: '7-14 hari',
+      jnt: '5-8 hari',
+      sicepat: '5-9 hari'
     }
   };
   
-  return estimations[zone]?.[courier] || '4-7 hari';
+  return estimations[zone]?.[courier] || '5-7 hari';
 };
+
 
 // Fungsi untuk mendapatkan biaya pengiriman berdasarkan zona dan kurir
 const getShippingCost = (zone, courier) => {
@@ -619,14 +602,49 @@ const getShippingCost = (zone, courier) => {
   return costs[zone]?.[courier] || 20000;
 };
 
-// Step 1 Component - Match dengan database fields
-const InformasiPembeli = ({ formData, onInputChange }) => {
+// Step 1 Component - Enhanced dengan auto-fill
+const InformasiPembeli = ({ formData, onInputChange, user }) => {
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Auto-disable editing jika data sudah ada dari profile
+  useEffect(() => {
+    if (user && user.user_metadata?.full_name && !isEditing) {
+      // Jika user sudah punya data profile, form akan read-only
+      setIsEditing(false);
+    }
+  }, [user, isEditing]);
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-xl font-semibold text-gray-900 mb-4">Informasi Pembeli</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold text-gray-900">Informasi Pembeli</h2>
+        
+        {/* Edit Toggle Button */}
+        {user && (
+          <button
+            type="button"
+            onClick={() => setIsEditing(!isEditing)}
+            className="text-sm bg-blue-100 text-blue-600 px-3 py-1 rounded-lg hover:bg-blue-200 transition"
+          >
+            {isEditing ? '🔒 Kunci' : '✏️ Edit'}
+          </button>
+        )}
+      </div>
+      
+      {/* Info dari Profile */}
+      {user && user.user_metadata?.full_name && !isEditing && (
+        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <div className="flex items-center">
+            <span className="text-green-600 mr-2">✅</span>
+            <p className="text-green-800 text-sm">
+              Data diambil dari profil Anda. Klik "Edit" untuk mengubah.
+            </p>
+          </div>
+        </div>
+      )}
       
       <div className="space-y-4">
-        {/* Email */}
+        {/* Email - Always Read Only */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Email <span className="text-red-500">*</span>
@@ -634,12 +652,10 @@ const InformasiPembeli = ({ formData, onInputChange }) => {
           <input
             type="email"
             value={formData.email}
-            onChange={(e) => onInputChange('email', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            placeholder="email@example.com"
-            required
+            readOnly
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
           />
-          <p className="text-xs text-gray-500 mt-1">Email konfirmasi akan dikirim ke alamat ini</p>
+          <p className="text-xs text-gray-500 mt-1">Email tidak dapat diubah</p>
         </div>
 
         {/* Newsletter */}
@@ -666,7 +682,12 @@ const InformasiPembeli = ({ formData, onInputChange }) => {
             type="text"
             value={formData.nama_lengkap}
             onChange={(e) => onInputChange('nama_lengkap', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            readOnly={!isEditing && user?.user_metadata?.full_name}
+            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+              !isEditing && user?.user_metadata?.full_name 
+                ? 'border-gray-300 bg-gray-100 text-gray-600' 
+                : 'border-gray-300'
+            }`}
             placeholder="John Doe"
             required
           />
@@ -681,7 +702,12 @@ const InformasiPembeli = ({ formData, onInputChange }) => {
             type="text"
             value={formData.kota}
             onChange={(e) => onInputChange('kota', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            readOnly={!isEditing && user?.user_metadata?.city}
+            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+              !isEditing && user?.user_metadata?.city 
+                ? 'border-gray-300 bg-gray-100 text-gray-600' 
+                : 'border-gray-300'
+            }`}
             placeholder="Jakarta Pusat"
             required
           />
@@ -695,8 +721,13 @@ const InformasiPembeli = ({ formData, onInputChange }) => {
           <textarea
             value={formData.alamat_pengiriman}
             onChange={(e) => onInputChange('alamat_pengiriman', e.target.value)}
+            readOnly={!isEditing && user?.user_metadata?.address}
             rows="3"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+              !isEditing && user?.user_metadata?.address 
+                ? 'border-gray-300 bg-gray-100 text-gray-600' 
+                : 'border-gray-300'
+            }`}
             placeholder="Jl. Contoh No. 123, RT/RW, Kelurahan, Kecamatan"
             required
           />
@@ -710,7 +741,12 @@ const InformasiPembeli = ({ formData, onInputChange }) => {
               type="text"
               value={formData.kode_pos}
               onChange={(e) => onInputChange('kode_pos', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              readOnly={!isEditing && user?.user_metadata?.postal_code}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                !isEditing && user?.user_metadata?.postal_code 
+                  ? 'border-gray-300 bg-gray-100 text-gray-600' 
+                  : 'border-gray-300'
+              }`}
               placeholder="12345"
             />
           </div>
@@ -724,7 +760,12 @@ const InformasiPembeli = ({ formData, onInputChange }) => {
               type="tel"
               value={formData.no_telepon}
               onChange={(e) => onInputChange('no_telepon', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              readOnly={!isEditing && user?.user_metadata?.phone}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                !isEditing && user?.user_metadata?.phone 
+                  ? 'border-gray-300 bg-gray-100 text-gray-600' 
+                  : 'border-gray-300'
+              }`}
               placeholder="+628123456789"
               required
             />
@@ -741,12 +782,28 @@ const InformasiPembeli = ({ formData, onInputChange }) => {
           />
           <label className="ml-2 text-sm text-gray-700">Kirim sebagai dropshipper</label>
         </div>
+
+        {/* Save to Profile Checkbox */}
+        {isEditing && (
+          <div className="flex items-center p-3 bg-blue-50 rounded-lg">
+            <input
+              type="checkbox"
+              id="saveToProfile"
+              defaultChecked
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <label htmlFor="saveToProfile" className="ml-2 text-sm text-blue-700">
+              Simpan perubahan ini ke profil saya
+            </label>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 // Step 2 Component - UPDATED WITH SMART SHIPPING
+// Step 2 Component - UPDATED FOR SURABAYA STORE
 const MetodePengiriman = ({ formData, onInputChange }) => {
   // Tentukan zona berdasarkan kota yang diinput user
   const shippingZone = getShippingZone(formData.kota);
@@ -755,30 +812,32 @@ const MetodePengiriman = ({ formData, onInputChange }) => {
     { 
       id: 'jne', 
       name: 'JNE Reguler', 
-      basePrice: 15000,
       estimasi: getShippingEstimation(shippingZone, 'jne'),
       price: getShippingCost(shippingZone, 'jne')
     },
     { 
       id: 'tiki', 
       name: 'TIKI Reguler', 
-      basePrice: 20000,
       estimasi: getShippingEstimation(shippingZone, 'tiki'),
       price: getShippingCost(shippingZone, 'tiki')
     },
     { 
       id: 'pos', 
       name: 'POS Indonesia', 
-      basePrice: 10000,
       estimasi: getShippingEstimation(shippingZone, 'pos'),
       price: getShippingCost(shippingZone, 'pos')
     },
     { 
       id: 'jnt', 
       name: 'J&T Express', 
-      basePrice: 12000,
       estimasi: getShippingEstimation(shippingZone, 'jnt'),
       price: getShippingCost(shippingZone, 'jnt')
+    },
+    { 
+      id: 'sicepat', 
+      name: 'SiCepat', 
+      estimasi: getShippingEstimation(shippingZone, 'sicepat'),
+      price: getShippingCost(shippingZone, 'sicepat')
     }
   ];
 
@@ -790,18 +849,32 @@ const MetodePengiriman = ({ formData, onInputChange }) => {
   // Dapatkan nama zona untuk ditampilkan
   const getZoneName = (zone) => {
     const zoneNames = {
-      'jabodetabek': 'Jabodetabek',
-      'jawa_barat': 'Jawa Barat', 
+      'surabaya_sekitarnya': 'Surabaya & Sekitarnya',
+      'jawa_timur': 'Jawa Timur Lainnya',
       'jawa_tengah': 'Jawa Tengah & DIY',
-      'jawa_timur': 'Jawa Timur',
+      'jawa_barat': 'Jawa Barat',
+      'jabodetabek': 'Jabodetabek & Banten',
       'luar_jawa': 'Luar Jawa'
     };
     return zoneNames[zone] || 'Luar Jawa';
   };
 
+  // Dapatkan info toko location
+  const getStoreLocationInfo = () => {
+    return "🛍️ Toko kami berlokasi di Surabaya, Jawa Timur";
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-xl font-semibold text-gray-900 mb-4">Metode Pengiriman</h2>
+      
+      {/* Info Lokasi Toko */}
+      <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+        <p className="font-medium text-purple-800">{getStoreLocationInfo()}</p>
+        <p className="text-sm text-purple-600 mt-1">
+          Biaya pengiriman sudah disesuaikan dengan jarak dari Surabaya
+        </p>
+      </div>
       
       {/* Info Zona Pengiriman */}
       {formData.kota && (
@@ -810,14 +883,14 @@ const MetodePengiriman = ({ formData, onInputChange }) => {
             <div>
               <p className="font-medium text-blue-800">Zona Pengiriman: {getZoneName(shippingZone)}</p>
               <p className="text-sm text-blue-600">
-                Kota: {formData.kota} 
+                Tujuan: {formData.kota} 
                 {shippingZone === 'luar_jawa' && (
                   <span className="ml-2 text-orange-600 font-medium">(Estimasi lebih lama)</span>
                 )}
+                {shippingZone === 'surabaya_sekitarnya' && (
+                  <span className="ml-2 text-green-600 font-medium">(Termurah & Tercepat)</span>
+                )}
               </p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-blue-600">Biaya dan estimasi sudah disesuaikan</p>
             </div>
           </div>
         </div>
@@ -855,40 +928,26 @@ const MetodePengiriman = ({ formData, onInputChange }) => {
                 <p className="font-medium text-gray-900">{method.name}</p>
                 <p className="text-sm text-gray-500">
                   Estimasi: {method.estimasi}
-                  {formData.kota && shippingZone === 'luar_jawa' && (
+                  {shippingZone === 'luar_jawa' && (
                     <span className="ml-1 text-orange-500">⏳</span>
+                  )}
+                  {shippingZone === 'surabaya_sekitarnya' && (
+                    <span className="ml-1 text-green-500">⚡</span>
                   )}
                 </p>
               </div>
             </div>
             <div className="text-right">
               <p className="font-semibold text-gray-900">{formatCurrency(method.price)}</p>
-              {method.price !== method.basePrice && (
-                <p className="text-xs text-gray-500 line-through">
-                  {formatCurrency(method.basePrice)}
-                </p>
-              )}
             </div>
           </div>
         ))}
       </div>
 
-      {/* Legend Estimasi */}
-      <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-        <p className="text-sm font-medium text-gray-700 mb-2">📦 Informasi Estimasi:</p>
-        <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-          <div>• Jabodetabek: 1-2 hari</div>
-          <div>• Jawa Barat: 2-3 hari</div>
-          <div>• Jateng & DIY: 2-3 hari</div>
-          <div>• Jawa Timur: 3-4 hari</div>
-          <div>• Luar Jawa: 5-10 hari</div>
-        </div>
       </div>
-    </div>
   );
 };
 
-// Step 3 Component
 const MetodePembayaran = ({ formData, onInputChange }) => {
   const paymentMethods = [
     { id: 'transfer', name: 'Transfer Bank', icon: '🏦' },

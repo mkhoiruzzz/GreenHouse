@@ -1,3 +1,4 @@
+// Di AuthContext.jsx - UPDATE register function dan tambah createUserProfile
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { supabase } from '../lib/supabase';
@@ -72,13 +73,71 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // HAPUS: validateEmail function tidak perlu karena Supabase sudah handle
+  // ✅ FUNCTION BARU: Auto Create Profile di Table
+  const createUserProfile = async (userData) => {
+    try {
+      console.log('🔄 Creating user profile in profiles table...', userData);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert({
+          id: userData.id,
+          email: userData.email,
+          username: userData.user_metadata?.username || userData.email.split('@')[0],
+          full_name: userData.user_metadata?.full_name || '',
+          phone: userData.user_metadata?.phone || '',
+          address: userData.user_metadata?.address || '',
+          city: userData.user_metadata?.city || '',
+          province: userData.user_metadata?.province || '',
+          role: userData.user_metadata?.role || 'customer',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error creating profile:', error);
+        // Jika error karena duplicate, coba update saja
+        if (error.code === '23505') {
+          console.log('🔄 Profile already exists, updating instead...');
+          const { data: updateData, error: updateError } = await supabase
+            .from('profiles')
+            .update({
+              username: userData.user_metadata?.username || userData.email.split('@')[0],
+              full_name: userData.user_metadata?.full_name || '',
+              phone: userData.user_metadata?.phone || '',
+              address: userData.user_metadata?.address || '',
+              city: userData.user_metadata?.city || '',
+              province: userData.user_metadata?.province || '',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', userData.id)
+            .select()
+            .single();
+
+          if (updateError) {
+            console.error('❌ Error updating profile:', updateError);
+            return { success: false, error: updateError };
+          }
+          return { success: true, data: updateData };
+        }
+        return { success: false, error };
+      }
+
+      console.log('✅ Profile created successfully:', data);
+      return { success: true, data };
+
+    } catch (error) {
+      console.error('❌ Exception creating profile:', error);
+      return { success: false, error };
+    }
+  };
 
   const login = async (email, password) => {
     try {
       setLoading(true);
 
-      // HAPUS: Validasi manual, biarkan Supabase handle
       if (!email || !password) {
         toast.error('Email dan password wajib diisi');
         return { success: false, message: 'Email dan password wajib diisi' };
@@ -92,7 +151,6 @@ export const AuthProvider = ({ children }) => {
       if (error) {
         console.error('Login error:', error);
         
-        // Handle error
         if (error.message.includes('Email not confirmed')) {
           toast.error('Email belum dikonfirmasi. Silakan cek email Anda.');
           return { 
@@ -119,6 +177,9 @@ export const AuthProvider = ({ children }) => {
         setIsAdmin(userData.user_metadata?.role === 'admin');
         localStorage.setItem('token', data.session.access_token);
         localStorage.setItem('user', JSON.stringify(userData));
+        
+        // ✅ AUTO CREATE PROFILE JIKA BELUM ADA (saat login)
+        await createUserProfile(userData);
         
         toast.success('Login berhasil!');
         return { success: true, user: userData };
@@ -180,7 +241,16 @@ export const AuthProvider = ({ children }) => {
         }
       }
 
-      // HAPUS: Buat profile di tabel terpisah (tidak perlu kompleks)
+      // ✅ AUTO CREATE PROFILE DI TABLE PROFILES
+      if (data.user) {
+        console.log('🎯 Creating profile for new user:', data.user);
+        const profileResult = await createUserProfile(data.user);
+        
+        if (!profileResult.success) {
+          console.error('⚠️ Profile creation failed but user registered:', profileResult.error);
+          // Lanjutkan saja, user tetap terdaftar
+        }
+      }
 
       if (data.user && data.user.identities && data.user.identities.length === 0) {
         toast.error('Email sudah terdaftar');
@@ -199,7 +269,61 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // HAPUS: resendConfirmationEmail (tidak perlu)
+  // ✅ FUNCTION BARU: Update Profile (untuk Profile.jsx)
+  const updateProfile = async (profileData) => {
+    try {
+      if (!user) throw new Error('No user logged in');
+
+      console.log('🔄 Updating profile data:', profileData);
+
+      // Update user metadata di Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.updateUser({
+        data: profileData
+      });
+
+      if (authError) throw authError;
+
+      // Update profile di table profiles
+      const { data: profileResult, error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          username: profileData.username,
+          full_name: profileData.full_name,
+          phone: profileData.phone,
+          address: profileData.address,
+          city: profileData.city,
+          province: profileData.province,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+        .select()
+        .single();
+
+      if (profileError) {
+        console.error('❌ Error updating profile table:', profileError);
+        // Coba create jika belum ada
+        const createResult = await createUserProfile({
+          id: user.id,
+          email: user.email,
+          user_metadata: profileData
+        });
+        if (!createResult.success) {
+          throw profileError;
+        }
+      }
+
+      // Update local user state
+      setUser(authData.user);
+      localStorage.setItem('user', JSON.stringify(authData.user));
+
+      console.log('✅ Profile updated successfully');
+      return { success: true, user: authData.user };
+
+    } catch (error) {
+      console.error('❌ Update profile error:', error);
+      return { success: false, error: error.message };
+    }
+  };
 
   const logout = async () => {
     try {
@@ -222,8 +346,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // HAPUS: updateProfile dan updateUser (tidak perlu untuk sekarang)
-
   const value = {
     user,
     isAuthenticated,
@@ -231,8 +353,8 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     register,
-    logout
-    // HAPUS: updateProfile, updateUser, resendConfirmationEmail
+    logout,
+    updateProfile // ✅ TAMBAH INI
   };
 
   return (
