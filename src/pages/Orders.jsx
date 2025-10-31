@@ -9,7 +9,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 // Import supabase
 let supabase;
 try {
-  const supabaseModule = await import('../config/supabase');
+  const supabaseModule = await import('../lib/supabase');
   supabase = supabaseModule.supabase;
   console.log('✅ Supabase loaded successfully');
 } catch (error) {

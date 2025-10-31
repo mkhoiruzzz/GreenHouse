@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { formatCurrency } from '../utils/formatCurrency';
 import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { supabase } from '../config/supabase'; // ✅ TAMBAHKAN IMPORT
+import { supabase } from '../lib/supabase'; // ✅ TAMBAHKAN IMPORT
 
 const AdminOrders = () => {
   const { user, isAuthenticated, isAdmin } = useAuth();
