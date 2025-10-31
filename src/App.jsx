@@ -21,7 +21,6 @@ import Contact from './pages/Contact'
 import Profil from './pages/Profile'
 import Accesories from './pages/Accesories'
 import TestSupabase from './components/TestSupabase'
-import DeleteAccount from './components/DeleteAccount';
 
 
 
@@ -50,8 +49,7 @@ function App() {
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/profile" element={<Profil />} />
                 <Route path="/accesories" element={<Accesories />} />
-                <Route path="/testsupabase" element={<TestSupabase />} /> {/* ✅ PERBAIKI TYPO */}
-                <Route path="/delete-account" element={<DeleteAccount />} /> {/* ✅ TAMBAHKAN ROUTE MODAL */}
+                <Route path="/testsupabase" element={<TestSupabase />} />
                 <Route path="/images/*" element={null} />
               </Routes>
             </main>

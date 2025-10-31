@@ -1,16 +1,12 @@
-// Profile.jsx - UPDATE untuk baca data dari table profiles + Hapus Akun
+// Profile.jsx - UPDATE untuk baca data dari table profiles
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-toastify';
-import { useNavigate } from 'react-router-dom';
 
 const Profile = () => {
-  const { user, updateProfile, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user, updateProfile } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [profileData, setProfileData] = useState({
     username: '',
     full_name: '',
@@ -26,7 +22,7 @@ const Profile = () => {
     const loadProfileData = async () => {
       if (user) {
         try {
-          console.log('📄 Loading profile data from profiles table...');
+          console.log('🔄 Loading profile data from profiles table...');
           
           // Coba ambil dari table profiles
           const { data, error } = await supabase
@@ -100,50 +96,6 @@ const Profile = () => {
       toast.error('Gagal memperbarui profil');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    if (deleteConfirmText !== 'HAPUS AKUN') {
-      toast.error('Ketik "HAPUS AKUN" untuk konfirmasi');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      // 1. Hapus data dari table profiles
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', user.id);
-
-      if (profileError) {
-        console.error('Error deleting profile:', profileError);
-      }
-
-      // 2. Hapus akun dari Supabase Auth
-      const { error: authError } = await supabase.rpc('delete_user');
-
-      if (authError) {
-        // Jika RPC tidak tersedia, coba cara manual
-        console.error('RPC delete_user error:', authError);
-        toast.error('Gagal menghapus akun. Silakan hubungi admin.');
-        setLoading(false);
-        return;
-      }
-
-      // 3. Logout dan redirect
-      toast.success('Akun berhasil dihapus');
-      await logout();
-      navigate('/');
-      
-    } catch (error) {
-      console.error('Delete account error:', error);
-      toast.error('Terjadi kesalahan saat menghapus akun');
-    } finally {
-      setLoading(false);
-      setShowDeleteModal(false);
     }
   };
 
@@ -258,66 +210,8 @@ const Profile = () => {
               {loading ? 'Menyimpan...' : 'Simpan Perubahan'}
             </button>
           </form>
-
-          {/* Zona Bahaya */}
-          <div className="mt-8 pt-8 border-t border-gray-200">
-            <h2 className="text-lg font-semibold text-red-600 mb-4">Zona Bahaya</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Menghapus akun akan menghilangkan semua data Anda secara permanen. Tindakan ini tidak dapat dibatalkan.
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowDeleteModal(true)}
-              className="px-6 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition"
-            >
-              Hapus Akun
-            </button>
-          </div>
         </div>
       </div>
-
-      {/* Modal Konfirmasi Hapus */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-red-600 mb-4">
-              Konfirmasi Hapus Akun
-            </h3>
-            <p className="text-gray-700 mb-4">
-              Apakah Anda yakin ingin menghapus akun? Semua data Anda akan dihapus secara permanen dan tidak dapat dikembalikan.
-            </p>
-            <p className="text-sm text-gray-600 mb-4">
-              Ketik <span className="font-bold">HAPUS AKUN</span> untuk konfirmasi:
-            </p>
-            <input
-              type="text"
-              value={deleteConfirmText}
-              onChange={(e) => setDeleteConfirmText(e.target.value)}
-              placeholder="Ketik: HAPUS AKUN"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-red-600"
-            />
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  setDeleteConfirmText('');
-                }}
-                disabled={loading}
-                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition disabled:opacity-50"
-              >
-                Batal
-              </button>
-              <button
-                onClick={handleDeleteAccount}
-                disabled={loading || deleteConfirmText !== 'HAPUS AKUN'}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition disabled:opacity-50"
-              >
-                {loading ? 'Menghapus...' : 'Hapus Akun'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

@@ -1,8 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
+import { FcGoogle } from 'react-icons/fc'; // ✅ Tambahkan ini
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -11,7 +11,7 @@ const Login = () => {
   });
   const [loading, setLoading] = useState(false);
   
-  const { login, isAuthenticated } = useAuth();
+  const { login, loginWithGoogle, isAuthenticated } = useAuth(); // ✅ Tambahkan loginWithGoogle jika sudah ada di context
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -32,27 +32,34 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validasi form
     if (!formData.email || !formData.password) {
       toast.error('Email dan password wajib diisi');
       return;
     }
 
     setLoading(true);
-
     try {
       const result = await login(formData.email, formData.password);
-      
       if (result.success) {
         setFormData({ email: '', password: '' });
-        // Redirect handled by useEffect above
       } else {
         toast.error(result.message || 'Login gagal');
       }
     } catch (error) {
       console.error('Login component error:', error);
       toast.error('Terjadi kesalahan sistem');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ Fungsi untuk login dengan Google
+  const handleGoogleLogin = async () => {
+    try {
+      setLoading(true);
+      await loginWithGoogle(); // pastikan sudah diimplementasi di AuthContext
+    } catch (error) {
+      toast.error('Gagal login dengan Google');
     } finally {
       setLoading(false);
     }
@@ -119,6 +126,25 @@ const Login = () => {
               )}
             </button>
           </form>
+
+          {/* ✅ Tambahan tombol Continue with Google */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="bg-white px-2 text-gray-500">atau</span>
+            </div>
+          </div>
+
+          <button
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="w-full border border-gray-300 rounded-lg py-3 flex items-center justify-center space-x-2 hover:bg-gray-50 transition disabled:opacity-50"
+          >
+            <FcGoogle className="text-2xl" />
+            <span className="text-gray-700 font-medium">Continue with Google</span>
+          </button>
 
           <div className="mt-6 text-center">
             <p className="text-gray-600">
