@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/formatCurrency';
 import { toast } from 'react-toastify';
 import emailjs from '@emailjs/browser';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 
 const Checkout = () => {
   const navigate = useNavigate();

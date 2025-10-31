@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
-import { supabase } from '../config/supabaseClient';
+import { supabase } from '../lib/supabaseClient';
 
 const OrdersContext = createContext();
 
