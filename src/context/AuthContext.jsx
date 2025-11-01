@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { supabase } from '../lib/supabase';
+import { accountService } from '../services/accountService'; // ✅ Import service
 
 const AuthContext = createContext();
 
@@ -72,13 +73,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // HAPUS: validateEmail function tidak perlu karena Supabase sudah handle
-
   const login = async (email, password) => {
     try {
       setLoading(true);
 
-      // HAPUS: Validasi manual, biarkan Supabase handle
       if (!email || !password) {
         toast.error('Email dan password wajib diisi');
         return { success: false, message: 'Email dan password wajib diisi' };
@@ -92,7 +90,6 @@ export const AuthProvider = ({ children }) => {
       if (error) {
         console.error('Login error:', error);
         
-        // Handle error
         if (error.message.includes('Email not confirmed')) {
           toast.error('Email belum dikonfirmasi. Silakan cek email Anda.');
           return { 
@@ -139,7 +136,6 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       
-      // Validasi dasar
       if (!userData.email || !userData.password || !userData.username) {
         toast.error('Email, username, dan password wajib diisi');
         return { success: false, message: 'Data wajib belum lengkap' };
@@ -180,8 +176,6 @@ export const AuthProvider = ({ children }) => {
         }
       }
 
-      // HAPUS: Buat profile di tabel terpisah (tidak perlu kompleks)
-
       if (data.user && data.user.identities && data.user.identities.length === 0) {
         toast.error('Email sudah terdaftar');
         return { success: false, message: 'Email sudah terdaftar' };
@@ -198,8 +192,6 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   };
-
-  // HAPUS: resendConfirmationEmail (tidak perlu)
 
   const logout = async () => {
     try {
@@ -222,14 +214,112 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-    // ✅ Login dengan Google
+  // ✅ PERBAIKI FUNGSI HAPUS AKUN DENGAN ACCOUNT SERVICE
+  const deleteAccount = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        return { success: false, message: 'User tidak ditemukan' };
+      }
+
+      console.log('🔄 Starting account deletion process for user:', user.id);
+
+      let result;
+
+      try {
+        // Coba hard delete dulu
+        result = await accountService.deleteUserAccount(user.id);
+      } catch (hardDeleteError) {
+        console.warn('⚠️ Hard delete failed, trying soft delete:', hardDeleteError);
+        
+        // Fallback ke soft delete
+        result = await accountService.softDeleteAccount(user.id);
+      }
+
+      // Jika berhasil, sign out dan clear data
+      if (result.success) {
+        await supabase.auth.signOut();
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setUser(null);
+        setIsAuthenticated(false);
+        setIsAdmin(false);
+      }
+
+      return result;
+
+    } catch (error) {
+      console.error('❌ Delete account error:', error);
+      return { 
+        success: false, 
+        message: error.message || 'Gagal menghapus akun. Silakan coba lagi.' 
+      };
+    }
+  };
+
+  // ✅ FUNGSI UPDATE PROFILE
+  const updateProfile = async (profileData) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        return { success: false, message: 'User tidak ditemukan' };
+      }
+
+      // Update di tabel profiles
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          username: profileData.username,
+          full_name: profileData.full_name,
+          phone: profileData.phone,
+          address: profileData.address,
+          city: profileData.city,
+          province: profileData.province,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (profileError) {
+        console.error('Error updating profile:', profileError);
+        throw profileError;
+      }
+
+      // Update user metadata di auth
+      const { error: authError } = await supabase.auth.updateUser({
+        data: {
+          username: profileData.username,
+          full_name: profileData.full_name,
+          phone: profileData.phone,
+          address: profileData.address,
+          city: profileData.city,
+          province: profileData.province
+        }
+      });
+
+      if (authError) {
+        console.error('Error updating auth user:', authError);
+        throw authError;
+      }
+
+      return { success: true, message: 'Profil berhasil diperbarui' };
+    } catch (error) {
+      console.error('Update profile error:', error);
+      return { 
+        success: false, 
+        message: error.message || 'Gagal memperbarui profil' 
+      };
+    }
+  };
+
+  // ✅ Login dengan Google
   const loginWithGoogle = async () => {
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: "https://green-house-khoiruz.vercel.app/",
-// arahkan balik ke website kamu
         },
       });
 
@@ -243,9 +333,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-
-  // HAPUS: updateProfile dan updateUser (tidak perlu untuk sekarang)
-
   const value = {
     user,
     isAuthenticated,
@@ -254,8 +341,9 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
+    deleteAccount,
+    updateProfile,
     loginWithGoogle
-    // HAPUS: updateProfile, updateUser, resendConfirmationEmail
   };
 
   return (

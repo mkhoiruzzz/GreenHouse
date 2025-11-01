@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
+import  {supabase } from '../lib/supabase';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -27,45 +28,87 @@ const Register = () => {
     });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    // Validasi form
-    if (!formData.email || !formData.password || !formData.username) {
-      toast.error('Email, username, dan password wajib diisi');
-      return;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      toast.error('Password dan konfirmasi password tidak cocok');
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      toast.error('Password minimal 6 karakter');
-      return;
-    }
-
-    setLoading(true);
-
+    // ✅ FUNGSI UNTUK CREATE PROFILE SETELAH REGISTER
+  const createUserProfile = async (userId, userData) => {
     try {
-      const { confirmPassword, ...registerData } = formData;
-      
-      const result = await register(registerData);
-      
-      if (result.success) {
-        toast.success('Registrasi berhasil! Silakan login.');
-        navigate('/login');
-      } else {
-        toast.error(result.message || 'Registrasi gagal');
+      const { error } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id: userId,
+            email: userData.email,
+            username: userData.username,
+            full_name: userData.nama_lengkap,
+            phone: userData.no_telepon,
+            address: userData.alamat,
+            city: userData.kota,
+            province: userData.provinsi,
+            role: 'customer',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+        ]);
+
+      if (error) {
+        console.error('Error creating profile:', error);
+        throw error;
       }
+
+      console.log('✅ Profile created successfully');
+      return true;
     } catch (error) {
-      console.error('Register component error:', error);
-      toast.error('Terjadi kesalahan sistem');
-    } finally {
-      setLoading(false);
+      console.error('Failed to create profile:', error);
+      throw error;
     }
-  };
+  };  
+
+  const handleSubmit = async (e) => {
+  e.preventDefault();
+
+  // Validasi form
+  if (!formData.email || !formData.password || !formData.username) {
+    toast.error('Email, username, dan password wajib diisi');
+    return;
+  }
+
+  if (formData.password !== formData.confirmPassword) {
+    toast.error('Password dan konfirmasi password tidak cocok');
+    return;
+  }
+
+  if (formData.password.length < 6) {
+    toast.error('Password minimal 6 karakter');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const { confirmPassword, ...registerData } = formData;
+    
+    const result = await register(registerData);
+    
+    if (result.success && result.user) {
+      // ✅ BUAT PROFILE SETELAH REGISTER BERHASIL
+      try {
+        await createUserProfile(result.user.id, registerData);
+        toast.success('Registrasi berhasil! Profil telah dibuat. Silakan login.');
+      } catch (profileError) {
+        console.error('Profile creation failed:', profileError);
+        toast.warning('Registrasi berhasil tetapi gagal membuat profil. Silakan lengkapi profil nanti.');
+      }
+      
+      navigate('/login');
+    } else {
+      toast.error(result.message || 'Registrasi gagal');
+    }
+  } catch (error) {
+    console.error('Register component error:', error);
+    toast.error('Terjadi kesalahan sistem');
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen mt-16 py-12 bg-gray-50">

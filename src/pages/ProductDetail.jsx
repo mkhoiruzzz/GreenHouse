@@ -16,6 +16,20 @@ const ProductDetail = () => {
   const [loading, setLoading] = useState(true);
   const [loadingRelated, setLoadingRelated] = useState(false);
   const [quantity, setQuantity] = useState(1);
+  
+  // TAMBAHKAN STATE INI DI DALAM KOMPONEN:
+  const [openSections, setOpenSections] = useState({
+    deskripsi: true,
+    perawatan: false
+  });
+
+  // TAMBAHKAN FUNCTION INI DI DALAM KOMPONEN:
+  const toggleSection = (section) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
 
   useEffect(() => {
     if (id) {
@@ -24,29 +38,33 @@ const ProductDetail = () => {
   }, [id]);
 
   const fetchProductDetail = async () => {
-    try {
-      setLoading(true);
-      console.log('🔄 Fetching product detail with ID:', id);
-      
-      const productData = await productsService.getProductById(id);
-      
-      if (!productData) {
-        throw new Error('Product not found');
-      }
-      
-      setProduct(productData);
-      
-      // Fetch related products after main product is loaded
-      await fetchRelatedProducts(productData);
-      
-    } catch (error) {
-      console.error('❌ Error fetching product:', error);
-      toast.error('Gagal memuat detail produk');
-      navigate('/products');
-    } finally {
-      setLoading(false);
+  try {
+    setLoading(true);
+    console.log('🔄 Fetching product detail with ID:', id);
+    
+    const productData = await productsService.getProductById(id);
+    
+    if (!productData) {
+      throw new Error('Product not found');
     }
-  };
+    
+    // DEBUG: Cek data cara perawatan
+    console.log('📦 Full product data:', productData);
+    console.log('💧 Cara perawatan exists:', !!productData.cara_perawatan);
+    console.log('💧 Cara perawatan value:', productData.cara_perawatan);
+    console.log('💧 Cara perawatan length:', productData.cara_perawatan?.length);
+    
+    setProduct(productData);
+    await fetchRelatedProducts(productData);
+    
+  } catch (error) {
+    console.error('❌ Error fetching product:', error);
+    toast.error('Gagal memuat detail produk');
+    navigate('/products');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const fetchRelatedProducts = async (currentProduct) => {
     try {
@@ -164,9 +182,6 @@ const ProductDetail = () => {
                   <h1 className="text-lg md:text-3xl font-bold text-gray-900 leading-tight">
                     {product.nama_produk}
                   </h1>
-                  <p className="text-gray-600 text-sm md:text-base leading-relaxed">
-                    {product.deskripsi}
-                  </p>
                   
                   <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
                     <span className="text-lg md:text-2xl font-bold text-secondary">
@@ -195,14 +210,7 @@ const ProductDetail = () => {
                     </div>
                   )}
 
-                  {product.cara_perawatan && (
-                    <div>
-                      <span className="text-sm text-gray-500">Cara Perawatan:</span>
-                      <p className="text-gray-700 mt-1 text-sm leading-relaxed">
-                        {product.cara_perawatan}
-                      </p>
-                    </div>
-                  )}
+                 
                 </div>
                 
                 {/* Add to Cart */}
@@ -238,6 +246,87 @@ const ProductDetail = () => {
                     {product.stok === 0 ? 'Stok Habis' : 'Tambah ke Keranjang'}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* HAPUS SECTION DESKRIPSI LAMA DAN GANTI DENGAN ACCORDION INI: */}
+          {/* Accordion Section - Sebelum Produk Terkait */}
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden mt-6">
+            <div className="p-6 md:p-8">
+              {/* Accordion Container */}
+              <div className="space-y-4">
+                {/* Deskripsi Produk Accordion */}
+                <div className="border border-gray-200 rounded-lg">
+                  <button
+                    onClick={() => toggleSection('deskripsi')}
+                    className="flex justify-between items-center w-full px-6 py-4 text-left hover:bg-gray-50 rounded-lg"
+                  >
+                    <h3 className="text-lg md:text-xl font-semibold text-gray-900">
+                      📖 Deskripsi Produk
+                    </h3>
+                    <svg
+                      className={`w-5 h-5 text-gray-500 transform transition-transform ${
+                        openSections.deskripsi ? 'rotate-180' : ''
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  
+                  {openSections.deskripsi && (
+                    <div className="px-6 pb-6">
+                      {product.deskripsi_lengkap ? (
+                        <p className="text-gray-600 leading-relaxed whitespace-pre-line">
+                          {product.deskripsi_lengkap}
+                        </p>
+                      ) : product.deskripsi ? (
+                        <p className="text-gray-600 leading-relaxed">
+                          {product.deskripsi}
+                        </p>
+                      ) : (
+                        <p className="text-gray-500 italic">
+                          Deskripsi produk tidak tersedia.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Cara Perawatan Accordion */}
+                {product.cara_perawatan && (
+                  <div className="border border-gray-200 rounded-lg">
+                    <button
+                      onClick={() => toggleSection('perawatan')}
+                      className="flex justify-between items-center w-full px-6 py-4 text-left hover:bg-gray-50 rounded-lg"
+                    >
+                      <h3 className="text-lg md:text-xl font-semibold text-gray-900">
+                        💧 Cara Perawatan
+                      </h3>
+                      <svg
+                        className={`w-5 h-5 text-gray-500 transform transition-transform ${
+                          openSections.perawatan ? 'rotate-180' : ''
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    
+                    {openSections.perawatan && (
+                      <div className="px-6 pb-6">
+                        <p className="text-gray-600 leading-relaxed whitespace-pre-line">
+                          {product.cara_perawatan}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

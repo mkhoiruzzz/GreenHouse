@@ -13,6 +13,7 @@ export const productsService = {
           id,
           nama_produk,
           deskripsi,
+          deskripsi_lengkap,
           harga,
           stok,
           gambar_url,
@@ -82,6 +83,7 @@ export const productsService = {
           id,
           nama_produk,
           deskripsi,
+          deskripsi_lengkap,
           harga,
           stok,
           gambar_url,
@@ -127,6 +129,7 @@ export const productsService = {
           id,
           nama_produk,
           deskripsi,
+          deskripsi_lengkap,
           harga,
           stok,
           gambar_url,
@@ -141,7 +144,7 @@ export const productsService = {
             name_kategori
           )
         `)
-        .or(`nama_produk.ilike.%${searchTerm}%,deskripsi.ilike.%${searchTerm}%`)
+        .or(`nama_produk.ilike.%${searchTerm}%,deskripsi.ilike.%${searchTerm}%,deskripsi_lengkap.ilike.%${searchTerm}%`)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -168,6 +171,7 @@ export const productsService = {
           id,
           nama_produk,
           deskripsi,
+          deskripsi_lengkap,
           harga,
           stok,
           gambar_url,
@@ -209,6 +213,7 @@ export const productsService = {
           id,
           nama_produk,
           deskripsi,
+          deskripsi_lengkap,
           harga,
           stok,
           gambar_url,

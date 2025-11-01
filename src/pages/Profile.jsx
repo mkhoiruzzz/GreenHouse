@@ -1,12 +1,15 @@
-// Profile.jsx - UPDATE untuk baca data dari table profiles
+// Profile.jsx - UPDATE dengan fungsi hapus akun
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 
 const Profile = () => {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, deleteAccount } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [profileData, setProfileData] = useState({
     username: '',
     full_name: '',
@@ -16,6 +19,8 @@ const Profile = () => {
     city: '',
     province: ''
   });
+
+  const navigate = useNavigate();
 
   // ✅ LOAD DATA DARI TABLE PROFILES
   useEffect(() => {
@@ -98,6 +103,35 @@ const Profile = () => {
       setLoading(false);
     }
   };
+
+// ✅ FUNGSI HAPUS AKUN DI PROFILE.JSX
+const handleDeleteAccount = async () => {
+  setDeleteLoading(true);
+  try {
+    const result = await deleteAccount();
+    
+    if (result.success) {
+      toast.success(result.message);
+      navigate('/');
+    } else {
+      toast.error(
+        <div>
+          <p>{result.message}</p>
+          <p className="text-sm mt-1">
+            Silakan hubungi admin jika masalah berlanjut.
+          </p>
+        </div>,
+        { autoClose: 8000 }
+      );
+    }
+  } catch (error) {
+    console.error('Delete account error:', error);
+    toast.error('Terjadi kesalahan tak terduga saat menghapus akun');
+  } finally {
+    setDeleteLoading(false);
+    setShowDeleteConfirm(false);
+  }
+};
 
   return (
     <div className="min-h-screen mt-16 py-8 bg-gray-50">
@@ -210,6 +244,49 @@ const Profile = () => {
               {loading ? 'Menyimpan...' : 'Simpan Perubahan'}
             </button>
           </form>
+
+          {/* ✅ SECTION HAPUS AKUN */}
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-red-800 mb-2">
+                Zona Berbahaya
+              </h3>
+              <p className="text-red-700 text-sm mb-4">
+                Tindakan ini tidak dapat dibatalkan. Semua data Anda akan dihapus permanen.
+              </p>
+              
+              {!showDeleteConfirm ? (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition"
+                >
+                  Hapus Akun Saya
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-red-800 font-medium">
+                    Yakin ingin menghapus akun? Tindakan ini tidak dapat dibatalkan!
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleDeleteAccount}
+                      disabled={deleteLoading}
+                      className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition disabled:opacity-50"
+                    >
+                      {deleteLoading ? 'Menghapus...' : 'Ya, Hapus Akun'}
+                    </button>
+                    <button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      disabled={deleteLoading}
+                      className="bg-gray-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-600 transition disabled:opacity-50"
+                    >
+                      Batal
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
