@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
-import  {supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
+import { accountService } from '../services/accountService';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -17,6 +18,10 @@ const Register = () => {
     provinsi: ''
   });
   const [loading, setLoading] = useState(false);
+  const [emailChecking, setEmailChecking] = useState(false);
+  const [emailAvailable, setEmailAvailable] = useState(null);
+  const [emailMessage, setEmailMessage] = useState('');
+  const [showCleanupOption, setShowCleanupOption] = useState(false);
   
   const navigate = useNavigate();
   const { register } = useAuth();
@@ -28,7 +33,27 @@ const Register = () => {
     });
   };
 
-    // ✅ FUNGSI UNTUK CREATE PROFILE SETELAH REGISTER
+  // ✅ DISABLE EMAIL CHECKING TEMPORARILY
+  useEffect(() => {
+    // Set email as always available (no checking)
+    setEmailAvailable(true);
+    setEmailMessage('');
+    setShowCleanupOption(false);
+  }, [formData.email]);
+
+  // ✅ FUNGSI CLEANUP EMAIL STUCK (DISABLED FOR NOW)
+  const handleCleanupEmail = async () => {
+    try {
+      setEmailChecking(true);
+      toast.info('Silakan hapus user manual dari Supabase Dashboard: Authentication → Users');
+    } catch (error) {
+      toast.error('Gagal membersihkan email');
+    } finally {
+      setEmailChecking(false);
+    }
+  };
+
+  // ✅ FUNGSI UNTUK CREATE PROFILE SETELAH REGISTER
   const createUserProfile = async (userId, userData) => {
     try {
       const { error } = await supabase
@@ -63,52 +88,52 @@ const Register = () => {
   };  
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  // Validasi form
-  if (!formData.email || !formData.password || !formData.username) {
-    toast.error('Email, username, dan password wajib diisi');
-    return;
-  }
-
-  if (formData.password !== formData.confirmPassword) {
-    toast.error('Password dan konfirmasi password tidak cocok');
-    return;
-  }
-
-  if (formData.password.length < 6) {
-    toast.error('Password minimal 6 karakter');
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-    const { confirmPassword, ...registerData } = formData;
-    
-    const result = await register(registerData);
-    
-    if (result.success && result.user) {
-      // ✅ BUAT PROFILE SETELAH REGISTER BERHASIL
-      try {
-        await createUserProfile(result.user.id, registerData);
-        toast.success('Registrasi berhasil! Profil telah dibuat. Silakan login.');
-      } catch (profileError) {
-        console.error('Profile creation failed:', profileError);
-        toast.warning('Registrasi berhasil tetapi gagal membuat profil. Silakan lengkapi profil nanti.');
-      }
-      
-      navigate('/login');
-    } else {
-      toast.error(result.message || 'Registrasi gagal');
+    // Validasi form
+    if (!formData.email || !formData.password || !formData.username) {
+      toast.error('Email, username, dan password wajib diisi');
+      return;
     }
-  } catch (error) {
-    console.error('Register component error:', error);
-    toast.error('Terjadi kesalahan sistem');
-  } finally {
-    setLoading(false);
-  }
-};
+
+    if (formData.password !== formData.confirmPassword) {
+      toast.error('Password dan konfirmasi password tidak cocok');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      toast.error('Password minimal 6 karakter');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { confirmPassword, ...registerData } = formData;
+      
+      const result = await register(registerData);
+      
+      if (result.success && result.user) {
+        // ✅ BUAT PROFILE SETELAH REGISTER BERHASIL
+        try {
+          await createUserProfile(result.user.id, registerData);
+          toast.success('Registrasi berhasil! Profil telah dibuat. Silakan login.');
+        } catch (profileError) {
+          console.error('Profile creation failed:', profileError);
+          toast.warning('Registrasi berhasil tetapi gagal membuat profil. Silakan lengkapi profil nanti.');
+        }
+        
+        navigate('/login');
+      } else {
+        toast.error(result.message || 'Registrasi gagal');
+      }
+    } catch (error) {
+      console.error('Register component error:', error);
+      toast.error('Terjadi kesalahan sistem');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen mt-16 py-12 bg-gray-50">
@@ -151,6 +176,13 @@ const Register = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50"
                   placeholder="email@example.com"
                 />
+                
+                {/* Note for stuck email */}
+                {emailMessage && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {emailMessage}
+                  </p>
+                )}
               </div>
             </div>
 

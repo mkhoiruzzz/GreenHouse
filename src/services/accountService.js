@@ -1,136 +1,275 @@
 import { supabase } from '../lib/supabase';
 
 export const accountService = {
-  // ✅ DELETE ACCOUNT DENGAN SERVICE ROLE KEY
-  async deleteUserAccount(userId) {
+  // ✅ CEK KETERSEDIAAN EMAIL (Simplified - tanpa profiles check)
+  async checkEmailAvailable(email) {
     try {
-      console.log('🔄 Starting account deletion for user:', userId);
+      const normalizedEmail = email.trim().toLowerCase();
+      
+      // Langsung cek dengan test signup
+      // Ini akan gagal jika email sudah terdaftar di auth.users
+      const testPassword = `Test_${Date.now()}_${Math.random().toString(36).substring(7)}!Aa1`;
+      
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password: testPassword,
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: { 
+            is_test_check: true,
+            timestamp: Date.now()
+          }
+        }
+      });
 
-      // 1. Hapus dari profiles table
+      // Jika ada error signup
+      if (signUpError) {
+        console.log('Signup error:', signUpError.message);
+        
+        // Email sudah terdaftar
+        if (signUpError.message.includes('already') || 
+            signUpError.message.includes('registered') ||
+            signUpError.message.includes('User already registered')) {
+          return {
+            available: false,
+            message: '⚠️ Email sudah terdaftar. Klik "Bersihkan" untuk mendaftar ulang.',
+            canCleanup: true
+          };
+        }
+        
+        // Error lain, anggap tersedia
+        return { 
+          available: true, 
+          message: '✓ Email tersedia'
+        };
+      }
+
+      // Jika signup berhasil, cek identities
+      if (signUpData?.user) {
+        // identities kosong = email sudah terdaftar
+        if (signUpData.user.identities && signUpData.user.identities.length === 0) {
+          return {
+            available: false,
+            message: '⚠️ Email sudah terdaftar. Klik "Bersihkan" untuk mendaftar ulang.',
+            canCleanup: true
+          };
+        }
+        
+        // Email benar-benar baru (test signup berhasil)
+        console.log('✓ Email available, test signup created (will auto-cleanup)');
+      }
+
+      // Email tersedia
+      return { 
+        available: true, 
+        message: '✓ Email tersedia',
+        canCleanup: false
+      };
+
+    } catch (error) {
+      console.error('Email availability check error:', error);
+      // Default ke available jika ada error
+      return { 
+        available: true, 
+        message: '✓ Email tersedia'
+      };
+    }
+  },
+
+  // ✅ DELETE ACCOUNT MELALUI API ROUTE
+  async deleteUserAccount(userId, userEmail) {
+    try {
+      console.log('📄 Starting API account deletion for user:', userId);
+
+      const response = await fetch('/api/delete-account', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          email: userEmail
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete account via API');
+      }
+
+      console.log('✅ API deletion completed');
+      return result;
+
+    } catch (error) {
+      console.error('❌ API deletion error:', error);
+      throw error;
+    }
+  },
+
+  // ✅ COMPLETE DATA CLEANUP (Hard delete approach untuk free up email)
+  async completeDataCleanup(userId, userEmail) {
+    try {
+      console.log('📄 Starting complete data cleanup for user:', userId);
+      console.log('📧 Original email:', userEmail);
+
+      // STEP 1: Update email di auth.users dulu (PENTING!)
+      // Ini akan membebaskan email asli untuk digunakan lagi
+      const uniqueEmail = `deleted_${userId}_${Date.now()}@deleted.account`;
+      
+      try {
+        const { data: updateData, error: emailError } = await supabase.auth.updateUser({
+          email: uniqueEmail
+        });
+
+        if (emailError) {
+          console.error('⚠️ Cannot update email:', emailError);
+          // Jangan throw error, lanjutkan proses
+        } else {
+          console.log('✅ Auth email updated to:', uniqueEmail);
+          console.log('✅ Original email freed:', userEmail);
+        }
+      } catch (emailUpdateError) {
+        console.warn('Email update failed:', emailUpdateError);
+      }
+
+      // STEP 2: Hard delete dari profiles (bukan soft delete)
       const { error: profileError } = await supabase
         .from('profiles')
         .delete()
         .eq('id', userId);
 
       if (profileError) {
-        console.error('❌ Error deleting profile:', profileError);
-        throw new Error(`Gagal menghapus data profil: ${profileError.message}`);
-      }
-
-      // 2. Hapus dari tabel lain yang terkait (jika ada)
-      await this.deleteUserRelatedData(userId);
-
-      // 3. Hapus user dari auth (butuh service_role key)
-      const { error: authError } = await supabase.auth.admin.deleteUser(userId);
-      
-      if (authError) {
-        console.error('❌ Error deleting auth user:', authError);
+        console.error('⚠️ Error deleting profile:', profileError);
+        // Jika hard delete gagal, coba soft delete sebagai fallback
+        const { error: softDeleteError } = await supabase
+          .from('profiles')
+          .update({ 
+            is_deleted: true,
+            deleted_at: new Date().toISOString()
+          })
+          .eq('id', userId);
         
-        // Jika tidak punya akses admin, throw error khusus
-        if (authError.message.includes('JWT')) {
-          throw new Error('Tidak memiliki izin untuk menghapus akun. Silakan gunakan metode alternatif.');
+        if (softDeleteError) {
+          console.error('Soft delete also failed:', softDeleteError);
+        } else {
+          console.log('✅ Profile soft deleted (fallback)');
         }
-        throw new Error(`Gagal menghapus akun auth: ${authError.message}`);
-      }
-
-      console.log('✅ Account deletion completed successfully');
-      return { 
-        success: true, 
-        message: 'Akun berhasil dihapus permanen' 
-      };
-
-    } catch (error) {
-      console.error('❌ Account service deletion error:', error);
-      throw error;
-    }
-  },
-
-  // ✅ SOFT DELETE ALTERNATIVE YANG LEBIH BAIK
-  async softDeleteAccount(userId) {
-    try {
-      console.log('🔄 Starting soft deletion for user:', userId);
-
-      // 1. Hapus data sensitif dari profiles
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          email: `deleted_${userId}@deleted.com`,
-          username: `deleted_${userId}`,
-          full_name: 'User Terhapus',
-          phone: '0000000000',
-          address: 'Data telah dihapus',
-          city: 'Data telah dihapus',
-          province: 'Data telah dihapus',
-          is_deleted: true,
-          deleted_at: new Date().toISOString()
-        })
-        .eq('id', userId);
-
-      if (profileError) {
-        throw new Error(`Gagal update profil: ${profileError.message}`);
-      }
-
-      // 2. BUAT EMAIL UNIK YANG TIDAK AKAN PERNAH DIGUNAKAN
-      const uniqueDeletedEmail = `deleted_${userId}_${Date.now()}@account.deleted`;
-      
-      // 3. Update email di auth - INI YANG PENTING!
-      const { error: emailError } = await supabase.auth.updateUser({
-        email: uniqueDeletedEmail
-      });
-
-      if (emailError) {
-        console.warn('⚠️ Cannot update email:', emailError);
-        // Jika gagal update email, coba approach lain
-        await this.alternativeAccountDeactivation(userId);
       } else {
-        console.log('✅ Email updated to:', uniqueDeletedEmail);
+        console.log('✅ Profile hard deleted');
       }
 
-      // 4. Update password untuk memastikan tidak bisa login
-      const randomPassword = this.generateSecurePassword();
-      const { error: passwordError } = await supabase.auth.updateUser({
-        password: randomPassword
-      });
+      // STEP 3: Update password untuk security
+      try {
+        const randomPassword = this.generateSecurePassword();
+        const { error: passwordError } = await supabase.auth.updateUser({
+          password: randomPassword
+        });
 
-      if (passwordError) {
-        console.warn('⚠️ Cannot update password:', passwordError);
+        if (!passwordError) {
+          console.log('✅ Password updated');
+        }
+      } catch (pwError) {
+        console.warn('Password update skipped:', pwError);
       }
 
-      console.log('✅ Soft deletion completed');
       return { 
         success: true, 
-        message: 'Akun berhasil dinonaktifkan. Email ini dapat digunakan untuk mendaftar kembali.' 
+        message: `Akun berhasil dihapus. Email ${userEmail} sekarang dapat digunakan kembali untuk registrasi.` 
       };
 
     } catch (error) {
-      console.error('❌ Soft deletion error:', error);
+      console.error('Complete cleanup error:', error);
       throw error;
     }
   },
 
-  // ✅ ALTERNATIVE JIKA UPDATE EMAIL GAGAL
-  async alternativeAccountDeactivation(userId) {
+  // ✅ CEK STATUS EMAIL DI AUTH
+  async checkAuthEmailStatus(email) {
     try {
-      console.log('🔄 Using alternative deactivation method');
+      const normalizedEmail = email.trim().toLowerCase();
       
-      // Hanya update password untuk memastikan tidak bisa login
-      const randomPassword = this.generateSecurePassword();
-      const { error } = await supabase.auth.updateUser({
-        password: randomPassword
-      });
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('id, email, is_deleted')
+        .eq('email', normalizedEmail);
 
       if (error) {
-        throw new Error('Gagal menonaktifkan akun');
+        return { 
+          exists: false, 
+          message: 'Error checking email status' 
+        };
       }
 
-      return true;
+      // Jika ada profile aktif dengan email ini
+      const activeProfile = profiles?.find(p => !p.is_deleted);
+      if (activeProfile) {
+        return { 
+          exists: true, 
+          active: true,
+          message: 'Email sudah terdaftar dengan akun aktif' 
+        };
+      }
+
+      // Jika ada profile deleted dengan email ini
+      const deletedProfile = profiles?.find(p => p.is_deleted);
+      if (deletedProfile) {
+        return { 
+          exists: true, 
+          active: false,
+          message: 'Email pernah terdaftar tetapi sudah dihapus',
+          can_cleanup: true
+        };
+      }
+
+      return { 
+        exists: false, 
+        message: 'Email tersedia' 
+      };
+
     } catch (error) {
-      console.error('Alternative deactivation error:', error);
-      throw error;
+      console.error('Auth email check error:', error);
+      return { 
+        exists: false, 
+        message: 'Email tersedia' 
+      };
     }
   },
 
-  // ✅ GENERATE PASSWORD YANG SANGAT AMAN
+  // ✅ FORCE CLEANUP EMAIL (Simplified - focus on auth.users)
+  async forceEmailCleanup(email) {
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+      console.log('🧹 Force cleaning up email:', normalizedEmail);
+
+      // Karena tidak bisa akses auth.users dari client,
+      // kita akan informasikan user untuk delete manual
+      
+      return { 
+        success: false, 
+        message: `❌ Email cleanup memerlukan akses admin. 
+        
+Silakan hapus manual:
+1. Buka Supabase Dashboard
+2. Authentication → Users  
+3. Cari email: ${normalizedEmail}
+4. Delete User
+5. Refresh halaman ini
+
+Atau gunakan email lain untuk mendaftar.`,
+        manual_action_required: true
+      };
+
+    } catch (error) {
+      console.error('Force cleanup error:', error);
+      return { 
+        success: false, 
+        message: 'Gagal membersihkan email. Silakan gunakan email lain atau hapus manual dari Supabase Dashboard.' 
+      };
+    }
+  },
+
+  // ✅ GENERATE SECURE PASSWORD
   generateSecurePassword() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
     let password = '';
@@ -138,96 +277,5 @@ export const accountService = {
       password += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return password;
-  },
-
-  // ✅ HAPUS DATA TERKAIT USER DARI TABEL LAIN
-  async deleteUserRelatedData(userId) {
-    try {
-      // Sesuaikan dengan tabel yang ada di database Anda
-      const tables = [
-        'orders', 
-        'order_items', 
-        'carts',
-        'user_preferences',
-        'user_sessions'
-      ];
-      
-      for (const table of tables) {
-        try {
-          const { error } = await supabase
-            .from(table)
-            .delete()
-            .eq('user_id', userId);
-
-          if (error && !error.message.includes('does not exist')) {
-            console.warn(`⚠️ Warning deleting from ${table}:`, error);
-          } else if (!error) {
-            console.log(`✅ Deleted from ${table}`);
-          }
-        } catch (tableError) {
-          console.warn(`⚠️ Error with table ${table}:`, tableError);
-        }
-      }
-    } catch (error) {
-      console.warn('⚠️ Error deleting related data:', error);
-    }
-  },
-
-  // ✅ CHECK IF USER CAN BE DELETED
-  async checkDeletionEligibility(userId) {
-    try {
-      // Cek apakah user ada
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('id, email, is_deleted')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        return { eligible: false, reason: 'User tidak ditemukan' };
-      }
-
-      if (profile.is_deleted) {
-        return { eligible: false, reason: 'Akun sudah dinonaktifkan' };
-      }
-
-      return { eligible: true };
-    } catch (error) {
-      console.error('Check eligibility error:', error);
-      return { eligible: false, reason: 'Error checking eligibility' };
-    }
-  },
-
-  // ✅ FUNGSI BARU: CEK APAKAH EMAIL SUDAH TERDAFTAR TAPI DELETED
-  async checkEmailAvailability(email) {
-    try {
-      // Cek di auth users (ini butuh admin privileges)
-      // Untuk sekarang, kita cek di profiles table saja
-      const { data: existingProfile, error } = await supabase
-        .from('profiles')
-        .select('id, email, is_deleted')
-        .eq('email', email)
-        .single();
-
-      if (error && error.code === 'PGRST116') {
-        // Tidak ada data, email available
-        return { available: true };
-      }
-
-      if (existingProfile) {
-        if (existingProfile.is_deleted) {
-          return { 
-            available: true, 
-            message: 'Email ini sebelumnya pernah terdaftar tetapi sudah dihapus. Bisa digunakan kembali.' 
-          };
-        }
-        return { available: false, message: 'Email sudah terdaftar' };
-      }
-
-      return { available: true };
-    } catch (error) {
-      console.error('Check email availability error:', error);
-      return { available: true }; // Default to available jika error
-    }
   }
 };

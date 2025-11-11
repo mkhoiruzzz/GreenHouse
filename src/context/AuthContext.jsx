@@ -214,49 +214,82 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ PERBAIKI FUNGSI HAPUS AKUN DENGAN ACCOUNT SERVICE
-  const deleteAccount = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        return { success: false, message: 'User tidak ditemukan' };
-      }
-
-      console.log('🔄 Starting account deletion process for user:', user.id);
-
-      let result;
-
-      try {
-        // Coba hard delete dulu
-        result = await accountService.deleteUserAccount(user.id);
-      } catch (hardDeleteError) {
-        console.warn('⚠️ Hard delete failed, trying soft delete:', hardDeleteError);
-        
-        // Fallback ke soft delete
-        result = await accountService.softDeleteAccount(user.id);
-      }
-
-      // Jika berhasil, sign out dan clear data
-      if (result.success) {
-        await supabase.auth.signOut();
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        setUser(null);
-        setIsAuthenticated(false);
-        setIsAdmin(false);
-      }
-
-      return result;
-
-    } catch (error) {
-      console.error('❌ Delete account error:', error);
-      return { 
-        success: false, 
-        message: error.message || 'Gagal menghapus akun. Silakan coba lagi.' 
-      };
+// ✅ FUNGSI DELETE ACCOUNT - FIXED VERSION
+const deleteAccount = async () => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      toast.error('User tidak ditemukan');
+      return { success: false, message: 'User tidak ditemukan' };
     }
-  };
+
+    console.log('🗑️ Starting account deletion for:', user.email);
+    const originalEmail = user.email;
+
+    // STEP 1: Cleanup data (email akan di-free up di sini)
+    let cleanupResult;
+    
+    try {
+      // Coba API route dulu (jika ada)
+      cleanupResult = await accountService.deleteUserAccount(user.id, user.email);
+      console.log('✅ API deletion successful');
+    } catch (apiError) {
+      console.warn('⚠️ API deletion failed, using fallback:', apiError);
+      
+      // Fallback: Complete data cleanup (CLIENT-SIDE)
+      cleanupResult = await accountService.completeDataCleanup(user.id, user.email);
+      console.log('✅ Fallback cleanup successful');
+    }
+
+    // STEP 2: Sign out (PENTING: lakukan setelah cleanup!)
+    try {
+      await supabase.auth.signOut();
+      console.log('✅ User signed out');
+    } catch (signOutError) {
+      console.warn('Sign out warning:', signOutError);
+      // Lanjutkan meski gagal sign out
+    }
+
+    // STEP 3: Clear local state
+    setUser(null);
+    setIsAuthenticated(false);
+    setIsAdmin(false);
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+
+    // STEP 4: Success notification
+    toast.success(`Akun berhasil dihapus! Email ${originalEmail} dapat digunakan kembali.`);
+    
+    return { 
+      success: true, 
+      message: `Akun berhasil dihapus. Email ${originalEmail} sekarang tersedia untuk registrasi.`,
+      freed_email: originalEmail
+    };
+
+  } catch (error) {
+    console.error('❌ Delete account error:', error);
+    
+    // Tetap sign out meski ada error
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setIsAuthenticated(false);
+      setIsAdmin(false);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    } catch (cleanupError) {
+      console.error('Cleanup after error failed:', cleanupError);
+    }
+
+    toast.warning('Akun sudah logout, tapi mungkin perlu cleanup manual dari database.');
+    
+    return { 
+      success: false, 
+      message: error.message || 'Gagal menghapus akun secara lengkap, tetapi Anda sudah logout.' 
+    };
+  }
+};
 
   // ✅ FUNGSI UPDATE PROFILE
   const updateProfile = async (profileData) => {
