@@ -1,9 +1,10 @@
 // src/pages/Product.jsx - MODERN E-COMMERCE LAYOUT
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react'; // TAMBAHKAN useRef
 import { productsService } from '../services/productsService';
 import ProductCard from '../components/ProductCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { toast } from 'react-toastify';
+import { useCart } from '../context/CartContext'; // TAMBAHKAN IMPORT INI
 
 const Product = () => {
   const [products, setProducts] = useState([]);
@@ -26,16 +27,48 @@ const Product = () => {
     price: true
   });
 
+  // TAMBAHKAN INI: Ambil cart dari context
+  const { cartItems } = useCart();
+  
+  // TAMBAHKAN INI: Ref untuk melacak jumlah item cart sebelumnya
+  const prevCartCountRef = useRef(0);
+
+  // TAMBAHKAN INI: Scroll to top ketika komponen Product dimount
+  useEffect(() => {
+    // Scroll ke atas ketika halaman Product pertama kali dimuat
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  }, []); // Empty dependency array - hanya sekali ketika komponen mount
+
   useEffect(() => {
     console.log('🔄 Product component mounted');
     fetchCategories();
     fetchProducts();
+    
+    // TAMBAHKAN INI: Inisialisasi cart count
+    prevCartCountRef.current = cartItems.length;
   }, []);
 
   useEffect(() => {
     console.log('🔄 Filters changed:', filters);
     fetchProducts();
   }, [filters]);
+
+  // TAMBAHKAN INI: useEffect untuk mendeteksi perubahan cart dan scroll ke atas
+  useEffect(() => {
+    // Scroll ke atas ketika cart items berubah (ketika ada penambahan item)
+    if (cartItems.length > prevCartCountRef.current) {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    }
+    
+    // Update previous cart count
+    prevCartCountRef.current = cartItems.length;
+  }, [cartItems]); // Trigger ketika cartItems berubah
 
   const fetchCategories = async () => {
     try {

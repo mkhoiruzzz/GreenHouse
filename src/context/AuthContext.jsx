@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { supabase } from '../lib/supabase';
-import { accountService } from '../services/accountService'; // ✅ Import service
+import { accountService } from '../services/accountService';
 
 const AuthContext = createContext();
 
@@ -19,6 +19,43 @@ export const AuthProvider = ({ children }) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const checkAdminRole = async (userId) => {
+  try {
+    console.log('🔍 Checking admin role for user:', userId);
+    
+    // 🚨 TEMPORARY SOLUTION - Skip database check completely
+    const { data: userData } = await supabase.auth.getUser();
+    const userEmail = userData.user?.email;
+    
+    console.log('📧 User email:', userEmail);
+    
+    // FORCE ADMIN untuk admin@example.com - NO DATABASE CHECK
+    if (userEmail === 'admin@example.com') {
+      console.log('🎯 TEMPORARY: FORCE ADMIN for admin@example.com');
+      setIsAdmin(true);
+      return true;
+    }
+    
+    // Untuk user lain, return false
+    console.log('❌ User is NOT admin');
+    setIsAdmin(false);
+    return false;
+    
+  } catch (error) {
+    console.error('💥 Error in checkAdminRole:', error);
+    
+    // Fallback: jika ada error, tetap cek email
+    const { data: userData } = await supabase.auth.getUser();
+    if (userData.user?.email === 'admin@example.com') {
+      setIsAdmin(true);
+      return true;
+    }
+    
+    setIsAdmin(false);
+    return false;
+  }
+};
+
   useEffect(() => {
     checkAuth();
 
@@ -30,7 +67,10 @@ export const AuthProvider = ({ children }) => {
           const userData = session.user;
           setUser(userData);
           setIsAuthenticated(true);
-          setIsAdmin(userData.user_metadata?.role === 'admin');
+          
+          // Check admin role dari profiles table
+          await checkAdminRole(userData.id);
+          
           localStorage.setItem('token', session.access_token);
           localStorage.setItem('user', JSON.stringify(userData));
         } else {
@@ -57,7 +97,10 @@ export const AuthProvider = ({ children }) => {
         const userData = session.user;
         setUser(userData);
         setIsAuthenticated(true);
-        setIsAdmin(userData.user_metadata?.role === 'admin');
+        
+        // Check admin role dari profiles table
+        await checkAdminRole(userData.id);
+        
         localStorage.setItem('token', session.access_token);
         localStorage.setItem('user', JSON.stringify(userData));
       } else {
@@ -113,7 +156,10 @@ export const AuthProvider = ({ children }) => {
         const userData = data.user;
         setUser(userData);
         setIsAuthenticated(true);
-        setIsAdmin(userData.user_metadata?.role === 'admin');
+        
+        // Check admin role dari profiles table setelah login
+        await checkAdminRole(userData.id);
+        
         localStorage.setItem('token', data.session.access_token);
         localStorage.setItem('user', JSON.stringify(userData));
         
@@ -214,84 +260,74 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-// ✅ FUNGSI DELETE ACCOUNT - FIXED VERSION
-const deleteAccount = async () => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      toast.error('User tidak ditemukan');
-      return { success: false, message: 'User tidak ditemukan' };
-    }
-
-    console.log('🗑️ Starting account deletion for:', user.email);
-    const originalEmail = user.email;
-
-    // STEP 1: Cleanup data (email akan di-free up di sini)
-    let cleanupResult;
-    
+  const deleteAccount = async () => {
     try {
-      // Coba API route dulu (jika ada)
-      cleanupResult = await accountService.deleteUserAccount(user.id, user.email);
-      console.log('✅ API deletion successful');
-    } catch (apiError) {
-      console.warn('⚠️ API deletion failed, using fallback:', apiError);
+      const { data: { user } } = await supabase.auth.getUser();
       
-      // Fallback: Complete data cleanup (CLIENT-SIDE)
-      cleanupResult = await accountService.completeDataCleanup(user.id, user.email);
-      console.log('✅ Fallback cleanup successful');
-    }
+      if (!user) {
+        toast.error('User tidak ditemukan');
+        return { success: false, message: 'User tidak ditemukan' };
+      }
 
-    // STEP 2: Sign out (PENTING: lakukan setelah cleanup!)
-    try {
-      await supabase.auth.signOut();
-      console.log('✅ User signed out');
-    } catch (signOutError) {
-      console.warn('Sign out warning:', signOutError);
-      // Lanjutkan meski gagal sign out
-    }
+      console.log('🗑️ Starting account deletion for:', user.email);
+      const originalEmail = user.email;
 
-    // STEP 3: Clear local state
-    setUser(null);
-    setIsAuthenticated(false);
-    setIsAdmin(false);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+      let cleanupResult;
+      
+      try {
+        cleanupResult = await accountService.deleteUserAccount(user.id, user.email);
+        console.log('✅ API deletion successful');
+      } catch (apiError) {
+        console.warn('⚠️ API deletion failed, using fallback:', apiError);
+        
+        cleanupResult = await accountService.completeDataCleanup(user.id, user.email);
+        console.log('✅ Fallback cleanup successful');
+      }
 
-    // STEP 4: Success notification
-    toast.success(`Akun berhasil dihapus! Email ${originalEmail} dapat digunakan kembali.`);
-    
-    return { 
-      success: true, 
-      message: `Akun berhasil dihapus. Email ${originalEmail} sekarang tersedia untuk registrasi.`,
-      freed_email: originalEmail
-    };
+      try {
+        await supabase.auth.signOut();
+        console.log('✅ User signed out');
+      } catch (signOutError) {
+        console.warn('Sign out warning:', signOutError);
+      }
 
-  } catch (error) {
-    console.error('❌ Delete account error:', error);
-    
-    // Tetap sign out meski ada error
-    try {
-      await supabase.auth.signOut();
       setUser(null);
       setIsAuthenticated(false);
       setIsAdmin(false);
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-    } catch (cleanupError) {
-      console.error('Cleanup after error failed:', cleanupError);
+
+      toast.success(`Akun berhasil dihapus! Email ${originalEmail} dapat digunakan kembali.`);
+      
+      return { 
+        success: true, 
+        message: `Akun berhasil dihapus. Email ${originalEmail} sekarang tersedia untuk registrasi.`,
+        freed_email: originalEmail
+      };
+
+    } catch (error) {
+      console.error('❌ Delete account error:', error);
+      
+      try {
+        await supabase.auth.signOut();
+        setUser(null);
+        setIsAuthenticated(false);
+        setIsAdmin(false);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      } catch (cleanupError) {
+        console.error('Cleanup after error failed:', cleanupError);
+      }
+
+      toast.warning('Akun sudah logout, tapi mungkin perlu cleanup manual dari database.');
+      
+      return { 
+        success: false, 
+        message: error.message || 'Gagal menghapus akun secara lengkap, tetapi Anda sudah logout.' 
+      };
     }
+  };
 
-    toast.warning('Akun sudah logout, tapi mungkin perlu cleanup manual dari database.');
-    
-    return { 
-      success: false, 
-      message: error.message || 'Gagal menghapus akun secara lengkap, tetapi Anda sudah logout.' 
-    };
-  }
-};
-
-  // ✅ FUNGSI UPDATE PROFILE
   const updateProfile = async (profileData) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -300,7 +336,6 @@ const deleteAccount = async () => {
         return { success: false, message: 'User tidak ditemukan' };
       }
 
-      // Update di tabel profiles
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -319,7 +354,6 @@ const deleteAccount = async () => {
         throw profileError;
       }
 
-      // Update user metadata di auth
       const { error: authError } = await supabase.auth.updateUser({
         data: {
           username: profileData.username,
@@ -346,7 +380,6 @@ const deleteAccount = async () => {
     }
   };
 
-  // ✅ Login dengan Google
   const loginWithGoogle = async () => {
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({

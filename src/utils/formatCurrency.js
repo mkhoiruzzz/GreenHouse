@@ -1,6 +1,8 @@
 // src/utils/formatCurrency.js
 export const formatCurrency = (amount) => {
-  if (!amount && amount !== 0) return 'Rp 0';
+  if (typeof amount !== 'number') {
+    amount = parseFloat(amount) || 0;
+  }
   
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',

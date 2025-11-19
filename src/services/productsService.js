@@ -1,11 +1,14 @@
-// src/services/productsService.js - UNTUK SUPABASE
+// src/services/productsService.js - ENHANCED DEBUG VERSION
 import { supabase } from '../lib/supabase';
 
 export const productsService = {
   // Get all products with category information
   getAllProducts: async () => {
     try {
-      console.log('🔄 Fetching products from Supabase...');
+      console.log('🔄 [getAllProducts] Starting fetch from Supabase...');
+      console.log('🔄 [getAllProducts] Supabase client:', supabase ? '✅ Connected' : '❌ NOT Connected');
+      
+      const startTime = performance.now();
       
       const { data, error } = await supabase
         .from('products')
@@ -18,8 +21,6 @@ export const productsService = {
           stok,
           gambar_url,
           kategori_id,
-          durability,
-          tingkat_kesulitan,
           max_pengiriman_hari,
           cara_perawatan,
           created_at,
@@ -30,21 +31,63 @@ export const productsService = {
         `)
         .order('created_at', { ascending: false });
 
+      const endTime = performance.now();
+      console.log(`⏱️ [getAllProducts] Query took ${(endTime - startTime).toFixed(2)}ms`);
+
       if (error) {
-        console.error('❌ Supabase error:', error);
+        console.error('❌ [getAllProducts] Supabase error:', error);
+        console.error('❌ [getAllProducts] Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
         throw error;
+      }
+
+      console.log('✅ [getAllProducts] Raw data received');
+      console.log('📊 [getAllProducts] Number of products:', data?.length || 0);
+      
+      if (!data || data.length === 0) {
+        console.warn('⚠️ [getAllProducts] No products found in database');
+        return [];
+      }
+      
+      // Log first product as sample
+      if (data.length > 0) {
+        console.log('📦 [getAllProducts] First product sample:', {
+          id: data[0].id,
+          nama_produk: data[0].nama_produk,
+          harga: data[0].harga,
+          stok: data[0].stok,
+          gambar_url: data[0].gambar_url,
+          has_categories: !!data[0].categories
+        });
       }
       
       // Normalize image field
-      const normalizedData = (data || []).map(product => ({
-        ...product,
-        gambar_url: product.gambar_url || 'https://placehold.co/400x300/4ade80/white?text=Gambar+Tidak+Tersedia'
-      }));
+      const normalizedData = (data || []).map((product, index) => {
+        const normalized = {
+          ...product,
+          gambar_url: product.gambar_url || 'https://placehold.co/400x300/4ade80/white?text=Gambar+Tidak+Tersedia'
+        };
+        
+        // Validate required fields
+        if (!normalized.id) {
+          console.error(`❌ [getAllProducts] Product at index ${index} missing ID:`, product);
+        }
+        if (!normalized.nama_produk) {
+          console.warn(`⚠️ [getAllProducts] Product ${normalized.id} missing nama_produk`);
+        }
+        
+        return normalized;
+      });
       
-      console.log('✅ Products fetched successfully:', normalizedData.length);
+      console.log('✅ [getAllProducts] Products normalized successfully:', normalizedData.length);
       return normalizedData;
     } catch (error) {
-      console.error('❌ Error fetching products:', error);
+      console.error('❌ [getAllProducts] Catch error:', error);
+      console.error('❌ [getAllProducts] Error stack:', error.stack);
       throw error;
     }
   },
@@ -52,7 +95,7 @@ export const productsService = {
   // Get all categories
   getAllCategories: async () => {
     try {
-      console.log('🔄 Fetching categories from Supabase...');
+      console.log('🔄 [getAllCategories] Fetching categories from Supabase...');
       
       const { data, error } = await supabase
         .from('categories')
@@ -60,14 +103,23 @@ export const productsService = {
         .order('name_kategori');
 
       if (error) {
-        console.error('❌ Supabase error:', error);
+        console.error('❌ [getAllCategories] Supabase error:', error);
+        console.error('❌ [getAllCategories] Error details:', {
+          message: error.message,
+          code: error.code
+        });
         throw error;
       }
       
-      console.log('✅ Categories fetched successfully:', data?.length || 0);
+      console.log('✅ [getAllCategories] Categories fetched:', data?.length || 0);
+      
+      if (data && data.length > 0) {
+        console.log('📦 [getAllCategories] Sample category:', data[0]);
+      }
+      
       return data || [];
     } catch (error) {
-      console.error('❌ Error fetching categories:', error);
+      console.error('❌ [getAllCategories] Error fetching categories:', error);
       throw error;
     }
   },
@@ -75,7 +127,15 @@ export const productsService = {
   // Get product by ID
   getProductById: async (id) => {
     try {
-      console.log(`🔄 Fetching product with ID: ${id}`);
+      console.log(`🔄 [getProductById] Fetching product with ID: ${id}`);
+      console.log(`🔍 [getProductById] ID type: ${typeof id}`);
+      
+      if (!id) {
+        console.error('❌ [getProductById] No ID provided');
+        throw new Error('Product ID is required');
+      }
+      
+      const startTime = performance.now();
       
       const { data, error } = await supabase
         .from('products')
@@ -88,8 +148,6 @@ export const productsService = {
           stok,
           gambar_url,
           kategori_id,
-          durability,
-          tingkat_kesulitan,
           max_pengiriman_hari,
           cara_perawatan,
           created_at,
@@ -101,10 +159,42 @@ export const productsService = {
         .eq('id', id)
         .single();
 
+      const endTime = performance.now();
+      console.log(`⏱️ [getProductById] Query took ${(endTime - startTime).toFixed(2)}ms`);
+
       if (error) {
-        console.error('❌ Supabase error:', error);
+        console.error('❌ [getProductById] Supabase error:', error);
+        console.error('❌ [getProductById] Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        
+        // Check if it's a "not found" error
+        if (error.code === 'PGRST116') {
+          console.error('❌ [getProductById] Product not found in database');
+          throw new Error(`Product with ID ${id} not found`);
+        }
+        
         throw error;
       }
+      
+      if (!data) {
+        console.error('❌ [getProductById] No data returned from Supabase');
+        throw new Error(`Product with ID ${id} not found`);
+      }
+      
+      console.log('✅ [getProductById] Product data received');
+      console.log('📦 [getProductById] Product details:', {
+        id: data.id,
+        nama_produk: data.nama_produk,
+        harga: data.harga,
+        stok: data.stok,
+        gambar_url: data.gambar_url ? '✅ Has image' : '❌ No image',
+        cara_perawatan: data.cara_perawatan ? `✅ ${data.cara_perawatan.length} chars` : '❌ No data',
+        categories: data.categories ? '✅ Has category' : '❌ No category'
+      });
       
       // Normalize image field
       const normalizedProduct = {
@@ -112,10 +202,11 @@ export const productsService = {
         gambar_url: data.gambar_url || 'https://placehold.co/600x400/4ade80/white?text=Gambar+Tidak+Tersedia'
       };
       
-      console.log('✅ Product fetched successfully:', normalizedProduct);
+      console.log('✅ [getProductById] Product normalized successfully');
       return normalizedProduct;
     } catch (error) {
-      console.error('❌ Error fetching product:', error);
+      console.error('❌ [getProductById] Error fetching product:', error);
+      console.error('❌ [getProductById] Error stack:', error.stack);
       throw error;
     }
   },
@@ -123,6 +214,8 @@ export const productsService = {
   // Search products
   searchProducts: async (searchTerm) => {
     try {
+      console.log(`🔍 [searchProducts] Searching for: "${searchTerm}"`);
+      
       const { data, error } = await supabase
         .from('products')
         .select(`
@@ -147,7 +240,12 @@ export const productsService = {
         .or(`nama_produk.ilike.%${searchTerm}%,deskripsi.ilike.%${searchTerm}%,deskripsi_lengkap.ilike.%${searchTerm}%`)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [searchProducts] Supabase error:', error);
+        throw error;
+      }
+      
+      console.log(`✅ [searchProducts] Found ${data?.length || 0} products`);
       
       // Normalize image field
       const normalizedData = (data || []).map(product => ({
@@ -157,7 +255,7 @@ export const productsService = {
       
       return normalizedData;
     } catch (error) {
-      console.error('Error searching products:', error);
+      console.error('❌ [searchProducts] Error searching products:', error);
       throw error;
     }
   },
@@ -165,6 +263,8 @@ export const productsService = {
   // Get products by category
   getProductsByCategory: async (categoryId) => {
     try {
+      console.log(`🔍 [getProductsByCategory] Fetching category ID: ${categoryId}`);
+      
       const { data, error } = await supabase
         .from('products')
         .select(`
@@ -189,7 +289,12 @@ export const productsService = {
         .eq('kategori_id', categoryId)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [getProductsByCategory] Supabase error:', error);
+        throw error;
+      }
+      
+      console.log(`✅ [getProductsByCategory] Found ${data?.length || 0} products`);
       
       // Normalize image field
       const normalizedData = (data || []).map(product => ({
@@ -199,7 +304,7 @@ export const productsService = {
       
       return normalizedData;
     } catch (error) {
-      console.error('Error fetching products by category:', error);
+      console.error('❌ [getProductsByCategory] Error fetching products by category:', error);
       throw error;
     }
   },
@@ -207,6 +312,8 @@ export const productsService = {
   // Get featured products
   getFeaturedProducts: async () => {
     try {
+      console.log('🔄 [getFeaturedProducts] Fetching featured products...');
+      
       const { data, error } = await supabase
         .from('products')
         .select(`
@@ -231,7 +338,12 @@ export const productsService = {
         .order('created_at', { ascending: false })
         .limit(8);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [getFeaturedProducts] Supabase error:', error);
+        throw error;
+      }
+      
+      console.log(`✅ [getFeaturedProducts] Found ${data?.length || 0} featured products`);
       
       // Normalize image field
       const normalizedData = (data || []).map(product => ({
@@ -241,8 +353,31 @@ export const productsService = {
       
       return normalizedData;
     } catch (error) {
-      console.error('Error fetching featured products:', error);
+      console.error('❌ [getFeaturedProducts] Error fetching featured products:', error);
       throw error;
+    }
+  },
+
+  // Test Supabase connection
+  testConnection: async () => {
+    try {
+      console.log('🔄 [testConnection] Testing Supabase connection...');
+      
+      const { data, error } = await supabase
+        .from('products')
+        .select('id')
+        .limit(1);
+
+      if (error) {
+        console.error('❌ [testConnection] Connection test failed:', error);
+        return { success: false, error };
+      }
+      
+      console.log('✅ [testConnection] Connection successful');
+      return { success: true, data };
+    } catch (error) {
+      console.error('❌ [testConnection] Connection test error:', error);
+      return { success: false, error };
     }
   }
 };

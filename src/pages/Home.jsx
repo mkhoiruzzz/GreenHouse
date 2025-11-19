@@ -1,18 +1,51 @@
 // src/pages/Home.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { productsService } from '../services/productsService';
 import ProductCard from '../components/ProductCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import CategorySlider from '../components/CategorySlider';
+import { useCart } from '../context/CartContext';
 
 const Home = () => {
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // TAMBAHKAN INI: Ambil cart dari context
+  const { cartItems } = useCart();
+  
+  // TAMBAHKAN INI: Ref untuk melacak jumlah item cart sebelumnya
+  const prevCartCountRef = useRef(0);
+
+  // TAMBAHKAN INI: Scroll to top ketika komponen Home dimount
+  useEffect(() => {
+    // Scroll ke atas ketika halaman Home pertama kali dimuat
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  }, []); // Empty dependency array - hanya sekali ketika komponen mount
+
   useEffect(() => {
     fetchFeaturedProducts();
+    
+    // TAMBAHKAN INI: Inisialisasi cart count
+    prevCartCountRef.current = cartItems.length;
   }, []);
+
+  // TAMBAHKAN INI: useEffect untuk mendeteksi perubahan cart dan scroll ke atas - SAMA SEPERTI DI CART.JSX
+  useEffect(() => {
+    // Scroll ke atas ketika cart items berubah (ketika ada penambahan item)
+    if (cartItems.length > prevCartCountRef.current) {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    }
+    
+    // Update previous cart count
+    prevCartCountRef.current = cartItems.length;
+  }, [cartItems]); // Trigger ketika cartItems berubah
 
   const fetchFeaturedProducts = async () => {
     try {
@@ -27,6 +60,7 @@ const Home = () => {
     }
   };
 
+  
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Hero Section - Compact dengan Gambar */}

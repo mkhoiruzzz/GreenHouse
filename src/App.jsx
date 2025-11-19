@@ -15,12 +15,11 @@ import 'react-toastify/dist/ReactToastify.css'
 import './App.css'
 import Checkout from './pages/Checkout'
 import Orders from './pages/Orders'
-import AdminOrders from './pages/AdminOrders'
 import About from './pages/About'
 import Contact from './pages/Contact'
 import Profil from './pages/Profile'
 import Accesories from './pages/Accesories'
-import TestSupabase from './components/TestSupabase'
+import AdminDashboard from './components/AdminDashboard'
 
 
 
@@ -43,14 +42,12 @@ function App() {
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/orders" element={<Orders />} />
-                <Route path="/admin/orders" element={<AdminOrders />} />
-                <Route path="/admin" element={<AdminOrders />} />
                 <Route path="/about" element={<About />} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/profile" element={<Profil />} />
                 <Route path="/accesories" element={<Accesories />} />
-                <Route path="/testsupabase" element={<TestSupabase />} />
                 <Route path="/images/*" element={null} />
+                <Route path="/admin" element={<AdminDashboard />} />
               </Routes>
             </main>
             <Footer />

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -10,6 +10,15 @@ const Cart = () => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [imageErrors, setImageErrors] = useState({});
+
+  // AUTO SCROLL TO TOP WHEN CART ITEMS CHANGE
+  useEffect(() => {
+    // Scroll ke atas ketika cart items berubah
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  }, [cartItems]); // Trigger ketika cartItems berubah
 
   const handleImageError = (itemId) => {
     setImageErrors(prev => ({ ...prev, [itemId]: true }));

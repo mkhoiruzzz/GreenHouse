@@ -1,15 +1,16 @@
-// Checkout.jsx - Fixed all errors with auto-fill profile
+// Checkout.jsx - FINAL VERSION
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/formatCurrency';
 import { toast } from 'react-toastify';
-import emailjs from '@emailjs/browser';
 import { supabase } from '../lib/supabase';
+import { tripayService } from '../services/tripay';
 
 const Checkout = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { cartItems, clearCart } = useCart();
   const { user } = useAuth();
 
@@ -17,9 +18,12 @@ const Checkout = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [orderId, setOrderId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [paymentChannels, setPaymentChannels] = useState([]);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState('pending');
+  const [tripayReference, setTripayReference] = useState('');
   
   const [formData, setFormData] = useState({
-    // Default values akan diisi oleh useEffect
     email: '',
     subscribe_newsletter: false,
     nama_lengkap: '',
@@ -28,17 +32,105 @@ const Checkout = () => {
     kode_pos: '',
     no_telepon: '',
     is_dropshipper: false,
-    
-    // Step 2: Metode Pengiriman
     metode_pengiriman: '',
-    biaya_pengiriman: 0,
-    
-    // Step 3: Metode Pembayaran
-    metode_pembayaran: 'transfer',
+    biaya_pengiriman: 15000,
+    metode_pembayaran: 'tripay',
     kode_kupon: ''
   });
 
-  // ✅ NEW: Auto-fill form dari user profile
+  // ✅ Cek parameter callback dari Tripay
+  useEffect(() => {
+    const reference = searchParams.get('reference');
+    const status = searchParams.get('status');
+    
+    if (reference) {
+      console.log('🔄 Tripay callback detected:', { reference, status });
+      setTripayReference(reference);
+      checkPaymentStatus(reference);
+      
+      if (status === 'success') {
+        setPaymentStatus('success');
+        setCurrentStep(4);
+      }
+    }
+  }, [searchParams]);
+
+  // ✅ Fungsi cek status pembayaran
+  const checkPaymentStatus = async (reference) => {
+    try {
+      console.log('🔍 Checking payment status for:', reference);
+      
+      // Cek di database
+      const { data: order, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('tripay_reference', reference)
+        .single();
+
+      if (error) {
+        console.error('Error fetching order:', error);
+        return;
+      }
+
+      if (order) {
+        console.log('📦 Order found:', order);
+        
+        if (order.status_pembayaran === 'paid') {
+          setPaymentStatus('success');
+          setOrderId(order.id);
+          setCurrentStep(4);
+          await updateProductStockAfterPayment(order.id);
+          toast.success('Pembayaran berhasil! Pesanan Anda sedang diproses.');
+        } else {
+          // Cek langsung ke Tripay
+          try {
+            const tripayStatus = await tripayService.checkTransaction(reference);
+            if (tripayStatus.data.status === 'PAID') {
+              // Update database
+              await supabase
+                .from('orders')
+                .update({ 
+                  status_pembayaran: 'paid',
+                  updated_at: new Date().toISOString()
+                })
+                .eq('tripay_reference', reference);
+
+              setPaymentStatus('success');
+              setOrderId(order.id);
+              setCurrentStep(4);
+              await updateProductStockAfterPayment(order.id);
+              toast.success('Pembayaran berhasil! Pesanan Anda sedang diproses.');
+            }
+          } catch (tripayError) {
+            console.error('Error checking Tripay status:', tripayError);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking payment status:', error);
+    }
+  };
+
+  // ✅ Load payment channels
+  useEffect(() => {
+    const loadPaymentChannels = async () => {
+      try {
+        console.log('🔄 Loading Tripay payment channels...');
+        const response = await tripayService.getPaymentChannels();
+        if (response.success) {
+          setPaymentChannels(response.data);
+          console.log('✅ Payment channels loaded:', response.data.length);
+        }
+      } catch (error) {
+        console.error('❌ Error loading payment channels:', error);
+        toast.error('Gagal memuat metode pembayaran');
+      }
+    };
+
+    loadPaymentChannels();
+  }, []);
+
+  // ✅ Auto-fill form dari user profile
   useEffect(() => {
     if (user) {
       console.log('🔄 Auto-filling form from user profile:', user);
@@ -55,12 +147,12 @@ const Checkout = () => {
     }
   }, [user]);
 
-  // ✅ ADD MISSING FUNCTION
+  // ✅ Format order items
   const formatOrderItems = () => {
     const formattedItems = cartItems.map(item => ({
       product_id: item.id,
       quantity: item.quantity,
-      harga_satuan: item.harga,
+      harga_satuan: item.harga
     }));
     
     console.log('📦 Formatted order items:', formattedItems);
@@ -70,133 +162,117 @@ const Checkout = () => {
   const steps = [
     { number: 1, title: 'Informasi Pembeli' },
     { number: 2, title: 'Metode Pengiriman' },
-    { number: 3, title: 'Metode Pembayaran' }
+    { number: 3, title: 'Metode Pembayaran' },
+    { number: 4, title: 'Selesai' }
   ];
 
-  // Fungsi untuk kirim email konfirmasi order - FIXED VERSION
-  const sendOrderConfirmationEmail = async (orderData) => {
+  // ✅ Fungsi membuat pembayaran Tripay
+  const createTripayPayment = async (orderData, orderItems) => {
     try {
-      console.log('📧 Preparing to send email confirmation...');
+      console.log('💰 Creating Tripay payment...');
       
-      // Validasi email
-      if (!orderData.email || orderData.email.trim() === '') {
-        console.error('❌ Email recipient is empty or invalid:', orderData.email);
-        return false;
-      }
+      const totalAmount = calculateTotal();
+      
+      // Format items untuk Tripay
+      const tripayItems = cartItems.map(item => ({
+        name: item.nama_produk.substring(0, 50), // Max 50 chars
+        price: item.harga,
+        quantity: item.quantity
+      }));
 
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(orderData.email)) {
-        console.error('❌ Invalid email format:', orderData.email);
-        return false;
-      }
-
-      // Hitung subtotal, shipping, dan total
-      const subtotal = orderData.items?.reduce((sum, item) => sum + (item.harga * item.quantity), 0) || 0;
-      const shippingCost = orderData.biaya_pengiriman || 0;
-      const grandTotal = subtotal + shippingCost;
-
-      // Format data sesuai dengan template email
-      const templateParams = {
-        to_email: orderData.email.trim(),
-        to_name: orderData.nama_lengkap?.trim() || 'Pelanggan',
-        customer_name: orderData.nama_lengkap?.trim() || 'Pelanggan',
-        order_id: orderData.orderId?.toString() || 'N/A',
-        order_date: new Date().toLocaleDateString('id-ID'),
-        
-        // VARIABEL HARGA
-        subtotal: `Rp ${subtotal.toLocaleString('id-ID')}`,
-        shipping_cost: `Rp ${shippingCost.toLocaleString('id-ID')}`,
-        grand_total: `Rp ${grandTotal.toLocaleString('id-ID')}`,
-        
-        // VARIABEL ALAMAT - SEMUA DIPISAH
-        shipping_address: orderData.alamat_pengiriman?.trim() || 'Alamat tidak tersedia',
-        kota: orderData.kota || '',
-        kode_pos: orderData.kode_pos || '',
-        
-        payment_method: orderData.metode_pembayaran || 'Transfer Bank',
-        shipping_method: orderData.metode_pengiriman || 'Reguler',
-        order_items: orderData.items?.map(item => 
-          `${item.nama_produk || 'Product'} - ${item.quantity} x Rp ${(item.harga || 0).toLocaleString('id-ID')}`
-        ).join(', ') || 'Tidak ada items',
-        phone_number: orderData.no_telepon || '-',
-        customer_email: orderData.email.trim()
+      const merchantRef = `ORDER-${orderData.id}-${Date.now()}`;
+      
+      const transactionData = {
+        method: selectedPaymentMethod,
+        merchant_ref: merchantRef,
+        amount: totalAmount,
+        customer_name: formData.nama_lengkap,
+        customer_email: formData.email,
+        customer_phone: formData.no_telepon,
+        order_items: tripayItems,
+        return_url: `${window.location.origin}/checkout?reference=${merchantRef}&status=success`,
+        expired_time: Math.floor(Date.now() / 1000) + (24 * 60 * 60),
       };
 
-      console.log('📨 Final email params:', templateParams);
+      console.log('📦 Tripay transaction data:', transactionData);
 
-      const requiredFields = ['to_email', 'customer_name', 'order_id'];
-      const missingFields = requiredFields.filter(field => !templateParams[field]);
+      const tripayResponse = await tripayService.createTransaction(transactionData);
       
-      if (missingFields.length > 0) {
-        console.error('❌ Missing required fields:', missingFields);
+      if (tripayResponse.success) {
+        console.log('✅ Tripay payment created:', tripayResponse.data);
+        return tripayResponse.data;
+      } else {
+        throw new Error(tripayResponse.message || 'Gagal membuat pembayaran Tripay');
+      }
+    } catch (error) {
+      console.error('❌ Error creating Tripay payment:', error);
+      throw error;
+    }
+  };
+
+  // ✅ Update stok produk setelah pembayaran
+  const updateProductStockAfterPayment = async (orderId) => {
+    try {
+      console.log('🔄 Updating stock after successful payment for order:', orderId);
+      
+      const { data: orderItems, error } = await supabase
+        .from('order_items')
+        .select('product_id, quantity')
+        .eq('order_id', orderId);
+
+      if (error) {
+        console.error('Error fetching order items:', error);
         return false;
       }
 
-      const serviceID = 'service_t9g74el';
-      const templateID = 'template_oldo1ke'; 
-      const publicKey = 'tAM6BbqC9NJgJnfc_';
+      console.log('📦 Order items to update stock:', orderItems);
 
-      console.log('🚀 Sending email via EmailJS...');
-      const result = await emailjs.send(serviceID, templateID, templateParams, publicKey);
+      for (const item of orderItems) {
+        const { data: currentProduct, error: fetchError } = await supabase
+          .from('products')
+          .select('stok, nama_produk')
+          .eq('id', item.product_id)
+          .single();
+
+        if (fetchError) {
+          console.error(`❌ Error fetching product ${item.product_id}:`, fetchError);
+          continue;
+        }
+
+        const newStock = (currentProduct.stok || 0) - item.quantity;
+        
+        if (newStock < 0) {
+          console.warn(`⚠️ Insufficient stock for product ${item.product_id}`);
+          continue;
+        }
+
+        const { error: updateError } = await supabase
+          .from('products')
+          .update({ 
+            stok: newStock,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', item.product_id);
+
+        if (updateError) {
+          console.error(`❌ Error updating stock for product ${item.product_id}:`, updateError);
+        } else {
+          console.log(`✅ Stock updated for product ${item.product_id}: ${currentProduct.stok} → ${newStock}`);
+        }
+      }
       
-      console.log('✅ Email konfirmasi order terkirim:', result);
+      console.log('✅ Stock update after payment completed');
       return true;
       
     } catch (error) {
-      console.error('❌ Gagal kirim email konfirmasi:', error);
-      
-      if (error.text) {
-        console.error('Error details:', error.text);
-      }
-      if (error.status) {
-        console.error('Error status:', error.status);
-      }
-      
+      console.error('❌ Error in updateProductStockAfterPayment:', error);
       return false;
     }
   };
 
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const handleNextStep = () => {
-    // Validasi step
-    if (currentStep === 1) {
-      if (!formData.nama_lengkap || !formData.alamat_pengiriman || !formData.no_telepon) {
-        toast.error('Harap lengkapi informasi pembeli');
-        return;
-      }
-    }
-    
-    if (currentStep === 2 && !formData.metode_pengiriman) {
-      toast.error('Pilih metode pengiriman');
-      return;
-    }
-    
-    if (currentStep === 3 && !formData.metode_pembayaran) {
-      toast.error('Pilih metode pembayaran');
-      return;
-    }
-
-    if (currentStep < 3) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      handlePlaceOrder();
-    }
-  };
-
-  const handlePrevStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
-  // ✅ FIXED handlePlaceOrder function
- const handlePlaceOrder = async () => {
+  // Di Checkout.jsx - tambah di bagian handlePlaceOrder
+// Di Checkout.jsx - update bagian handlePlaceOrder
+const handlePlaceOrder = async () => {
   try {
     setLoading(true);
     setIsSubmitting(true);
@@ -208,26 +284,36 @@ const Checkout = () => {
       return;
     }
 
+    if (!selectedPaymentMethod) {
+      toast.error('Pilih metode pembayaran terlebih dahulu');
+      return;
+    }
+
     // Format data order
     const orderItems = formatOrderItems();
     const totalHarga = calculateSubtotal();
     const biayaPengiriman = formData.biaya_pengiriman || 15000;
+    const totalAmount = calculateTotal();
 
+    // Data order untuk database
     const orderData = {
       user_id: user.id,
       total_harga: totalHarga,
       biaya_pengiriman: biayaPengiriman,
-      status_pembayaran: 'pending',
+      status_pembayaran: 'unpaid',
       status_pengiriman: 'pending',
-      metode_pembayaran: formData.metode_pembayaran,
+      metode_pembayaran: `tripay_${selectedPaymentMethod}`,
       alamat_pengiriman: `${formData.alamat_pengiriman}, ${formData.kota} ${formData.kode_pos}`,
-      catatan: ''
+      customer_name: formData.nama_lengkap,
+      customer_email: formData.email,
+      customer_phone: formData.no_telepon,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
 
-    console.log('📝 Order data:', orderData);
-    console.log('🔄 Checking if order saved in database...');
+    console.log('📝 Creating order in database...');
 
-    // Insert order ke database
+    // Insert order ke Supabase
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert([orderData])
@@ -235,11 +321,11 @@ const Checkout = () => {
       .single();
 
     if (orderError) {
-      console.error('❌ Order error:', orderError);
+      console.error('❌ Database error:', orderError);
       throw new Error(`Gagal membuat order: ${orderError.message}`);
     }
 
-    console.log('✅ Order created:', order);
+    console.log('✅ Order created in database:', order.id);
 
     // Insert order items
     const orderItemsData = orderItems.map(item => ({
@@ -258,43 +344,64 @@ const Checkout = () => {
 
     console.log('✅ Order items created');
 
-    // ✅ KIRIM EMAIL KONFIRMASI SETELAH ORDER BERHASIL
-    console.log('📧 Attempting to send confirmation email...');
+    // ✅ CREATE PAYMENT (Mock/Real)
+    console.log('💰 Creating payment...');
     
-    const emailData = {
-      email: formData.email,
-      nama_lengkap: formData.nama_lengkap,
-      orderId: order.id,
-      items: cartItems,
-      biaya_pengiriman: biayaPengiriman,
-      metode_pembayaran: formData.metode_pembayaran,
-      metode_pengiriman: formData.metode_pengiriman,
-      alamat_pengiriman: `${formData.alamat_pengiriman}, ${formData.kota} ${formData.kode_pos}`,
-      kota: formData.kota,
-      kode_pos: formData.kode_pos,
-      no_telepon: formData.no_telepon
+    const tripayItems = cartItems.map(item => ({
+      name: item.nama_produk.substring(0, 50),
+      price: item.harga,
+      quantity: item.quantity
+    }));
+
+    const merchantRef = `ORDER-${order.id}-${Date.now()}`;
+    
+    const transactionData = {
+      method: selectedPaymentMethod,
+      merchant_ref: merchantRef,
+      amount: totalAmount,
+      customer_name: formData.nama_lengkap,
+      customer_email: formData.email,
+      customer_phone: formData.no_telepon,
+      order_items: tripayItems,
+      return_url: `${window.location.origin}/checkout?reference=${merchantRef}&status=success`,
+      expired_time: Math.floor(Date.now() / 1000) + (24 * 60 * 60),
     };
 
-    const emailSent = await sendOrderConfirmationEmail(emailData);
+    const tripayPayment = await tripayService.createTransaction(transactionData);
     
-    if (emailSent) {
-      console.log('✅ Email confirmation sent successfully');
-    } else {
-      console.log('⚠️ Email confirmation failed, but order was created');
+    if (!tripayPayment.success) {
+      throw new Error(tripayPayment.message || 'Gagal membuat pembayaran');
     }
 
-    console.log('🎉 Order placement successful:', order.id);
+    console.log('✅ Payment created:', tripayPayment.data);
+
+    // Update order dengan payment reference
+    await supabase
+      .from('orders')
+      .update({
+        tripay_reference: tripayPayment.data.reference,
+        tripay_checkout_url: tripayPayment.data.checkout_url,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', order.id);
+
+    console.log('🎉 Order placement successful!');
     
-    // Clear cart
-    clearCart();
-    
-    // Set order ID untuk ditampilkan
-    setOrderId(order.id);
-    
-    // Move to success step
-    setCurrentStep(4);
-    
-    toast.success('Pesanan berhasil dibuat!');
+    // ✅ HANDLE REDIRECT/SIMULATION
+    if (tripayPayment.data.checkout_url && tripayPayment.data.checkout_url !== '#') {
+      // Real Tripay - redirect ke payment page
+      console.log('🚀 Redirecting to payment page...');
+      window.location.href = tripayPayment.data.checkout_url;
+    } else {
+      // Mock payment - langsung ke success
+      console.log('🎭 Mock payment - langsung ke success');
+      setOrderId(order.id);
+      setTripayReference(tripayPayment.data.reference);
+      setPaymentStatus('success');
+      setCurrentStep(4);
+      clearCart();
+      toast.success('Pembayaran berhasil! Pesanan Anda sedang diproses.');
+    }
 
   } catch (error) {
     console.error('❌ Error placing order:', error);
@@ -305,12 +412,159 @@ const Checkout = () => {
   }
 };
 
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleNextStep = () => {
+    if (currentStep === 1) {
+      if (!formData.nama_lengkap || !formData.alamat_pengiriman || !formData.no_telepon) {
+        toast.error('Harap lengkapi informasi pembeli');
+        return;
+      }
+    }
+    
+    if (currentStep === 2 && !formData.metode_pengiriman) {
+      toast.error('Pilih metode pengiriman');
+      return;
+    }
+    
+    if (currentStep === 3 && !selectedPaymentMethod) {
+      toast.error('Pilih metode pembayaran');
+      return;
+    }
+
+    if (currentStep < 3) {
+      setCurrentStep(currentStep + 1);
+    } else {
+      handlePlaceOrder();
+    }
+  };
+
+  const handlePrevStep = () => {
+    if (currentStep > 1 && currentStep < 4) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
   const calculateSubtotal = () => {
     return cartItems.reduce((total, item) => total + (item.harga * item.quantity), 0);
   };
 
   const calculateTotal = () => {
-    return calculateSubtotal() + formData.biaya_pengiriman;
+    return calculateSubtotal() + (formData.biaya_pengiriman || 0);
+  };
+
+  // ✅ STEP 4: Payment Success Component
+  const PaymentSuccess = () => {
+    useEffect(() => {
+      // Clear cart ketika pembayaran sukses
+      clearCart();
+    }, []);
+
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="text-center">
+          <div className="text-6xl mb-4">🎉</div>
+          <h2 className="text-2xl font-bold text-green-600 mb-4">Pembayaran Berhasil!</h2>
+          <p className="text-gray-600 mb-2">
+            Terima kasih telah berbelanja di toko kami.
+          </p>
+          <p className="text-gray-600 mb-2">
+            Order ID: <strong>#{orderId}</strong>
+          </p>
+          {tripayReference && (
+            <p className="text-gray-600 mb-4">
+              Reference: <strong>{tripayReference}</strong>
+            </p>
+          )}
+          <p className="text-gray-600 mb-6">
+            Pesanan Anda sedang diproses dan akan segera dikirim.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md mx-auto">
+            <button
+              onClick={() => navigate('/orders')}
+              className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition"
+            >
+              Lihat Pesanan
+            </button>
+            <button
+              onClick={() => navigate('/products')}
+              className="border border-green-600 text-green-600 px-6 py-3 rounded-lg font-semibold hover:bg-green-50 transition"
+            >
+              Lanjut Belanja
+            </button>
+          </div>
+
+          {/* Order Summary di Success Page */}
+          <div className="mt-8 border-t pt-6">
+            <h3 className="font-semibold text-lg text-gray-900 mb-4">Ringkasan Pesanan</h3>
+            <div className="space-y-3 mb-4">
+              {cartItems.map((item) => (
+                <div key={item.id} className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <p className="font-medium text-sm text-gray-900">{item.nama_produk}</p>
+                    <p className="text-xs text-gray-500">
+                      {formatCurrency(item.harga)} × {item.quantity}
+                    </p>
+                  </div>
+                  <p className="font-semibold text-gray-900 text-sm">
+                    {formatCurrency(item.harga * item.quantity)}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-gray-200 my-4"></div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Subtotal</span>
+                <span className="text-gray-900">{formatCurrency(calculateSubtotal())}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Biaya Pengiriman</span>
+                <span className="text-gray-900">{formatCurrency(formData.biaya_pengiriman)}</span>
+              </div>
+              <div className="flex justify-between text-sm font-semibold">
+                <span className="text-gray-900">Total</span>
+                <span className="text-green-600">{formatCurrency(calculateTotal())}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ✅ Payment Pending Component
+  const PaymentPending = () => {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="text-center">
+          <div className="text-6xl mb-4">⏳</div>
+          <h2 className="text-2xl font-bold text-yellow-600 mb-4">Menunggu Pembayaran</h2>
+          <p className="text-gray-600 mb-4">
+            Silakan selesaikan pembayaran Anda melalui halaman Tripay.
+          </p>
+          {tripayReference && (
+            <p className="text-gray-600 mb-4">
+              Reference: <strong>{tripayReference}</strong>
+            </p>
+          )}
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition"
+          >
+            Cek Status Pembayaran
+          </button>
+        </div>
+      </div>
+    );
   };
 
   if (cartItems.length === 0 && currentStep !== 4) {
@@ -330,112 +584,91 @@ const Checkout = () => {
     );
   }
 
-  if (currentStep === 4) {
-    return (
-      <div className="min-h-screen mt-16 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-6xl mb-4">🎉</div>
-          <h2 className="text-2xl font-bold text-green-600 mb-4">Pesanan Berhasil!</h2>
-          <p className="text-gray-600 mb-2">Order ID: <strong>#{orderId}</strong></p>
-          <p className="text-gray-600 mb-6">Terima kasih telah berbelanja. Pesanan Anda sedang diproses.</p>
-          <div className="flex gap-4 justify-center">
-            <button
-              onClick={() => navigate('/orders')}
-              className="bg-green-600 text-white px-6 py-2 rounded-lg font-semibold"
-            >
-              Lihat Pesanan
-            </button>
-            <button
-              onClick={() => navigate('/products')}
-              className="border border-green-600 text-green-600 px-6 py-2 rounded-lg font-semibold"
-            >
-              Lanjut Belanja
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // Render steps
   return (
     <div className="min-h-screen mt-16 bg-gray-50 py-6">
       <div className="max-w-4xl mx-auto px-4">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Checkout</h1>
-          <p className="text-gray-600">Selesaikan pembelian Anda dalam 3 langkah mudah</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            {currentStep === 4 ? 'Pembayaran Selesai' : 'Checkout'}
+          </h1>
+          <p className="text-gray-600">
+            {currentStep === 4 
+              ? 'Terima kasih telah berbelanja di toko kami' 
+              : 'Selesaikan pembelian Anda dalam 3 langkah mudah'
+            }
+          </p>
         </div>
 
-        {/* Progress Steps */}
-        <div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
-          {/* Desktop View */}
-          <div className="hidden md:flex items-center justify-between">
-            {steps.map((step, index) => (
-              <div key={step.number} className="flex items-center">
-                <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-                  currentStep >= step.number 
-                    ? 'bg-green-600 border-green-600 text-white' 
-                    : 'border-gray-300 text-gray-500'
-                } font-semibold`}>
-                  {step.number}
-                </div>
-                <span className={`ml-2 font-medium ${
-                  currentStep >= step.number ? 'text-green-600' : 'text-gray-500'
-                }`}>
-                  {step.title}
-                </span>
-                {index < steps.length - 1 && (
-                  <div className={`w-16 h-0.5 mx-4 ${
-                    currentStep > step.number ? 'bg-green-600' : 'bg-gray-300'
-                  }`} />
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Mobile View */}
-          <div className="md:hidden">
-            {/* Step Numbers */}
-            <div className="flex justify-between items-center mb-4">
-              {steps.map((step) => (
-                <div 
-                  key={step.number} 
-                  className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
+        {/* Progress Steps - jangan tampilkan di step 4 */}
+        {currentStep < 4 && (
+          <div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
+            <div className="hidden md:flex items-center justify-between">
+              {steps.slice(0, 3).map((step, index) => (
+                <div key={step.number} className="flex items-center">
+                  <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
                     currentStep >= step.number 
                       ? 'bg-green-600 border-green-600 text-white' 
                       : 'border-gray-300 text-gray-500'
-                  } font-semibold text-sm`}
-                >
-                  {step.number}
+                  } font-semibold`}>
+                    {step.number}
+                  </div>
+                  <span className={`ml-2 font-medium ${
+                    currentStep >= step.number ? 'text-green-600' : 'text-gray-500'
+                  }`}>
+                    {step.title}
+                  </span>
+                  {index < 2 && (
+                    <div className={`w-16 h-0.5 mx-4 ${
+                      currentStep > step.number ? 'bg-green-600' : 'bg-gray-300'
+                    }`} />
+                  )}
                 </div>
               ))}
             </div>
-            
-            {/* Progress Bar */}
-            <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
-              <div 
-                className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${((currentStep - 1) / (steps.length - 1)) * 100}%` }}
-              ></div>
-            </div>
-            
-            {/* Current Step Title */}
-            <div className="text-center">
-              <span className="text-sm font-medium text-green-600">
-                Langkah {currentStep}: {steps.find(step => step.number === currentStep)?.title}
-              </span>
+
+            {/* Mobile View */}
+            <div className="md:hidden">
+              <div className="flex justify-between items-center mb-4">
+                {steps.slice(0, 3).map((step) => (
+                  <div 
+                    key={step.number} 
+                    className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
+                      currentStep >= step.number 
+                        ? 'bg-green-600 border-green-600 text-white' 
+                        : 'border-gray-300 text-gray-500'
+                    } font-semibold text-sm`}
+                  >
+                    {step.number}
+                  </div>
+                ))}
+              </div>
+              
+              <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
+                <div 
+                  className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${((currentStep - 1) / 2) * 100}%` }}
+                ></div>
+              </div>
+              
+              <div className="text-center">
+                <span className="text-sm font-medium text-green-600">
+                  Langkah {currentStep}: {steps.find(step => step.number === currentStep)?.title}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}
-          <div className="lg:col-span-2">
+          <div className={`${currentStep === 4 ? 'lg:col-span-3' : 'lg:col-span-2'}`}>
             {currentStep === 1 && (
               <InformasiPembeli 
                 formData={formData} 
                 onInputChange={handleInputChange}
-                user={user} // ✅ PASS USER PROP
+                user={user}
               />
             )}
             
@@ -449,216 +682,113 @@ const Checkout = () => {
             {currentStep === 3 && (
               <MetodePembayaran 
                 formData={formData} 
-                onInputChange={handleInputChange} 
+                onInputChange={handleInputChange}
+                paymentChannels={paymentChannels}
+                selectedPaymentMethod={selectedPaymentMethod}
+                onPaymentMethodSelect={setSelectedPaymentMethod}
               />
+            )}
+            
+            {currentStep === 4 && paymentStatus === 'success' && (
+              <PaymentSuccess />
+            )}
+            
+            {currentStep === 4 && paymentStatus === 'pending' && (
+              <PaymentPending />
             )}
           </div>
 
-          {/* Order Summary */}
-          <OrderSummary 
-            cartItems={cartItems}
-            subtotal={calculateSubtotal()}
-            shippingCost={formData.biaya_pengiriman}
-            total={calculateTotal()}
-            currentStep={currentStep}
-            onPrevStep={handlePrevStep}
-            onNextStep={handleNextStep}
-            isSubmitting={isSubmitting}
-          />
+          {/* Order Summary - hanya tampilkan di step 1-3 */}
+          {currentStep < 4 && (
+            <OrderSummary 
+              cartItems={cartItems}
+              subtotal={calculateSubtotal()}
+              shippingCost={formData.biaya_pengiriman}
+              total={calculateTotal()}
+              currentStep={currentStep}
+              onPrevStep={handlePrevStep}
+              onNextStep={handleNextStep}
+              isSubmitting={isSubmitting}
+            />
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-// Fungsi untuk menentukan zona pengiriman berdasarkan kota
-// Fungsi untuk menentukan zona pengiriman berdasarkan kota - UPDATED FOR SURABAYA STORE
-const getShippingZone = (kota) => {
-  if (!kota) return 'luar_jawa';
-  
-  const kotaLower = kota.toLowerCase();
-  
-  // Zona Surabaya & Sekitarnya (TERMURAH)
-  const surabayaCities = ['surabaya', 'sidoarjo', 'gresik', 'mojokerto', 'lamongan', 'bangil'];
-  
-  // Zona Jawa Timur Lainnya
-  const jatimCities = ['malang', 'jember', 'banyuwangi', 'madiun', 'kediri', 'blitar', 'pasuruan', 'probolinggo', 'lumajang', 'bondowoso', 'situbondo', 'tulungagung', 'trenggalek', 'nganjuk', 'magetan', 'ponorogo', 'pacitan', 'tuban', 'bojonegoro', 'ngawi', 'batu', 'pamekasan', 'sampang', 'sumenep'];
-  
-  // Zona Jawa Tengah & DIY
-  const jatengCities = ['semarang', 'solo', 'surakarta', 'magelang', 'salatiga', 'pekalongan', 'tegal', 'purwokerto', 'cilacap', 'klaten', 'boyolali', 'sukoharjo', 'wonogiri', 'kebumen', 'purworejo', 'temanggung', 'kendal', 'batang', 'blora', 'rembang', 'pati', 'kudus', 'jepara', 'demak', 'grobogan', 'sragen', 'karanganyar', 'wonosobo', 'maguwoharjo', 'yogyakarta'];
-  
-  // Zona Jawa Barat
-  const jabarCities = ['bandung', 'bekasi', 'bogor', 'depok', 'sukabumi', 'cimahi', 'tasikmalaya', 'cirebon', 'garut', 'cianjur', 'subang', 'sumedang', 'indramayu', 'karawang', 'purwakarta', 'banjar', 'majalengka', 'pangandaran', 'cilegon', 'serang', 'tangerang', 'tangerang selatan', 'south tangerang'];
-  
-  // Zona Jabodetabek & Banten
-  const jabodetabekCities = ['jakarta', 'bogor', 'depok', 'tangerang', 'bekasi', 'banten', 'cilegon', 'serang', 'tangerang selatan'];
-  
-  // Cek zona - PRIORITAS: Surabaya > Jatim > Jateng > Jabar > Jabodetabek > Luar Jawa
-  if (surabayaCities.some(city => kotaLower.includes(city))) {
-    return 'surabaya_sekitarnya';
-  }
-  if (jatimCities.some(city => kotaLower.includes(city))) {
-    return 'jawa_timur';
-  }
-  if (jatengCities.some(city => kotaLower.includes(city))) {
-    return 'jawa_tengah';
-  }
-  if (jabarCities.some(city => kotaLower.includes(city))) {
-    return 'jawa_barat';
-  }
-  if (jabodetabekCities.some(city => kotaLower.includes(city))) {
-    return 'jabodetabek';
-  }
-  
-  return 'luar_jawa';
-};
-
-// Fungsi untuk mendapatkan estimasi pengiriman berdasarkan zona dan kurir - UPDATED FOR SURABAYA STORE
-const getShippingEstimation = (zone, courier) => {
-  const estimations = {
-    surabaya_sekitarnya: {
-      jne: '1-2 hari',
-      tiki: '1 hari', 
-      pos: '1-2 hari',
-      jnt: '1 hari',
-      sicepat: '1 hari'
-    },
-    jawa_timur: {
-      jne: '2-3 hari',
-      tiki: '2 hari',
-      pos: '2-3 hari',
-      jnt: '2 hari',
-      sicepat: '2 hari'
-    },
-    jawa_tengah: {
-      jne: '3-4 hari',
-      tiki: '3 hari',
-      pos: '3-4 hari',
-      jnt: '3 hari',
-      sicepat: '3 hari'
-    },
-    jawa_barat: {
-      jne: '4-5 hari',
-      tiki: '4 hari',
-      pos: '4-5 hari',
-      jnt: '4 hari',
-      sicepat: '4 hari'
-    },
-    jabodetabek: {
-      jne: '4-5 hari',
-      tiki: '4 hari',
-      pos: '4-5 hari',
-      jnt: '4 hari',
-      sicepat: '4 hari'
-    },
-    luar_jawa: {
-      jne: '5-10 hari',
-      tiki: '7-10 hari',
-      pos: '7-14 hari',
-      jnt: '5-8 hari',
-      sicepat: '5-9 hari'
-    }
-  };
-  
-  return estimations[zone]?.[courier] || '5-7 hari';
-};
-
-
-// Fungsi untuk mendapatkan biaya pengiriman berdasarkan zona dan kurir
-const getShippingCost = (zone, courier) => {
-  const costs = {
-    jabodetabek: {
-      jne: 10000,
-      tiki: 15000,
-      pos: 8000,
-      jnt: 12000
-    },
-    jawa_barat: {
-      jne: 12000,
-      tiki: 18000,
-      pos: 10000,
-      jnt: 15000
-    },
-    jawa_tengah: {
-      jne: 15000,
-      tiki: 20000,
-      pos: 12000,
-      jnt: 17000
-    },
-    jawa_timur: {
-      jne: 18000,
-      tiki: 25000,
-      pos: 15000,
-      jnt: 20000
-    },
-    luar_jawa: {
-      jne: 25000,
-      tiki: 35000,
-      pos: 20000,
-      jnt: 30000
-    }
-  };
-  
-  return costs[zone]?.[courier] || 20000;
-};
-
-// Step 1 Component - Enhanced dengan auto-fill
+// Komponen InformasiPembeli
 const InformasiPembeli = ({ formData, onInputChange, user }) => {
-  const [isEditing, setIsEditing] = useState(false);
-
-  // Auto-disable editing jika data sudah ada dari profile
-  useEffect(() => {
-    if (user && user.user_metadata?.full_name && !isEditing) {
-      // Jika user sudah punya data profile, form akan read-only
-      setIsEditing(false);
-    }
-  }, [user, isEditing]);
-
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-gray-900">Informasi Pembeli</h2>
-        
-        {/* Edit Toggle Button */}
-        {user && (
-          <button
-            type="button"
-            onClick={() => setIsEditing(!isEditing)}
-            className="text-sm bg-blue-100 text-blue-600 px-3 py-1 rounded-lg hover:bg-blue-200 transition"
-          >
-            {isEditing ? '🔒 Kunci' : '✏️ Edit'}
-          </button>
-        )}
-      </div>
-      
-      {/* Info dari Profile */}
-      {user && user.user_metadata?.full_name && !isEditing && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-          <div className="flex items-center">
-            <span className="text-green-600 mr-2">✅</span>
-            <p className="text-green-800 text-sm">
-              Data diambil dari profil Anda. Klik "Edit" untuk mengubah.
-            </p>
-          </div>
-        </div>
-      )}
+      <h2 className="text-xl font-semibold text-gray-900 mb-4">Informasi Pembeli</h2>
       
       <div className="space-y-4">
-        {/* Email - Always Read Only */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Email <span className="text-red-500">*</span>
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
           <input
             type="email"
             value={formData.email}
-            readOnly
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
+            onChange={(e) => onInputChange('email', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            required
           />
-          <p className="text-xs text-gray-500 mt-1">Email tidak dapat diubah</p>
         </div>
 
-        {/* Newsletter */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Nama Lengkap</label>
+          <input
+            type="text"
+            value={formData.nama_lengkap}
+            onChange={(e) => onInputChange('nama_lengkap', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">No. Telepon</label>
+          <input
+            type="tel"
+            value={formData.no_telepon}
+            onChange={(e) => onInputChange('no_telepon', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Kota</label>
+          <input
+            type="text"
+            value={formData.kota}
+            onChange={(e) => onInputChange('kota', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Alamat Pengiriman</label>
+          <textarea
+            value={formData.alamat_pengiriman}
+            onChange={(e) => onInputChange('alamat_pengiriman', e.target.value)}
+            rows="3"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Kode Pos</label>
+          <input
+            type="text"
+            value={formData.kode_pos}
+            onChange={(e) => onInputChange('kode_pos', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          />
+        </div>
+
         <div className="flex items-center">
           <input
             type="checkbox"
@@ -668,341 +798,314 @@ const InformasiPembeli = ({ formData, onInputChange, user }) => {
           />
           <label className="ml-2 text-sm text-gray-700">Berlangganan newsletter</label>
         </div>
-
-        <div className="border-t border-gray-200 my-4"></div>
-
-        <h3 className="font-semibold text-gray-900 mb-3">Alamat Pengiriman</h3>
-
-        {/* Nama Lengkap */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Nama Lengkap <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={formData.nama_lengkap}
-            onChange={(e) => onInputChange('nama_lengkap', e.target.value)}
-            readOnly={!isEditing && user?.user_metadata?.full_name}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-              !isEditing && user?.user_metadata?.full_name 
-                ? 'border-gray-300 bg-gray-100 text-gray-600' 
-                : 'border-gray-300'
-            }`}
-            placeholder="John Doe"
-            required
-          />
-        </div>
-
-        {/* Kota */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Kota/Kabupaten <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={formData.kota}
-            onChange={(e) => onInputChange('kota', e.target.value)}
-            readOnly={!isEditing && user?.user_metadata?.city}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-              !isEditing && user?.user_metadata?.city 
-                ? 'border-gray-300 bg-gray-100 text-gray-600' 
-                : 'border-gray-300'
-            }`}
-            placeholder="Jakarta Pusat"
-            required
-          />
-        </div>
-
-        {/* Alamat */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Alamat Lengkap <span className="text-red-500">*</span>
-          </label>
-          <textarea
-            value={formData.alamat_pengiriman}
-            onChange={(e) => onInputChange('alamat_pengiriman', e.target.value)}
-            readOnly={!isEditing && user?.user_metadata?.address}
-            rows="3"
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-              !isEditing && user?.user_metadata?.address 
-                ? 'border-gray-300 bg-gray-100 text-gray-600' 
-                : 'border-gray-300'
-            }`}
-            placeholder="Jl. Contoh No. 123, RT/RW, Kelurahan, Kecamatan"
-            required
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          {/* Kode Pos */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Kode Pos</label>
-            <input
-              type="text"
-              value={formData.kode_pos}
-              onChange={(e) => onInputChange('kode_pos', e.target.value)}
-              readOnly={!isEditing && user?.user_metadata?.postal_code}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                !isEditing && user?.user_metadata?.postal_code 
-                  ? 'border-gray-300 bg-gray-100 text-gray-600' 
-                  : 'border-gray-300'
-              }`}
-              placeholder="12345"
-            />
-          </div>
-
-          {/* Telepon */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Telepon <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="tel"
-              value={formData.no_telepon}
-              onChange={(e) => onInputChange('no_telepon', e.target.value)}
-              readOnly={!isEditing && user?.user_metadata?.phone}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                !isEditing && user?.user_metadata?.phone 
-                  ? 'border-gray-300 bg-gray-100 text-gray-600' 
-                  : 'border-gray-300'
-              }`}
-              placeholder="+628123456789"
-              required
-            />
-          </div>
-        </div>
-
-        {/* Dropshipper */}
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            checked={formData.is_dropshipper}
-            onChange={(e) => onInputChange('is_dropshipper', e.target.checked)}
-            className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-          />
-          <label className="ml-2 text-sm text-gray-700">Kirim sebagai dropshipper</label>
-        </div>
-
-        {/* Save to Profile Checkbox */}
-        {isEditing && (
-          <div className="flex items-center p-3 bg-blue-50 rounded-lg">
-            <input
-              type="checkbox"
-              id="saveToProfile"
-              defaultChecked
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <label htmlFor="saveToProfile" className="ml-2 text-sm text-blue-700">
-              Simpan perubahan ini ke profil saya
-            </label>
-          </div>
-        )}
       </div>
     </div>
   );
 };
 
-// Step 2 Component - UPDATED WITH SMART SHIPPING
-// Step 2 Component - UPDATED FOR SURABAYA STORE
+// Komponen MetodePengiriman
 const MetodePengiriman = ({ formData, onInputChange }) => {
-  // Tentukan zona berdasarkan kota yang diinput user
-  const shippingZone = getShippingZone(formData.kota);
-  
-  const shippingMethods = [
-    { 
-      id: 'jne', 
-      name: 'JNE Reguler', 
-      estimasi: getShippingEstimation(shippingZone, 'jne'),
-      price: getShippingCost(shippingZone, 'jne')
-    },
-    { 
-      id: 'tiki', 
-      name: 'TIKI Reguler', 
-      estimasi: getShippingEstimation(shippingZone, 'tiki'),
-      price: getShippingCost(shippingZone, 'tiki')
-    },
-    { 
-      id: 'pos', 
-      name: 'POS Indonesia', 
-      estimasi: getShippingEstimation(shippingZone, 'pos'),
-      price: getShippingCost(shippingZone, 'pos')
-    },
-    { 
-      id: 'jnt', 
-      name: 'J&T Express', 
-      estimasi: getShippingEstimation(shippingZone, 'jnt'),
-      price: getShippingCost(shippingZone, 'jnt')
-    },
-    { 
-      id: 'sicepat', 
-      name: 'SiCepat', 
-      estimasi: getShippingEstimation(shippingZone, 'sicepat'),
-      price: getShippingCost(shippingZone, 'sicepat')
-    }
+  const shippingOptions = [
+    { value: 'jne', label: 'JNE Reguler', cost: 15000, estimate: '2-3 hari' },
+    { value: 'jne_oke', label: 'JNE OKE', cost: 12000, estimate: '3-5 hari' },
+    { value: 'tiki', label: 'TIKI Reguler', cost: 18000, estimate: '1-2 hari' },
+    { value: 'pos', label: 'POS Indonesia', cost: 10000, estimate: '4-7 hari' }
   ];
 
-  const handleShippingSelect = (method) => {
-    onInputChange('metode_pengiriman', method.id);
-    onInputChange('biaya_pengiriman', method.price);
-  };
-
-  // Dapatkan nama zona untuk ditampilkan
-  const getZoneName = (zone) => {
-    const zoneNames = {
-      'surabaya_sekitarnya': 'Surabaya & Sekitarnya',
-      'jawa_timur': 'Jawa Timur Lainnya',
-      'jawa_tengah': 'Jawa Tengah & DIY',
-      'jawa_barat': 'Jawa Barat',
-      'jabodetabek': 'Jabodetabek & Banten',
-      'luar_jawa': 'Luar Jawa'
-    };
-    return zoneNames[zone] || 'Luar Jawa';
-  };
-
-  // Dapatkan info toko location
-  const getStoreLocationInfo = () => {
-    return "🛍️ Toko kami berlokasi di Surabaya, Jawa Timur";
+  const handleShippingChange = (method, cost) => {
+    onInputChange('metode_pengiriman', method);
+    onInputChange('biaya_pengiriman', cost);
   };
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-xl font-semibold text-gray-900 mb-4">Metode Pengiriman</h2>
       
-      {/* Info Lokasi Toko */}
-      <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
-        <p className="font-medium text-purple-800">{getStoreLocationInfo()}</p>
-        <p className="text-sm text-purple-600 mt-1">
-          Biaya pengiriman sudah disesuaikan dengan jarak dari Surabaya
-        </p>
-      </div>
-      
-      {/* Info Zona Pengiriman */}
-      {formData.kota && (
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-blue-800">Zona Pengiriman: {getZoneName(shippingZone)}</p>
-              <p className="text-sm text-blue-600">
-                Tujuan: {formData.kota} 
-                {shippingZone === 'luar_jawa' && (
-                  <span className="ml-2 text-orange-600 font-medium">(Estimasi lebih lama)</span>
-                )}
-                {shippingZone === 'surabaya_sekitarnya' && (
-                  <span className="ml-2 text-green-600 font-medium">(Termurah & Tercepat)</span>
-                )}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Warning untuk kota belum diisi */}
-      {!formData.kota && (
-        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p className="text-yellow-800 text-sm">
-            ⚠️ Masukkan kota terlebih dahulu untuk melihat estimasi pengiriman yang akurat
-          </p>
-        </div>
-      )}
-
       <div className="space-y-3">
-        {shippingMethods.map((method) => (
+        {shippingOptions.map((option) => (
           <div 
-            key={method.id} 
+            key={option.value}
             className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition ${
-              formData.metode_pengiriman === method.id 
+              formData.metode_pengiriman === option.value 
                 ? 'border-green-500 bg-green-50' 
                 : 'border-gray-200 hover:border-green-300'
             }`}
-            onClick={() => handleShippingSelect(method)}
+            onClick={() => handleShippingChange(option.value, option.cost)}
           >
             <div className="flex items-center">
               <input
                 type="radio"
                 name="shippingMethod"
-                checked={formData.metode_pengiriman === method.id}
-                onChange={() => handleShippingSelect(method)}
+                checked={formData.metode_pengiriman === option.value}
+                onChange={() => handleShippingChange(option.value, option.cost)}
                 className="w-4 h-4 text-green-600 border-gray-300 focus:ring-green-500"
               />
               <div className="ml-3">
-                <p className="font-medium text-gray-900">{method.name}</p>
-                <p className="text-sm text-gray-500">
-                  Estimasi: {method.estimasi}
-                  {shippingZone === 'luar_jawa' && (
-                    <span className="ml-1 text-orange-500">⏳</span>
-                  )}
-                  {shippingZone === 'surabaya_sekitarnya' && (
-                    <span className="ml-1 text-green-500">⚡</span>
-                  )}
-                </p>
+                <p className="font-medium text-gray-900">{option.label}</p>
+                <p className="text-sm text-gray-500">Estimasi: {option.estimate}</p>
               </div>
             </div>
-            <div className="text-right">
-              <p className="font-semibold text-gray-900">{formatCurrency(method.price)}</p>
-            </div>
+            <p className="font-semibold text-gray-900">{formatCurrency(option.cost)}</p>
           </div>
         ))}
       </div>
-
-      </div>
+    </div>
   );
 };
 
-const MetodePembayaran = ({ formData, onInputChange }) => {
-  const paymentMethods = [
-    { id: 'transfer', name: 'Transfer Bank', icon: '🏦' },
-    { id: 'cod', name: 'COD (Bayar di Tempat)', icon: '💵' },
-    { id: 'ewallet', name: 'E-Wallet', icon: '📱' }
-  ];
+// Replace MetodePembayaran component di Checkout.jsx
+const MetodePembayaran = ({ formData, onInputChange, paymentChannels, selectedPaymentMethod, onPaymentMethodSelect }) => {
+  const [openCategories, setOpenCategories] = useState({
+    'Virtual Account': true,
+    'E-Wallet': true,
+    'Convenience Store': true,
+    'QR Code': true
+  });
+
+  // Di dalam MetodePembayaran component, ganti function getPaymentIcon:
+const getPaymentIcon = (channel) => {
+  // Prioritas 1: Gunakan icon_url dari API response jika valid
+  if (channel.icon_url && channel.icon_url.includes('tripay.co.id')) {
+    return channel.icon_url;
+  }
+  
+  // Prioritas 2: Fallback ke mapping lokal JIKA icon_url tidak valid
+  const code = channel.code.toUpperCase();
+  
+  // Mapping ke Tripay CDN (bukan local files)
+  const iconMap = {
+    // Virtual Accounts
+    'BRIVA': 'https://tripay.co.id/images/payment_method/bri.png',
+    'BNIVA': 'https://tripay.co.id/images/payment_method/bni.png',
+    'BCAVA': 'https://tripay.co.id/images/payment_method/bca.png',
+    'MANDIRIVA': 'https://tripay.co.id/images/payment_method/mandiri.png',
+    'PERMATAVA': 'https://tripay.co.id/images/payment_method/permata.png',
+    
+    // E-Wallets
+    'OVO': 'https://tripay.co.id/images/payment_method/ovo.png',
+    'DANA': 'https://tripay.co.id/images/payment_method/dana.png',
+    'SHOPEEPAY': 'https://tripay.co.id/images/payment_method/shopeepay.png',
+    'GOPAY': 'https://tripay.co.id/images/payment_method/gopay.png',
+    
+    // QRIS
+    'QRIS': 'https://tripay.co.id/images/payment_method/qris.png',
+    'QRISC': 'https://tripay.co.id/images/payment_method/qris.png',
+    
+    // Convenience Store
+    'ALFAMART': 'https://tripay.co.id/images/payment_method/alfamart.png',
+    'INDOMARET': 'https://tripay.co.id/images/payment_method/indomaret.png',
+  };
+  
+  return iconMap[code] || null;
+};
+
+// Dan di bagian render icon, tambahkan error handling yang lebih baik:
+<div className="ml-3 flex-shrink-0 w-16 h-10 flex items-center justify-center bg-white rounded border border-gray-100">
+  {iconUrl ? (
+    <img 
+      src={iconUrl}
+      alt={channel.name}
+      className="max-w-full max-h-full object-contain p-1"
+      loading="lazy"
+      onError={(e) => {
+        console.warn('Failed to load payment icon:', channel.code, iconUrl);
+        // Fallback ke emoji jika gambar gagal load
+        e.target.style.display = 'none';
+        const fallbackEmoji = e.target.nextSibling || document.createElement('span');
+        fallbackEmoji.className = 'text-2xl';
+        fallbackEmoji.textContent = '💳';
+        if (!e.target.nextSibling) {
+          e.target.parentElement.appendChild(fallbackEmoji);
+        }
+      }}
+    />
+  ) : (
+    <span className="text-2xl">💳</span>
+  )}
+</div>
+
+  // Kelompokkan payment channels
+  const groupedPayments = paymentChannels.reduce((acc, channel) => {
+    const category = channel.group || 'Lainnya';
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(channel);
+    return acc;
+  }, {});
+
+  const toggleCategory = (category) => {
+    setOpenCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
+  };
+
+  const getCategoryIcon = (category) => {
+    const icons = {
+      'Virtual Account': '🏦',
+      'E-Wallet': '📱',
+      'Convenience Store': '🏪',
+      'QR Code': '📲',
+      'Lainnya': '💳'
+    };
+    return icons[category] || '💳';
+  };
+
+  
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-xl font-semibold text-gray-900 mb-4">Metode Pembayaran</h2>
       
       <div className="space-y-4">
-        {/* Payment Methods */}
+        {/* Payment Methods dengan Accordion */}
         <div className="space-y-3">
-          {paymentMethods.map((method) => (
-            <div 
-              key={method.id} 
-              className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition ${
-                formData.metode_pembayaran === method.id 
-                  ? 'border-green-500 bg-green-50' 
-                  : 'border-gray-200 hover:border-green-300'
-              }`}
-              onClick={() => onInputChange('metode_pembayaran', method.id)}
-            >
-              <div className="flex items-center">
-                <input
-                  type="radio"
-                  name="paymentMethod"
-                  checked={formData.metode_pembayaran === method.id}
-                  onChange={() => onInputChange('metode_pembayaran', method.id)}
-                  className="w-4 h-4 text-green-600 border-gray-300 focus:ring-green-500"
-                />
-                <span className="ml-3 text-lg">{method.icon}</span>
-                <span className="ml-2 font-medium text-gray-900">{method.name}</span>
+          {Object.keys(groupedPayments).length > 0 ? (
+            Object.entries(groupedPayments).map(([category, channels]) => (
+              <div key={category} className="border border-gray-200 rounded-lg overflow-hidden">
+                {/* Category Header */}
+                <button
+                  type="button"
+                  onClick={() => toggleCategory(category)}
+                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center">
+                    <span className="text-lg mr-3">{getCategoryIcon(category)}</span>
+                    <div className="text-left">
+                      <h3 className="font-semibold text-gray-900">{category}</h3>
+                      <p className="text-sm text-gray-500">
+                        {channels.length} metode tersedia
+                      </p>
+                    </div>
+                  </div>
+                  <svg
+                    className={`w-5 h-5 text-gray-500 transition-transform ${
+                      openCategories[category] ? 'rotate-180' : ''
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {/* Category Content */}
+                {openCategories[category] && (
+                  <div className="p-2 space-y-2">
+                    {channels.map((channel) => {
+                      const iconUrl = getPaymentIcon(channel);
+                      
+                      return (
+                        <div 
+                          key={channel.code}
+                          className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition ${
+                            selectedPaymentMethod === channel.code 
+                              ? 'border-green-500 bg-green-50' 
+                              : 'border-gray-200 hover:border-green-300'
+                          }`}
+                          onClick={() => onPaymentMethodSelect(channel.code)}
+                        >
+                          <div className="flex items-center flex-1 min-w-0">
+                            <input
+                              type="radio"
+                              name="paymentMethod"
+                              checked={selectedPaymentMethod === channel.code}
+                              onChange={() => onPaymentMethodSelect(channel.code)}
+                              className="w-4 h-4 text-green-600 border-gray-300 focus:ring-green-500 flex-shrink-0"
+                            />
+                            
+                            {/* Logo Payment Method dari Tripay CDN */}
+                            <div className="ml-3 flex-shrink-0 w-16 h-10 flex items-center justify-center bg-white rounded border border-gray-100">
+                              {iconUrl ? (
+                                <img 
+                                  src={iconUrl}
+                                  alt={channel.name}
+                                  className="max-w-full max-h-full object-contain p-1"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    console.error('Failed to load icon:', channel.code, iconUrl);
+                                    e.target.style.display = 'none';
+                                    e.target.parentElement.innerHTML = '<span class="text-2xl">💳</span>';
+                                  }}
+                                />
+                              ) : (
+                                <span className="text-2xl">💳</span>
+                              )}
+                            </div>
+                            
+                            <div className="ml-3 flex-1 min-w-0">
+                              <p className="font-medium text-gray-900 truncate">{channel.name}</p>
+                              <p className="text-xs text-gray-500 truncate">
+                                {channel.group}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="text-right ml-3 flex-shrink-0">
+                            {channel.total_fee?.flat > 0 && (
+                              <p className="text-xs text-green-600 font-semibold whitespace-nowrap">
+                                +{formatCurrency(channel.total_fee.flat)}
+                              </p>
+                            )}
+                            {channel.total_fee?.percent > 0 && (
+                              <p className="text-xs text-green-600 font-semibold whitespace-nowrap">
+                                +{channel.total_fee.percent}%
+                              </p>
+                            )}
+                            {!channel.total_fee?.flat && !channel.total_fee?.percent && (
+                              <p className="text-xs text-gray-400">Gratis</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
+            ))
+          ) : (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Memuat metode pembayaran...</p>
             </div>
-          ))}
+          )}
+        </div>
+
+        {/* Info Tripay */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start">
+            <span className="text-blue-600 mr-3 text-xl">🔒</span>
+            <div>
+              <p className="text-blue-900 font-semibold text-sm mb-1">
+                Pembayaran Aman dengan Tripay
+              </p>
+              <p className="text-blue-700 text-xs">
+                Payment Gateway resmi dan terpercaya di Indonesia
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Kode Kupon */}
         <div className="border-t border-gray-200 pt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Kode Kupon</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Punya Kode Kupon?
+          </label>
           <div className="flex gap-2">
             <input
               type="text"
               value={formData.kode_kupon}
               onChange={(e) => onInputChange('kode_kupon', e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
               placeholder="Masukkan kode kupon"
             />
             <button 
               type="button"
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium text-sm"
             >
-              Cari
+              Terapkan
             </button>
           </div>
         </div>
@@ -1011,19 +1114,21 @@ const MetodePembayaran = ({ formData, onInputChange }) => {
   );
 };
 
-// Order Summary Component
+// Komponen OrderSummary
 const OrderSummary = ({ cartItems, subtotal, shippingCost, total, currentStep, onPrevStep, onNextStep, isSubmitting }) => {
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 h-fit sticky top-24">
-      <h3 className="font-semibold text-lg text-gray-900 mb-4">Ringkasan Pesanan</h3>
+    <div className="bg-white rounded-lg shadow-md p-6 h-fit sticky top-4">
+      <h2 className="text-xl font-semibold text-gray-900 mb-4">Ringkasan Pesanan</h2>
       
-      {/* Cart Items */}
-      <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
+      {/* Items List */}
+      <div className="space-y-3 mb-4">
         {cartItems.map((item) => (
           <div key={item.id} className="flex justify-between items-start">
             <div className="flex-1">
               <p className="font-medium text-sm text-gray-900">{item.nama_produk}</p>
-              <p className="text-xs text-gray-500">{formatCurrency(item.harga)} × {item.quantity}</p>
+              <p className="text-xs text-gray-500">
+                {formatCurrency(item.harga)} × {item.quantity}
+              </p>
             </div>
             <p className="font-semibold text-gray-900 text-sm">
               {formatCurrency(item.harga * item.quantity)}
@@ -1032,11 +1137,10 @@ const OrderSummary = ({ cartItems, subtotal, shippingCost, total, currentStep, o
         ))}
       </div>
 
-      {/* Divider */}
       <div className="border-t border-gray-200 my-4"></div>
 
-      {/* Cost Breakdown */}
-      <div className="space-y-2 mb-4">
+      {/* Pricing */}
+      <div className="space-y-2">
         <div className="flex justify-between text-sm">
           <span className="text-gray-600">Subtotal</span>
           <span className="text-gray-900">{formatCurrency(subtotal)}</span>
@@ -1052,12 +1156,12 @@ const OrderSummary = ({ cartItems, subtotal, shippingCost, total, currentStep, o
       </div>
 
       {/* Navigation Buttons */}
-      <div className="space-y-3">
+      <div className="mt-6 space-y-3">
         {currentStep > 1 && (
           <button
             onClick={onPrevStep}
             disabled={isSubmitting}
-            className="w-full bg-gray-100 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-200 transition disabled:opacity-50"
+            className="w-full bg-gray-100 text-gray-700 px-4 py-3 rounded-lg font-semibold hover:bg-gray-200 transition disabled:opacity-50"
           >
             Kembali
           </button>
@@ -1066,18 +1170,17 @@ const OrderSummary = ({ cartItems, subtotal, shippingCost, total, currentStep, o
         <button
           onClick={onNextStep}
           disabled={isSubmitting}
-          className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+          className="w-full bg-green-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-50"
         >
           {isSubmitting ? (
-            <>
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
+            <div className="flex items-center justify-center">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
               Memproses...
-            </>
+            </div>
+          ) : currentStep === 3 ? (
+            'Buat Pesanan & Bayar'
           ) : (
-            currentStep === 3 ? 'Buat Pesanan' : 'Lanjutkan'
+            'Lanjutkan'
           )}
         </button>
       </div>
