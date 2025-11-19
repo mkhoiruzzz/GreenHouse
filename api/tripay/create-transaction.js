@@ -1,10 +1,12 @@
+// api/tripay/create-transaction.js - FIXED VERSION
 import axios from 'axios';
 import crypto from 'crypto';
 
-const TRIPAY_API_KEY = process.env.VITE_TRIPAY_API_KEY;
-const TRIPAY_PRIVATE_KEY = process.env.VITE_TRIPAY_PRIVATE_KEY;
-const TRIPAY_MERCHANT_CODE = process.env.VITE_TRIPAY_MERCHANT_CODE;
-const TRIPAY_MODE = process.env.VITE_TRIPAY_MODE || 'sandbox';
+// ✅ FIX: Hapus prefix VITE_ untuk API routes
+const TRIPAY_API_KEY = process.env.TRIPAY_API_KEY;
+const TRIPAY_PRIVATE_KEY = process.env.TRIPAY_PRIVATE_KEY;
+const TRIPAY_MERCHANT_CODE = process.env.TRIPAY_MERCHANT_CODE;
+const TRIPAY_MODE = process.env.TRIPAY_MODE || 'sandbox';
 
 const TRIPAY_API_URL = TRIPAY_MODE === 'production' 
   ? 'https://tripay.co.id/api' 
@@ -41,35 +43,48 @@ export default async function handler(req, res) {
       return_url
     } = req.body;
 
-    console.log('📦 Received transaction data:', {
-      method, merchant_ref, amount, customer_name, customer_email
+    console.log('📦 Creating Tripay transaction:', {
+      method, 
+      merchant_ref, 
+      amount, 
+      customer_name,
+      mode: TRIPAY_MODE,
+      api_url: TRIPAY_API_URL
     });
 
-    // Validasi input
+    // ✅ Validasi input
     if (!method || !amount || !customer_name || !customer_email) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields'
+        error: 'Missing required fields: method, amount, customer_name, customer_email'
       });
     }
 
-    // Validasi environment variables
+    // ✅ Validasi environment variables
     if (!TRIPAY_API_KEY || !TRIPAY_PRIVATE_KEY || !TRIPAY_MERCHANT_CODE) {
-      console.error('❌ Missing Tripay environment variables');
+      console.error('❌ Missing Tripay credentials. Please check environment variables:');
+      console.error({
+        TRIPAY_API_KEY: TRIPAY_API_KEY ? '✓ Set' : '✗ Missing',
+        TRIPAY_PRIVATE_KEY: TRIPAY_PRIVATE_KEY ? '✓ Set' : '✗ Missing',
+        TRIPAY_MERCHANT_CODE: TRIPAY_MERCHANT_CODE ? '✓ Set' : '✗ Missing'
+      });
+      
       return res.status(500).json({
         success: false,
-        error: 'Tripay configuration missing'
+        error: 'Tripay configuration missing. Please contact administrator.'
       });
     }
 
-    // Generate signature (WAJIB untuk Tripay)
+    // ✅ Generate signature (Format: MERCHANT_CODE + MERCHANT_REF + AMOUNT)
+    const signatureString = TRIPAY_MERCHANT_CODE + merchant_ref + amount;
     const signature = crypto
       .createHmac('sha256', TRIPAY_PRIVATE_KEY)
-      .update(TRIPAY_MERCHANT_CODE + merchant_ref + amount)
+      .update(signatureString)
       .digest('hex');
 
-    console.log('🔐 Generated signature:', signature);
+    console.log('🔐 Signature generated');
 
+    // ✅ Prepare payload
     const payload = {
       method,
       merchant_ref,
@@ -78,16 +93,19 @@ export default async function handler(req, res) {
       customer_email,
       customer_phone: customer_phone || '',
       order_items: order_items || [],
-      return_url: return_url || `https://green-house-mkhoiruzzzs-projects.vercel.app/checkout`,
+      return_url: return_url || `${process.env.VERCEL_URL || 'http://localhost:3000'}/checkout`,
       expired_time: Math.floor(Date.now() / 1000) + (24 * 60 * 60), // 24 jam
       signature
     };
 
     console.log('💰 Sending to Tripay API:', {
       url: `${TRIPAY_API_URL}/transaction/create`,
-      payload: { ...payload, signature: '***hidden***' }
+      method: payload.method,
+      amount: payload.amount,
+      signature: '***hidden***'
     });
 
+    // ✅ Call Tripay API
     const response = await axios.post(
       `${TRIPAY_API_URL}/transaction/create`,
       payload,
@@ -100,15 +118,21 @@ export default async function handler(req, res) {
       }
     );
 
-    console.log('✅ Tripay API Response:', response.data);
+    console.log('✅ Tripay API Response Status:', response.status);
 
     if (response.data.success) {
-      console.log('🎉 Transaction created in Tripay:', response.data.data.reference);
+      console.log('🎉 Transaction created successfully:', {
+        reference: response.data.data.reference,
+        checkout_url: response.data.data.checkout_url,
+        status: response.data.data.status
+      });
+      
       return res.status(200).json({
         success: true,
         data: response.data.data
       });
     } else {
+      console.error('❌ Tripay returned success: false', response.data);
       throw new Error(response.data.message || 'Tripay API error');
     }
 
@@ -116,13 +140,23 @@ export default async function handler(req, res) {
     console.error('❌ Error creating Tripay transaction:', {
       message: error.message,
       response: error.response?.data,
-      status: error.response?.status
+      status: error.response?.status,
+      url: error.config?.url
     });
     
-    return res.status(500).json({
+    // ✅ Better error handling
+    let errorMessage = 'Gagal membuat transaksi pembayaran';
+    let errorDetails = error.message;
+    
+    if (error.response?.data) {
+      errorMessage = error.response.data.message || errorMessage;
+      errorDetails = JSON.stringify(error.response.data);
+    }
+    
+    return res.status(error.response?.status || 500).json({
       success: false,
-      error: error.response?.data || error.message,
-      message: 'Gagal membuat transaksi di Tripay'
+      error: errorDetails,
+      message: errorMessage
     });
   }
 }

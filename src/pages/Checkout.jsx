@@ -862,67 +862,41 @@ const MetodePembayaran = ({ formData, onInputChange, paymentChannels, selectedPa
     'QR Code': true
   });
 
-  // Di dalam MetodePembayaran component, ganti function getPaymentIcon:
-const getPaymentIcon = (channel) => {
-  // Prioritas 1: Gunakan icon_url dari API response jika valid
-  if (channel.icon_url && channel.icon_url.includes('tripay.co.id')) {
-    return channel.icon_url;
-  }
-  
-  // Prioritas 2: Fallback ke mapping lokal JIKA icon_url tidak valid
-  const code = channel.code.toUpperCase();
-  
-  // Mapping ke Tripay CDN (bukan local files)
-  const iconMap = {
-    // Virtual Accounts
-    'BRIVA': 'https://tripay.co.id/images/payment_method/bri.png',
-    'BNIVA': 'https://tripay.co.id/images/payment_method/bni.png',
-    'BCAVA': 'https://tripay.co.id/images/payment_method/bca.png',
-    'MANDIRIVA': 'https://tripay.co.id/images/payment_method/mandiri.png',
-    'PERMATAVA': 'https://tripay.co.id/images/payment_method/permata.png',
+  // ✅ FIX: Function untuk get icon URL (return string, bukan JSX)
+  const getPaymentIcon = (channel) => {
+    // Prioritas 1: Gunakan icon_url dari API response jika valid
+    if (channel.icon_url && channel.icon_url.includes('tripay.co.id')) {
+      return channel.icon_url;
+    }
     
-    // E-Wallets
-    'OVO': 'https://tripay.co.id/images/payment_method/ovo.png',
-    'DANA': 'https://tripay.co.id/images/payment_method/dana.png',
-    'SHOPEEPAY': 'https://tripay.co.id/images/payment_method/shopeepay.png',
-    'GOPAY': 'https://tripay.co.id/images/payment_method/gopay.png',
+    // Prioritas 2: Fallback ke mapping lokal
+    const code = channel.code.toUpperCase();
     
-    // QRIS
-    'QRIS': 'https://tripay.co.id/images/payment_method/qris.png',
-    'QRISC': 'https://tripay.co.id/images/payment_method/qris.png',
+    const iconMap = {
+      // Virtual Accounts
+      'BRIVA': 'https://tripay.co.id/images/payment_method/bri.png',
+      'BNIVA': 'https://tripay.co.id/images/payment_method/bni.png',
+      'BCAVA': 'https://tripay.co.id/images/payment_method/bca.png',
+      'MANDIRIVA': 'https://tripay.co.id/images/payment_method/mandiri.png',
+      'PERMATAVA': 'https://tripay.co.id/images/payment_method/permata.png',
+      
+      // E-Wallets
+      'OVO': 'https://tripay.co.id/images/payment_method/ovo.png',
+      'DANA': 'https://tripay.co.id/images/payment_method/dana.png',
+      'SHOPEEPAY': 'https://tripay.co.id/images/payment_method/shopeepay.png',
+      'GOPAY': 'https://tripay.co.id/images/payment_method/gopay.png',
+      
+      // QRIS
+      'QRIS': 'https://tripay.co.id/images/payment_method/qris.png',
+      'QRISC': 'https://tripay.co.id/images/payment_method/qris.png',
+      
+      // Convenience Store
+      'ALFAMART': 'https://tripay.co.id/images/payment_method/alfamart.png',
+      'INDOMARET': 'https://tripay.co.id/images/payment_method/indomaret.png',
+    };
     
-    // Convenience Store
-    'ALFAMART': 'https://tripay.co.id/images/payment_method/alfamart.png',
-    'INDOMARET': 'https://tripay.co.id/images/payment_method/indomaret.png',
+    return iconMap[code] || null;
   };
-  
-  return iconMap[code] || null;
-};
-
-// Dan di bagian render icon, tambahkan error handling yang lebih baik:
-<div className="ml-3 flex-shrink-0 w-16 h-10 flex items-center justify-center bg-white rounded border border-gray-100">
-  {iconUrl ? (
-    <img 
-      src={iconUrl}
-      alt={channel.name}
-      className="max-w-full max-h-full object-contain p-1"
-      loading="lazy"
-      onError={(e) => {
-        console.warn('Failed to load payment icon:', channel.code, iconUrl);
-        // Fallback ke emoji jika gambar gagal load
-        e.target.style.display = 'none';
-        const fallbackEmoji = e.target.nextSibling || document.createElement('span');
-        fallbackEmoji.className = 'text-2xl';
-        fallbackEmoji.textContent = '💳';
-        if (!e.target.nextSibling) {
-          e.target.parentElement.appendChild(fallbackEmoji);
-        }
-      }}
-    />
-  ) : (
-    <span className="text-2xl">💳</span>
-  )}
-</div>
 
   // Kelompokkan payment channels
   const groupedPayments = paymentChannels.reduce((acc, channel) => {
@@ -951,8 +925,6 @@ const getPaymentIcon = (channel) => {
     };
     return icons[category] || '💳';
   };
-
-  
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -1027,7 +999,13 @@ const getPaymentIcon = (channel) => {
                                   onError={(e) => {
                                     console.error('Failed to load icon:', channel.code, iconUrl);
                                     e.target.style.display = 'none';
-                                    e.target.parentElement.innerHTML = '<span class="text-2xl">💳</span>';
+                                    const parent = e.target.parentElement;
+                                    if (parent && !parent.querySelector('.fallback-icon')) {
+                                      const span = document.createElement('span');
+                                      span.className = 'text-2xl fallback-icon';
+                                      span.textContent = '💳';
+                                      parent.appendChild(span);
+                                    }
                                   }}
                                 />
                               ) : (

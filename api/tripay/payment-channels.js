@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-const TRIPAY_API_KEY = process.env.VITE_TRIPAY_API_KEY;
-const TRIPAY_MODE = process.env.VITE_TRIPAY_MODE || 'sandbox';
+const TRIPAY_API_KEY = process.env.TRIPAY_API_KEY;
+const TRIPAY_MODE = process.env.TRIPAY_MODE || 'sandbox';
 
 const TRIPAY_API_URL = TRIPAY_MODE === 'production' 
   ? 'https://tripay.co.id/api' 
