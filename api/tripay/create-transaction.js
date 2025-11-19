@@ -85,7 +85,7 @@ export default async function handler(req, res) {
 
     console.log('💰 Sending to Tripay API:', {
       url: `${TRIPAY_API_URL}/transaction/create`,
-      payload: { ...payload, signature: '***hidden***' } // Hide signature in logs
+      payload: { ...payload, signature: '***hidden***' }
     });
 
     const response = await axios.post(

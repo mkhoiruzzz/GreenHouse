@@ -1,7 +1,5 @@
-
 import axios from 'axios';
 
-// ✅ PAKAI VITE_ PREFIX
 const TRIPAY_API_KEY = process.env.VITE_TRIPAY_API_KEY;
 const TRIPAY_MODE = process.env.VITE_TRIPAY_MODE || 'sandbox';
 
@@ -9,11 +7,10 @@ const TRIPAY_API_URL = TRIPAY_MODE === 'production'
   ? 'https://tripay.co.id/api' 
   : 'https://tripay.co.id/api-sandbox';
 
-// Base URL untuk gambar payment method
 const PAYMENT_ICON_BASE_URL = 'https://tripay.co.id/images/payment_method';
 
 export default async function handler(req, res) {
-  // Set CORS headers untuk production
+  // Set CORS headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -33,11 +30,6 @@ export default async function handler(req, res) {
 
   try {
     console.log('🔄 Fetching payment channels from Tripay...');
-    console.log('🔧 Tripay Config:', {
-      mode: TRIPAY_MODE,
-      apiUrl: TRIPAY_API_URL,
-      hasApiKey: !!TRIPAY_API_KEY
-    });
 
     const response = await axios.get(`${TRIPAY_API_URL}/merchant/payment-channel`, {
       headers: {
@@ -49,7 +41,6 @@ export default async function handler(req, res) {
 
     console.log('✅ Payment channels fetched successfully');
 
-    // Pastikan semua channel memiliki icon_url yang valid
     const channelsWithValidIcons = (response.data.data || []).map(channel => {
       const validIconUrl = channel.icon_url && channel.icon_url.includes('tripay.co.id')
         ? channel.icon_url
@@ -69,7 +60,6 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error('❌ Error fetching payment channels:', error.response?.data || error.message);
     
-    // Fallback data
     const fallbackChannels = [
       {
         code: 'BRIVA',
@@ -91,7 +81,6 @@ export default async function handler(req, res) {
   }
 }
 
-// Helper function untuk mendapatkan nama file icon
 function getIconFilename(code) {
   const iconMap = {
     'BRIVA': 'bri',
