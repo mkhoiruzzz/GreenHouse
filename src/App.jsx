@@ -20,44 +20,47 @@ import Contact from './pages/Contact'
 import Profil from './pages/Profile'
 import Accesories from './pages/Accesories'
 import AdminDashboard from './components/AdminDashboard'
-
-
-
+import ErrorBoundary from './components/ErrorBoundary'
 
 function App() {
   return (
-    <AuthProvider>
-      <CartProvider>
-        <Router>
-          <div className="App">
-            <Navbar />
-            <main className="min-h-screen flex flex-col">
-              <Routes>
-                {/* Your existing routes */}
-                <Route path="/" element={<Home />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/products" element={<Product />} />
-                <Route path="/product/:id" element={<ProductDetail />} />
-                <Route path="/cart" element={<Cart />} />
-                <Route path="/checkout" element={<Checkout />} />
-                <Route path="/orders" element={<Orders />} />
-                <Route path="/about" element={<About />} />
-                <Route path="/contact" element={<Contact />} />
-                <Route path="/profile" element={<Profil />} />
-                <Route path="/accesories" element={<Accesories />} />
-                <Route path="/images/*" element={null} />
-                <Route path="/admin" element={<AdminDashboard />} />
-              </Routes>
-            </main>
-            <Footer />
-            <ToastContainer position="bottom-right" />
-          </div>
-        </Router>
-      </CartProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <CartProvider>
+          <Router>
+            <ErrorBoundary>
+              <div className="App">
+                <Navbar />
+                <main className="min-h-screen flex flex-col">
+                  <ErrorBoundary>
+                    <Routes>
+                      {/* Your existing routes */}
+                      <Route path="/" element={<Home />} />
+                      <Route path="/login" element={<Login />} />
+                      <Route path="/register" element={<Register />} />
+                      <Route path="/products" element={<Product />} />
+                      <Route path="/product/:id" element={<ProductDetail />} />
+                      <Route path="/cart" element={<Cart />} />
+                      <Route path="/checkout" element={<Checkout />} />
+                      <Route path="/orders" element={<Orders />} />
+                      <Route path="/about" element={<About />} />
+                      <Route path="/contact" element={<Contact />} />
+                      <Route path="/profile" element={<Profil />} />
+                      <Route path="/accesories" element={<Accesories />} />
+                      <Route path="/images/*" element={null} />
+                      <Route path="/admin" element={<AdminDashboard />} />
+                    </Routes>
+                  </ErrorBoundary>
+                </main>
+                <Footer />
+                <ToastContainer position="bottom-right" />
+              </div>
+            </ErrorBoundary>
+          </Router>
+        </CartProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   )
 }
-
 
 export default App
