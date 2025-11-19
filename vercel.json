@@ -7,9 +7,17 @@
       "config": {
         "distDir": "dist"
       }
+    },
+    {
+      "src": "api/tripay/*.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
+    {
+      "src": "/api/tripay/(.*)",
+      "dest": "/api/tripay/$1"
+    },
     {
       "src": "/assets/(.*)",
       "headers": {
@@ -20,5 +28,10 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/tripay/*.js": {
+      "maxDuration": 30
+    }
+  }
 }
