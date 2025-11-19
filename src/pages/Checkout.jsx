@@ -246,10 +246,35 @@ const Checkout = () => {
         order_id: order.id
       }));
 
-      await supabase.from('order_items').insert(orderItemsData);
+      console.log('📦 Inserting order items:', orderItemsData);
+
+      const { error: itemsError } = await supabase.from('order_items').insert(orderItemsData);
+
+      if (itemsError) {
+        console.error('❌ Order items error:', itemsError);
+        throw new Error(`Failed to insert order items: ${itemsError.message}`);
+      }
+
+      console.log('✅ Order items created');
 
       // Create payment
       const merchantRef = `ORDER-${order.id}-${Date.now()}`;
+      
+      // ✅ FIX: Include shipping fee in order items for Tripay validation
+      const tripayOrderItems = [
+        // Product items
+        ...cartItems.map(item => ({
+          name: item.nama_produk.substring(0, 50),
+          price: item.harga,
+          quantity: item.quantity
+        })),
+        // Add shipping fee as separate item
+        {
+          name: `Biaya Pengiriman (${formData.metode_pengiriman.toUpperCase()})`,
+          price: formData.biaya_pengiriman,
+          quantity: 1
+        }
+      ];
       
       const transactionData = {
         method: selectedPaymentMethod,
@@ -258,36 +283,66 @@ const Checkout = () => {
         customer_name: formData.nama_lengkap,
         customer_email: formData.email,
         customer_phone: formData.no_telepon,
-        order_items: cartItems.map(item => ({
-          name: item.nama_produk.substring(0, 50),
-          price: item.harga,
-          quantity: item.quantity
-        })),
+        order_items: tripayOrderItems,
         return_url: `${window.location.origin}/checkout?reference=${merchantRef}&status=success`,
         expired_time: Math.floor(Date.now() / 1000) + (24 * 60 * 60)
       };
 
-      const tripayPayment = await tripayService.createTransaction(transactionData);
+      console.log('💰 Creating payment transaction...');
+      console.log('Transaction data:', {
+        method: transactionData.method,
+        amount: transactionData.amount,
+        itemsCount: transactionData.order_items.length
+      });
       
-      if (!tripayPayment.success) {
-        throw new Error(tripayPayment.message || 'Gagal membuat pembayaran');
+      // ✅ Validate: order_items total must equal amount
+      const itemsTotal = transactionData.order_items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      console.log('💰 Validation:', {
+        itemsTotal: itemsTotal,
+        amount: transactionData.amount,
+        match: itemsTotal === transactionData.amount
+      });
+      
+      if (itemsTotal !== transactionData.amount) {
+        console.error('❌ Amount mismatch!', { itemsTotal, amount: transactionData.amount });
+        throw new Error(`Amount validation failed: items=${itemsTotal}, amount=${transactionData.amount}`);
       }
 
+      const tripayPayment = await tripayService.createTransaction(transactionData);
+      
+      console.log('📥 Tripay response:', tripayPayment);
+
+      if (!tripayPayment || !tripayPayment.success) {
+        console.error('❌ Payment creation failed:', tripayPayment);
+        throw new Error(tripayPayment?.message || 'Gagal membuat pembayaran');
+      }
+
+      console.log('✅ Payment created successfully');
+
       // Update order with payment reference
-      await supabase
+      console.log('📝 Updating order with payment reference...');
+      
+      const { error: updateError } = await supabase
         .from('orders')
         .update({
           tripay_reference: tripayPayment.data.reference,
-          tripay_checkout_url: tripayPayment.data.checkout_url
+          tripay_checkout_url: tripayPayment.data.checkout_url || '#'
         })
         .eq('id', order.id);
 
-      console.log('✅ Payment created');
+      if (updateError) {
+        console.error('⚠️ Warning: Failed to update order with payment reference:', updateError);
+        // Don't throw - continue with order
+      }
+
+      console.log('🎉 Order placement completed successfully!');
       
       // Redirect or show success
       if (tripayPayment.data.checkout_url && tripayPayment.data.checkout_url !== '#') {
+        console.log('🚀 Redirecting to payment page:', tripayPayment.data.checkout_url);
         window.location.href = tripayPayment.data.checkout_url;
       } else {
+        console.log('✅ Mock payment - showing success page');
         setOrderId(order.id);
         setTripayReference(tripayPayment.data.reference);
         setPaymentStatus('success');
@@ -297,9 +352,14 @@ const Checkout = () => {
       }
 
     } catch (error) {
-      console.error('❌ Error:', error);
-      toast.error(error.message || 'Terjadi kesalahan');
+      console.error('❌ ERROR in handlePlaceOrder:', {
+        message: error.message,
+        stack: error.stack,
+        error: error
+      });
+      toast.error(error.message || 'Terjadi kesalahan saat membuat pesanan');
     } finally {
+      console.log('🔄 Resetting loading states');
       setLoading(false);
       setIsSubmitting(false);
     }
