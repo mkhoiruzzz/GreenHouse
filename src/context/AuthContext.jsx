@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { supabase } from '../lib/supabase';
 import { accountService } from '../services/accountService';
+import { supabase, invokeFunction } from '../lib/supabase';
 
 const AuthContext = createContext();
 
@@ -260,47 +261,33 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-const deleteAccount = async () => {
+  const deleteAccount = async () => {
   try {
-    // Dapatkan session untuk mendapatkan access token
-    const { data: { session } } = await supabase.auth.getSession();
-
-    if (!session) {
-      return { success: false, message: "Sesi tidak ditemukan. Silakan login kembali." };
-    }
-
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
       return { success: false, message: "User tidak ditemukan" };
     }
 
-    // ✅ Panggil Edge Function dengan Authorization header
-    const { data, error } = await supabase.functions.invoke("delete-account", {
-      body: { user_id: user.id },
-      headers: {
-        Authorization: `Bearer ${session.access_token}` // ✅ Kirim token
-      }
+    console.log('🔄 Menghapus akun untuk user:', user.id);
+
+    // ✅ Gunakan helper function invokeFunction
+    const result = await invokeFunction('delete-account', { 
+      user_id: user.id 
     });
 
-    if (error) {
-      console.error('Delete account error:', error);
-      return { 
-        success: false, 
-        message: error.message || "Gagal menghapus akun. Silakan coba lagi." 
-      };
-    }
+    console.log('✅ Akun berhasil dihapus:', result);
 
-    // ✅ Sign out setelah berhasil delete
+    // Logout setelah berhasil hapus
     await supabase.auth.signOut();
 
     return { success: true, message: "Akun berhasil dihapus" };
 
   } catch (err) {
-    console.error('Delete account exception:', err);
+    console.error('❌ Error menghapus akun:', err);
     return { 
       success: false, 
-      message: err.message || "Terjadi kesalahan saat menghapus akun" 
+      message: err.message || "Gagal menghapus akun. Silakan coba lagi." 
     };
   }
 };
