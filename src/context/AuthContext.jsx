@@ -260,73 +260,52 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const deleteAccount = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        toast.error('User tidak ditemukan');
-        return { success: false, message: 'User tidak ditemukan' };
+const deleteAccount = async () => {
+  try {
+    // Dapatkan session untuk mendapatkan access token
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+      return { success: false, message: "Sesi tidak ditemukan. Silakan login kembali." };
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, message: "User tidak ditemukan" };
+    }
+
+    // ✅ Panggil Edge Function dengan Authorization header
+    const { data, error } = await supabase.functions.invoke("delete-account", {
+      body: { user_id: user.id },
+      headers: {
+        Authorization: `Bearer ${session.access_token}` // ✅ Kirim token
       }
+    });
 
-      console.log('🗑️ Starting account deletion for:', user.email);
-      const originalEmail = user.email;
-
-      let cleanupResult;
-      
-      try {
-        cleanupResult = await accountService.deleteUserAccount(user.id, user.email);
-        console.log('✅ API deletion successful');
-      } catch (apiError) {
-        console.warn('⚠️ API deletion failed, using fallback:', apiError);
-        
-        cleanupResult = await accountService.completeDataCleanup(user.id, user.email);
-        console.log('✅ Fallback cleanup successful');
-      }
-
-      try {
-        await supabase.auth.signOut();
-        console.log('✅ User signed out');
-      } catch (signOutError) {
-        console.warn('Sign out warning:', signOutError);
-      }
-
-      setUser(null);
-      setIsAuthenticated(false);
-      setIsAdmin(false);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-
-      toast.success(`Akun berhasil dihapus! Email ${originalEmail} dapat digunakan kembali.`);
-      
-      return { 
-        success: true, 
-        message: `Akun berhasil dihapus. Email ${originalEmail} sekarang tersedia untuk registrasi.`,
-        freed_email: originalEmail
-      };
-
-    } catch (error) {
-      console.error('❌ Delete account error:', error);
-      
-      try {
-        await supabase.auth.signOut();
-        setUser(null);
-        setIsAuthenticated(false);
-        setIsAdmin(false);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-      } catch (cleanupError) {
-        console.error('Cleanup after error failed:', cleanupError);
-      }
-
-      toast.warning('Akun sudah logout, tapi mungkin perlu cleanup manual dari database.');
-      
+    if (error) {
+      console.error('Delete account error:', error);
       return { 
         success: false, 
-        message: error.message || 'Gagal menghapus akun secara lengkap, tetapi Anda sudah logout.' 
+        message: error.message || "Gagal menghapus akun. Silakan coba lagi." 
       };
     }
-  };
+
+    // ✅ Sign out setelah berhasil delete
+    await supabase.auth.signOut();
+
+    return { success: true, message: "Akun berhasil dihapus" };
+
+  } catch (err) {
+    console.error('Delete account exception:', err);
+    return { 
+      success: false, 
+      message: err.message || "Terjadi kesalahan saat menghapus akun" 
+    };
+  }
+};
+
+
 
   const updateProfile = async (profileData) => {
     try {

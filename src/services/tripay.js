@@ -212,31 +212,24 @@ export const tripayService = {
 function getPaymentIconUrl(code) {
   const iconMap = {
     // Virtual Accounts
-    'BRIVA': `${PAYMENT_ICON_BASE_URL}/bri.png`,
-    'BNIVA': `${PAYMENT_ICON_BASE_URL}/bni.png`,
-    'BCAVA': `${PAYMENT_ICON_BASE_URL}/bca.png`,
-    'MANDIRIVA': `${PAYMENT_ICON_BASE_URL}/mandiri.png`,
-    'PERMATAVA': `${PAYMENT_ICON_BASE_URL}/permata.png`,
-    'BSIVA': `${PAYMENT_ICON_BASE_URL}/bsi.png`,
-    'SMSVA': `${PAYMENT_ICON_BASE_URL}/sinarmas.png`,
-    'MUAMALATVA': `${PAYMENT_ICON_BASE_URL}/muamalat.png`,
-    'CIMBVA': `${PAYMENT_ICON_BASE_URL}/cimb.png`,
+     'BRIVA': '/images/products/bri.png',
+    'BNIVA': '/images/products/bni.png',
+    'BCAVA': '/images/products/bca.png',
+    'MANDIRIVA': '/images/products/mandiri.png',
+    'PERMATAVA': '/images/products/permata.png',
     
     // E-Wallets
-    'OVO': `${PAYMENT_ICON_BASE_URL}/ovo.png`,
-    'DANA': `${PAYMENT_ICON_BASE_URL}/dana.png`,
-    'SHOPEEPAY': `${PAYMENT_ICON_BASE_URL}/shopeepay.png`,
-    'LINKAJA': `${PAYMENT_ICON_BASE_URL}/linkaja.png`,
-    'GOPAY': `${PAYMENT_ICON_BASE_URL}/gopay.png`,
-    
+      'OVO': '/images/products/ovo.png',
+    'DANA': '/images/products/dana.png',
+    'SHOPEEPAY': '/images/products/shopeepay.png',
+    'LINKAJA': '/images/products/linkaja.png',
+    'GOPAY': '/images/products/gopay.png',
     // QRIS
-    'QRIS': `${PAYMENT_ICON_BASE_URL}/qris.png`,
-    'QRISC': `${PAYMENT_ICON_BASE_URL}/qris.png`,
-    'QRIS2': `${PAYMENT_ICON_BASE_URL}/qris.png`,
+    'QRIS': '/images/products/qris.png',
     
     // Convenience Store
-    'ALFAMART': `${PAYMENT_ICON_BASE_URL}/alfamart.png`,
-    'INDOMARET': `${PAYMENT_ICON_BASE_URL}/indomaret.png`,
+    'ALFAMART': '/images/products/alfamart.png',
+    'INDOMARET': '/images/products/indomaret.png',
     
     // Default fallback
     'default': `${PAYMENT_ICON_BASE_URL}/default.png`

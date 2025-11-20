@@ -589,43 +589,32 @@ const Checkout = () => {
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-xl font-semibold mb-4">Metode Pembayaran</h2>
                 {paymentChannels.length > 0 ? (
-                  <div className="space-y-2">
-                    {paymentChannels.map((channel) => (
-                      <div 
-                        key={channel.code}
-                        className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer ${
-                          selectedPaymentMethod === channel.code 
-                            ? 'border-green-500 bg-green-50' 
-                            : 'border-gray-200'
-                        }`}
-                        onClick={() => setSelectedPaymentMethod(channel.code)}
-                      >
-                        <div className="flex items-center flex-1">
-                          <input
-                            type="radio"
-                            checked={selectedPaymentMethod === channel.code}
-                            onChange={() => {}}
-                            className="mr-3"
-                          />
-                          <div>
-                            <p className="font-medium">{channel.name}</p>
-                            <p className="text-xs text-gray-500">{channel.group}</p>
-                          </div>
-                        </div>
-                        {channel.total_fee?.flat > 0 && (
-                          <p className="text-xs text-green-600">
-                            +{formatCurrency(channel.total_fee.flat)}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                  <PaymentMethodAccordion 
+                    channels={paymentChannels}
+                    selectedMethod={selectedPaymentMethod}
+                    onSelectMethod={setSelectedPaymentMethod}
+                  />
                 ) : (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
                     <p className="text-gray-600">Memuat metode pembayaran...</p>
                   </div>
                 )}
+                
+                {/* Info Tripay */}
+                <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="flex items-start">
+                    <span className="text-blue-600 mr-2 text-lg">🔒</span>
+                    <div>
+                      <p className="text-blue-900 font-semibold text-sm mb-1">
+                        Pembayaran Aman dengan Tripay
+                      </p>
+                      <p className="text-blue-700 text-xs">
+                        Payment Gateway resmi dan terpercaya di Indonesia
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -711,6 +700,164 @@ const Checkout = () => {
           )}
         </div>
       </div>
+    </div>
+  );
+};
+
+// ✅ Payment Method Accordion Component
+const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod }) => {
+  const [openCategories, setOpenCategories] = React.useState({
+    'Virtual Account': true,
+    'E-Wallet': false,
+    'Convenience Store': false,
+    'QR Code': false
+  });
+
+  // Group channels by category
+  const groupedChannels = channels.reduce((acc, channel) => {
+    const category = channel.group || 'Lainnya';
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(channel);
+    return acc;
+  }, {});
+
+  const toggleCategory = (category) => {
+    setOpenCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
+  };
+
+  const getCategoryIcon = (category) => {
+    const icons = {
+      'Virtual Account': '🏦',
+      'E-Wallet': '📱',
+      'Convenience Store': '🏪',
+      'QR Code': '📲',
+      'Lainnya': '💳'
+    };
+    return icons[category] || '💳';
+  };
+
+  const getCategoryColor = (category) => {
+    const colors = {
+      'Virtual Account': 'bg-blue-50 border-blue-200',
+      'E-Wallet': 'bg-purple-50 border-purple-200',
+      'Convenience Store': 'bg-orange-50 border-orange-200',
+      'QR Code': 'bg-green-50 border-green-200',
+      'Lainnya': 'bg-gray-50 border-gray-200'
+    };
+    return colors[category] || 'bg-gray-50 border-gray-200';
+  };
+
+  return (
+    <div className="space-y-3">
+      {Object.entries(groupedChannels).map(([category, categoryChannels]) => (
+        <div 
+          key={category} 
+          className={`border rounded-lg overflow-hidden ${getCategoryColor(category)}`}
+        >
+          {/* Category Header - Clickable */}
+          <button
+            type="button"
+            onClick={() => toggleCategory(category)}
+            className="w-full flex items-center justify-between p-4 hover:bg-opacity-70 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">{getCategoryIcon(category)}</span>
+              <div className="text-left">
+                <h3 className="font-semibold text-gray-900">{category}</h3>
+                <p className="text-xs text-gray-600">
+                  {categoryChannels.length} metode tersedia
+                </p>
+              </div>
+            </div>
+            <svg
+              className={`w-5 h-5 text-gray-600 transition-transform duration-200 ${
+                openCategories[category] ? 'rotate-180' : ''
+              }`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {/* Category Content - Collapsible */}
+          {openCategories[category] && (
+            <div className="px-2 pb-2 space-y-2">
+              {categoryChannels.map((channel) => (
+                <div
+                  key={channel.code}
+                  className={`flex items-center justify-between p-3 bg-white border-2 rounded-lg cursor-pointer transition-all ${
+                    selectedMethod === channel.code
+                      ? 'border-green-500 shadow-md'
+                      : 'border-gray-200 hover:border-green-300'
+                  }`}
+                  onClick={() => onSelectMethod(channel.code)}
+                >
+                  <div className="flex items-center gap-3 flex-1">
+                    <input
+                      type="radio"
+                      checked={selectedMethod === channel.code}
+                      onChange={() => {}}
+                      className="w-4 h-4 text-green-600"
+                    />
+                    
+                    {/* Payment Icon */}
+                    <div className="w-12 h-12 flex items-center justify-center bg-white rounded border border-gray-200 flex-shrink-0">
+                      {channel.icon_url ? (
+                        <img
+                          src={channel.icon_url}
+                          alt={channel.name}
+                          className="max-w-full max-h-full object-contain p-1"
+                          loading="lazy"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.parentElement.innerHTML = '<span class="text-xl">💳</span>';
+                          }}
+                        />
+                      ) : (
+                        <span className="text-xl">💳</span>
+                      )}
+                    </div>
+
+                    {/* Payment Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 text-sm truncate">
+                        {channel.name}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {channel.group}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Fee Display */}
+                  <div className="text-right ml-3 flex-shrink-0">
+                    {channel.total_fee?.flat > 0 && (
+                      <p className="text-xs font-semibold text-green-600">
+                        +{formatCurrency(channel.total_fee.flat)}
+                      </p>
+                    )}
+                    {channel.total_fee?.percent > 0 && (
+                      <p className="text-xs font-semibold text-green-600">
+                        +{channel.total_fee.percent}%
+                      </p>
+                    )}
+                    {!channel.total_fee?.flat && !channel.total_fee?.percent && (
+                      <p className="text-xs text-gray-400">Gratis</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 };
