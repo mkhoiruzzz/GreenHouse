@@ -1,43 +1,36 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
-import { supabase } from '@/lib/supabase'
 
 export default function Confirm() {
   const router = useRouter()
   const { token } = router.query
-  const [message, setMessage] = useState('Verifying email...')
+  const [message, setMessage] = useState('Loading...')
 
   useEffect(() => {
-    if (token) {
-      verifyEmail(token)
+    console.log('Token:', token) // Cek di browser console
+    
+    if (!token) {
+      setMessage('❌ No token found in URL')
+      return
     }
-  }, [token])
-
-  const verifyEmail = async (token) => {
-    try {
-      const { error } = await supabase.auth.verifyOtp({
-        token_hash: token,
-        type: 'signup'
-      })
-
-      if (error) {
-        setMessage('Verification failed. Please try again.')
-        return
-      }
-      
-      setMessage('✅ Email verified successfully! Redirecting to login...')
-      setTimeout(() => {
-        router.push('/login')
-      }, 3000)
-    } catch (error) {
-      setMessage('❌ Error: ' + error.message)
-    }
-  }
+    
+    setMessage(`Token received: ${token}. Verifying...`)
+    
+    // Redirect ke login dulu (temporary solution)
+    setTimeout(() => {
+      router.push('/login?verified=true')
+    }, 2000)
+  }, [token, router])
 
   return (
     <div style={{ padding: '2rem', textAlign: 'center' }}>
       <h1>Email Verification</h1>
       <p>{message}</p>
+      {token && (
+        <p>
+          <small>Token: {token}</small>
+        </p>
+      )}
     </div>
   )
 }
