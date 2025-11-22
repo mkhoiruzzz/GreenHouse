@@ -21,10 +21,12 @@ import Profil from './pages/Profile'
 import Accesories from './pages/Accesories'
 import AdminDashboard from './components/AdminDashboard'
 import ErrorBoundary from './components/ErrorBoundary'
+import { ThemeProvider } from './context/ThemeContext'
 
 function App() {
   return (
     <ErrorBoundary>
+      <ThemeProvider>
       <AuthProvider>
         <CartProvider>
           <Router>
@@ -59,6 +61,7 @@ function App() {
           </Router>
         </CartProvider>
       </AuthProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   )
 }

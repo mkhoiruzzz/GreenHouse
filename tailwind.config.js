@@ -4,12 +4,13 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  darkMode: 'class', // ← WAJIB ADA INI!
   theme: {
     extend: {
       colors: {
-        primary: '#16a34a',    // green-600
-        secondary: '#ca8a04',  // yellow-600
-        accent: '#15803d',     // green-700
+        primary: '#16a34a',
+        secondary: '#ca8a04',
+        accent: '#15803d',
       }
     },
   },
