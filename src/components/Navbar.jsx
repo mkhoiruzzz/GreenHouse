@@ -45,23 +45,23 @@ const Navbar = () => {
             </Link>
           </div>
 
-          {/* Right Side Controls - STYLE DIPERBAIKI */}
-          <div className="flex items-center space-x-3">
-            {/* Language Toggle - STYLE DIPERBAIKI */}
+          {/* Right Side Controls */}
+          <div className="flex items-center space-x-2">
+            {/* Language Toggle */}
             <button
               onClick={toggleLanguage}
-              className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-green-700 dark:hover:bg-green-800 transition duration-200 border border-green-500 dark:border-green-700"
+              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg hover:bg-green-700 dark:hover:bg-green-800 transition duration-200 text-sm font-semibold"
               title={language === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}
             >
               <span className="text-base">{language === 'id' ? '🇮🇩' : '🇬🇧'}</span>
-              <span className="font-medium">{language === 'id' ? 'ID' : 'EN'}</span>
+              <span>{language === 'id' ? 'ID' : 'EN'}</span>
             </button>
 
-            {/* Theme Toggle - STYLE DIPERBAIKI */}
+            {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
-              className="p-2 rounded-lg hover:bg-green-700 dark:hover:bg-green-800 transition duration-200 border border-green-500 dark:border-green-700"
-              title={isDark ? t('Mode Terang', 'Light Mode') : t('Mode Gelap', 'Dark Mode')}
+              className="p-2 rounded-lg hover:bg-green-700 dark:hover:bg-green-800 transition duration-200"
+              title={isDark ? (language === 'id' ? 'Mode Terang' : 'Light Mode') : (language === 'id' ? 'Mode Gelap' : 'Dark Mode')}
             >
               {isDark ? (
                 <svg className="w-5 h-5 text-yellow-300" fill="currentColor" viewBox="0 0 20 20">
@@ -74,12 +74,9 @@ const Navbar = () => {
               )}
             </button>
 
-            {/* Cart Indicator - STYLE DIPERBAIKI */}
+            {/* Cart Indicator */}
             {isAuthenticated && (
-              <Link 
-                to="/cart" 
-                className="relative p-2 hover:bg-green-700 dark:hover:bg-green-800 rounded-lg transition duration-200 border border-green-500 dark:border-green-700"
-              >
+              <Link to="/cart" className="relative hover:text-yellow-300 transition duration-200 p-2">
                 <span className="text-xl">🛒</span>
                 {cartCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
@@ -99,7 +96,7 @@ const Navbar = () => {
           ></div>
         )}
 
-        {/* Sidebar Panel - BAHASA DIPERBAIKI */}
+        {/* Sidebar Panel */}
         <div className={`fixed top-0 left-0 h-full w-80 bg-green-600 dark:bg-green-900 shadow-lg transform transition-all duration-300 z-50 overflow-y-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className="flex flex-col h-full">
             {/* HEADER SIDEBAR */}
@@ -115,7 +112,7 @@ const Navbar = () => {
                 </Link>
                 <button
                   onClick={closeMenu}
-                  className="text-white hover:text-yellow-300 transition duration-200 p-1"
+                  className="text-white hover:text-yellow-300 transition duration-200"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -123,7 +120,7 @@ const Navbar = () => {
                 </button>
               </div>
 
-              {/* INFO AKUN USER - BAHASA DIPERBAIKI */}
+              {/* INFO AKUN USER */}
               {isAuthenticated ? (
                 <div className="bg-green-700 dark:bg-green-800 rounded-lg p-3">
                   <div className="flex items-center space-x-3">
@@ -134,7 +131,7 @@ const Navbar = () => {
                       <div className="text-yellow-300 font-semibold text-lg truncate">{user?.username}</div>
                       <div className="text-green-200 text-sm truncate">{user?.email}</div>
                       <div className="text-green-300 text-xs mt-1">
-                        {isAdmin ? t('Administrator', 'Administrator') : t('Pelanggan', 'Customer')}
+                        {isAdmin ? (language === 'id' ? 'Administrator' : 'Administrator') : (language === 'id' ? 'Pelanggan' : 'Customer')}
                       </div>
                     </div>
                   </div>
@@ -150,7 +147,7 @@ const Navbar = () => {
                       className="flex-1 bg-yellow-500 text-white py-2 px-3 rounded-lg hover:bg-yellow-600 transition duration-200 text-sm font-semibold"
                       onClick={closeMenu}
                     >
-                      {t('Login', 'Login')}
+                      Login
                     </Link>
                     <Link
                       to="/register"
@@ -164,8 +161,8 @@ const Navbar = () => {
               )}
             </div>
 
-            {/* MENU NAVIGASI - BAHASA DIPERBAIKI */}
-            <div className="flex-1 p-4 space-y-1">
+            {/* MENU NAVIGASI */}
+            <div className="flex-1 p-4 space-y-2">
               <Link
                 to="/"
                 className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 dark:hover:bg-green-800 rounded-lg transition duration-200"
@@ -202,7 +199,7 @@ const Navbar = () => {
                 <span className="text-lg">{t('Kontak', 'Contact')}</span>
               </Link>
 
-              <div className="border-t border-green-500 dark:border-green-700 my-3"></div>
+              <div className="border-t border-green-500 dark:border-green-700 my-4"></div>
 
               {isAuthenticated && (
                 <>
@@ -251,20 +248,20 @@ const Navbar = () => {
                     </Link>
                   )}
 
-                  <div className="border-t border-green-500 dark:border-green-700 my-3"></div>
+                  <div className="border-t border-green-500 dark:border-green-700 my-4"></div>
                   
                   <button
                     onClick={handleLogout}
                     className="flex items-center w-full text-left py-3 px-4 hover:text-yellow-300 hover:bg-green-700 dark:hover:bg-green-800 rounded-lg transition duration-200"
                   >
                     <span className="mr-3 text-xl">🚪</span>
-                    <span className="text-lg">{t('Logout', 'Logout')}</span>
+                    <span className="text-lg">Logout</span>
                   </button>
                 </>
               )}
             </div>
 
-            {/* FOOTER SIDEBAR - BAHASA DIPERBAIKI */}
+            {/* FOOTER SIDEBAR */}
             <div className="p-4 border-t border-green-500 dark:border-green-700">
               <div className="text-center text-green-200 text-sm">
                 <p>🌿 Green House</p>
