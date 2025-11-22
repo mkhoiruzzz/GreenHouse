@@ -39,10 +39,12 @@ const Navbar = () => {
             </button>
 
             {/* Logo */}
-            <Link to="/" className="flex items-center space-x-2 text-2xl font-bold text-yellow-300">
-              <span>🌿</span>
-              <span>Green House</span>
-            </Link>
+            <Link to="/" className="flex items-center space-x-1 md:space-x-2 text-xl md:text-2xl font-bold text-yellow-300">
+  <span className="text-lg md:text-xl">🌿</span>
+  {/* Desktop: Full text, Mobile: Short text */}
+  <span className="hidden sm:block">Green House</span>
+  <span className="sm:hidden text-base">GreenHouse</span>
+</Link>
           </div>
 
           {/* Right Side Controls */}
