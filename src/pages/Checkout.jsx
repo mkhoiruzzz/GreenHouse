@@ -23,6 +23,7 @@ const Checkout = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentChannels, setPaymentChannels] = useState([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
+  const [paymentFee, setPaymentFee] = useState(0); // ✅ NEW: Track payment fee
   const [paymentStatus, setPaymentStatus] = useState('pending');
   const [tripayReference, setTripayReference] = useState('');
 
@@ -213,11 +214,12 @@ const Checkout = () => {
 
       const orderItems = formatOrderItems();
       const totalHarga = calculateSubtotal();
-      const totalAmount = calculateTotal();
+      const totalAmount = calculateTotal(); // Sudah include subtotal + shipping + payment fee
 
       console.log('💰 Order totals:', {
         subtotal: totalHarga,
         shipping: formData.biaya_pengiriman,
+        paymentFee: paymentFee,
         total: totalAmount,
         items: orderItems.length
       });
@@ -227,6 +229,7 @@ const Checkout = () => {
         user_id: user.id,
         total_harga: totalHarga,
         biaya_pengiriman: formData.biaya_pengiriman,
+        biaya_admin: paymentFee, // ✅ NEW: Save payment fee
         status_pembayaran: 'unpaid',
         status_pengiriman: 'pending',
         metode_pembayaran: `tripay_${selectedPaymentMethod}`,
@@ -292,6 +295,15 @@ const Checkout = () => {
           quantity: 1
         }
       ];
+
+      // ✅ NEW: Add payment fee if exists
+      if (paymentFee > 0) {
+        tripayOrderItems.push({
+          name: `Biaya Admin Pembayaran`,
+          price: paymentFee,
+          quantity: 1
+        });
+      }
 
       const transactionData = {
         method: selectedPaymentMethod,
@@ -438,10 +450,11 @@ const Checkout = () => {
   };
 
   const calculateTotal = () => {
-    // ✅ FIXED: Hanya tambahkan ongkir jika sudah dipilih (> 0)
+    // ✅ FIXED: Tambahkan subtotal + ongkir + payment fee
     const subtotal = calculateSubtotal();
     const shipping = formData.biaya_pengiriman > 0 ? formData.biaya_pengiriman : 0;
-    return subtotal + shipping;
+    const fee = paymentFee > 0 ? paymentFee : 0;
+    return subtotal + shipping + fee;
   };
 
   // Empty cart check
@@ -645,17 +658,43 @@ const Checkout = () => {
             {/* STEP 3: Metode Pembayaran */}
             {currentStep === 3 && (
               <div className="bg-white dark:bg-gray-800 dark:border dark:border-gray-700 rounded-lg shadow p-6 transition-colors duration-300">
-                <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">{t('Metode Pembayaran','Payment Method')}</h2>
+                <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">{t('Metode Pembayaran','Payment Method')}</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  {t('Pilih metode pembayaran yang Anda inginkan', 'Choose your preferred payment method')}
+                </p>
+                
                 {paymentChannels.length > 0 ? (
                   <PaymentMethodAccordion 
                     channels={paymentChannels}
                     selectedMethod={selectedPaymentMethod}
                     onSelectMethod={setSelectedPaymentMethod}
+                    onFeeChange={setPaymentFee}
                   />
                 ) : (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
                     <p className="text-gray-600 dark:text-gray-300">{t('Memuat metode pembayaran...','Loading payment methods...')}</p>
+                  </div>
+                )}
+
+                {/* ✅ NEW: Display selected payment with fee */}
+                {selectedPaymentMethod && (
+                  <div className="mt-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-green-600 dark:text-green-400">✓</span>
+                        <p className="text-green-800 dark:text-green-200 font-medium text-sm">
+                          {t('Metode terpilih:', 'Selected method:')} <strong>{selectedPaymentMethod.toUpperCase()}</strong>
+                        </p>
+                      </div>
+                      {paymentFee > 0 && (
+                        <div className="bg-amber-100 dark:bg-amber-900/30 px-2 py-1 rounded">
+                          <p className="text-amber-800 dark:text-amber-300 text-xs font-semibold">
+                            Fee: {formatCurrency(paymentFee)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -689,18 +728,46 @@ const Checkout = () => {
                 {tripayReference && (
                   <p className="text-gray-600 dark:text-gray-300 mb-4">{t('Reference','Reference')}: <strong>{tripayReference}</strong></p>
                 )}
+                
+                {/* ✅ NEW: Order Summary on Success */}
+                <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mt-6 mb-6 text-left max-w-md mx-auto">
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 text-center">{t('Ringkasan Pembayaran','Payment Summary')}</h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">{t('Subtotal Produk','Products Subtotal')}</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(calculateSubtotal())}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">{t('Biaya Pengiriman','Shipping')}</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(formData.biaya_pengiriman)}</span>
+                    </div>
+                    {paymentFee > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">{t('Biaya Admin','Admin Fee')}</span>
+                        <span className="font-medium text-amber-600 dark:text-amber-400">{formatCurrency(paymentFee)}</span>
+                      </div>
+                    )}
+                    <div className="border-t border-gray-300 dark:border-gray-600 pt-2 mt-2">
+                      <div className="flex justify-between font-bold text-base">
+                        <span className="text-gray-900 dark:text-gray-100">{t('Total Dibayar','Total Paid')}</span>
+                        <span className="text-green-600 dark:text-green-400 text-lg">{formatCurrency(calculateTotal())}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
                 <div className="flex gap-4 justify-center mt-6 flex-wrap">
                   <button
                     onClick={() => navigate('/orders')}
-                    className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700"
+                    className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-semibold transition-colors"
                   >
-                    {t('Lihat Pesanan','View Orders')}
+                    📦 {t('Lihat Pesanan','View Orders')}
                   </button>
                   <button
                     onClick={() => navigate('/products')}
-                    className="border border-green-600 text-green-600 px-6 py-3 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/10"
+                    className="border border-green-600 text-green-600 dark:text-green-400 dark:border-green-500 px-6 py-3 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/10 font-semibold transition-colors"
                   >
-                    {t('Lanjut Belanja','Continue Shopping')}
+                    🛍️ {t('Lanjut Belanja','Continue Shopping')}
                   </button>
                 </div>
               </div>
@@ -732,7 +799,23 @@ const Checkout = () => {
                   <span>{formatCurrency(calculateSubtotal())}</span>
                 </div>
                 
-              
+                {/* ✅ Shipping Info based on step */}
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-700 dark:text-gray-300">{t('Biaya Pengiriman','Shipping')}</span>
+                  {currentStep === 1 ? (
+                    <span className="text-xs text-amber-600 dark:text-amber-400 italic font-medium">
+                      {t('Pilih di step berikutnya','Select in next step')} →
+                    </span>
+                  ) : currentStep >= 2 && formData.biaya_pengiriman > 0 ? (
+                    <span className="text-gray-700 dark:text-gray-300 font-medium">
+                      {formatCurrency(formData.biaya_pengiriman)}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-red-500 dark:text-red-400 italic">
+                      {t('Belum dipilih','Not selected')}
+                    </span>
+                  )}
+                </div>
                 
                 {/* Selected shipping method display */}
                 {currentStep >= 2 && formData.metode_pengiriman && (
@@ -789,7 +872,7 @@ const Checkout = () => {
 };
 
 // Payment Method Accordion Component
-const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod }) => {
+const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod, onFeeChange }) => {
   const [openCategories, setOpenCategories] = React.useState({
     'Virtual Account': true,
     'E-Wallet': false,
@@ -836,6 +919,22 @@ const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod }) =>
     return colors[category] || 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700';
   };
 
+  // ✅ NEW: Calculate fee for a channel
+  const calculateChannelFee = (channel) => {
+    const flatFee = channel.total_fee?.flat || 0;
+    const percentFee = channel.total_fee?.percent || 0;
+    return { flat: flatFee, percent: percentFee };
+  };
+
+  // ✅ NEW: Handle payment method selection with fee
+  const handleSelectMethod = (channel) => {
+    const fee = calculateChannelFee(channel);
+    const totalFee = fee.flat; // For now, we'll use flat fee
+    
+    onSelectMethod(channel.code);
+    onFeeChange(totalFee);
+  };
+
   return (
     <div className="space-y-3">
       {Object.entries(groupedChannels).map(([category, categoryChannels]) => (
@@ -870,63 +969,76 @@ const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod }) =>
           {/* Category Content - Collapsible */}
           {openCategories[category] && (
             <div className="px-2 pb-2 space-y-2">
-              {categoryChannels.map((channel) => (
-                <div
-                  key={channel.code}
-                  className={`flex items-center justify-between p-3 bg-white dark:bg-gray-800 border-2 rounded-lg cursor-pointer transition-all ${
-                    selectedMethod === channel.code
-                      ? 'border-green-500 shadow-md'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-green-300'
-                  }`}
-                  onClick={() => onSelectMethod(channel.code)}
-                >
-                  <div className="flex items-center gap-3 flex-1">
-                    <input
-                      type="radio"
-                      checked={selectedMethod === channel.code}
-                      onChange={() => {}}
-                      className="w-4 h-4 text-green-600"
-                    />
+              {categoryChannels.map((channel) => {
+                const fee = calculateChannelFee(channel);
+                
+                return (
+                  <div
+                    key={channel.code}
+                    className={`flex items-center justify-between p-3 bg-white dark:bg-gray-800 border-2 rounded-lg cursor-pointer transition-all ${
+                      selectedMethod === channel.code
+                        ? 'border-green-500 shadow-md bg-green-50 dark:bg-green-900/20'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-green-300'
+                    }`}
+                    onClick={() => handleSelectMethod(channel)}
+                  >
+                    <div className="flex items-center gap-3 flex-1">
+                      <input
+                        type="radio"
+                        checked={selectedMethod === channel.code}
+                        onChange={() => {}}
+                        className="w-4 h-4 text-green-600"
+                      />
 
-                    {/* Payment Icon */}
-                    <div className="w-12 h-12 flex items-center justify-center bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 flex-shrink-0">
-                      {channel.icon_url ? (
-                        <img
-                          src={channel.icon_url}
-                          alt={channel.name}
-                          className="max-w-full max-h-full object-contain p-1"
-                          loading="lazy"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            e.target.parentElement.innerHTML = '<span class="text-xl">💳</span>';
-                          }}
-                        />
+                      {/* Payment Icon */}
+                      <div className="w-12 h-12 flex items-center justify-center bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 flex-shrink-0">
+                        {channel.icon_url ? (
+                          <img
+                            src={channel.icon_url}
+                            alt={channel.name}
+                            className="max-w-full max-h-full object-contain p-1"
+                            loading="lazy"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.parentElement.innerHTML = '<span class="text-xl">💳</span>';
+                            }}
+                          />
+                        ) : (
+                          <span className="text-xl">💳</span>
+                        )}
+                      </div>
+
+                      {/* Payment Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate">{channel.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{channel.group}</p>
+                      </div>
+                    </div>
+
+                    {/* ✅ UPDATED: Fee Display with better styling */}
+                    <div className="text-right ml-3 flex-shrink-0">
+                      {fee.flat > 0 || fee.percent > 0 ? (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded px-2 py-1">
+                          {fee.flat > 0 && (
+                            <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                              +{formatCurrency(fee.flat)}
+                            </p>
+                          )}
+                          {fee.percent > 0 && (
+                            <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                              +{fee.percent}%
+                            </p>
+                          )}
+                        </div>
                       ) : (
-                        <span className="text-xl">💳</span>
+                        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded px-2 py-1">
+                          <p className="text-xs font-semibold text-green-700 dark:text-green-400">Gratis</p>
+                        </div>
                       )}
                     </div>
-
-                    {/* Payment Info */}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate">{channel.name}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{channel.group}</p>
-                    </div>
                   </div>
-
-                  {/* Fee Display */}
-                  <div className="text-right ml-3 flex-shrink-0 text-sm">
-                    {channel.total_fee?.flat > 0 && (
-                      <p className="text-xs font-semibold text-green-600">+{formatCurrency(channel.total_fee.flat)}</p>
-                    )}
-                    {channel.total_fee?.percent > 0 && (
-                      <p className="text-xs font-semibold text-green-600">+{channel.total_fee.percent}%</p>
-                    )}
-                    {!channel.total_fee?.flat && !channel.total_fee?.percent && (
-                      <p className="text-xs text-gray-400 dark:text-gray-500">{/* Gratis */}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

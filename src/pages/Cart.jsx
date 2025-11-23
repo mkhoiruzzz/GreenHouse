@@ -209,6 +209,9 @@ const Cart = () => {
                       {formatCurrency(total)}
                     </span>
                   </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 transition-colors duration-300">
+                    {t('*Ongkir dihitung di checkout', '*Shipping calculated at checkout')}
+                  </p>
                 </div>
               </div>
 
@@ -225,6 +228,16 @@ const Cart = () => {
               >
                 ➕ {t('Belanja Lagi', 'Continue Shopping')}
               </button>
+
+              {/* Info */}
+              <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded text-xs transition-colors duration-300">
+                <p className="text-gray-700 dark:text-gray-300">
+                  <strong>📦 Info:</strong> {t(
+                    'Pengiriman disesuaikan dengan ketahanan tanaman',
+                    'Delivery adjusted to plant durability'
+                  )}
+                </p>
+              </div>
             </div>
           </div>
         </div>
