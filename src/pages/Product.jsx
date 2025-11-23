@@ -211,8 +211,6 @@ const Product = () => {
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-2xl font-bold text-green-600 dark:text-green-500">Green House</h1>
             <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-              <span>{products.length} produk</span>
-              <span>{categories.length} kategori</span>
             </div>
           </div>
 
@@ -333,21 +331,6 @@ const Product = () => {
                       {category.name_kategori || category.nama_kategori || category.title || category.name}
                     </option>
                   ))}
-                </select>
-              </div>
-
-              {/* Durability */}
-              <div className="mb-6">
-                <h4 className="font-medium text-gray-700 mb-3">Tingkat Perawatan</h4>
-                <select
-                  value={filters.durability}
-                  onChange={(e) => handleFilterChange('durability', e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
-                >
-                  <option value="">Semua Tingkat</option>
-                  <option value="easy">Mudah</option>
-                  <option value="medium">Sedang</option>
-                  <option value="hard">Sulit</option>
                 </select>
               </div>
             </div>

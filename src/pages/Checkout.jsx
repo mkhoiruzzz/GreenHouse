@@ -49,28 +49,31 @@ const Checkout = () => {
     });
   }, []);
 
-  // Cek parameter callback dari Tripay
+  // ✅ FIXED: Cek parameter callback dari Tripay DAN clear cart
   useEffect(() => {
     try {
       const reference = searchParams.get('reference');
       const status = searchParams.get('status');
 
       if (reference) {
-        console.log('📄 Tripay callback detected:', { reference, status });
+        console.log('🔄 Tripay callback detected:', { reference, status });
         setTripayReference(reference);
         checkPaymentStatus(reference);
 
         if (status === 'success') {
           setPaymentStatus('success');
           setCurrentStep(4);
+          // ✅ PENTING: Clear cart setelah payment success dari callback
+          console.log('✅ Clearing cart after successful payment callback');
+          clearCart();
         }
       }
     } catch (error) {
       console.error('❌ Error in callback effect:', error);
     }
-  }, [searchParams]);
+  }, [searchParams, clearCart]);
 
-  // Fungsi cek status pembayaran
+  // ✅ FIXED: Fungsi cek status pembayaran dengan clear cart
   const checkPaymentStatus = async (reference) => {
     try {
       console.log('🔍 Checking payment status for:', reference);
@@ -94,6 +97,11 @@ const Checkout = () => {
           setOrderId(order.id);
           setCurrentStep(4);
           await updateProductStockAfterPayment(order.id);
+          
+          // ✅ PENTING: Clear cart setelah payment berhasil
+          console.log('✅ Clearing cart after payment verification');
+          clearCart();
+          
           toast.success(t('Pembayaran berhasil!', 'Payment successful!'));
         }
       }
@@ -106,7 +114,7 @@ const Checkout = () => {
   useEffect(() => {
     const loadPaymentChannels = async () => {
       try {
-        console.log('📄 Loading payment channels...');
+        console.log('🔄 Loading payment channels...');
         const response = await tripayService.getPaymentChannels();
 
         if (response.success && response.data) {
@@ -125,7 +133,7 @@ const Checkout = () => {
   // Auto-fill form dari user profile
   useEffect(() => {
     if (user) {
-      console.log('📄 Auto-filling form from user');
+      console.log('🔄 Auto-filling form from user');
 
       setFormData(prev => ({
         ...prev,
@@ -177,7 +185,7 @@ const Checkout = () => {
     try {
       setLoading(true);
       setIsSubmitting(true);
-      console.log('📄 Starting order placement...');
+      console.log('🔄 Starting order placement...');
 
       if (!user) {
         console.error('❌ No user found');
@@ -311,7 +319,7 @@ const Checkout = () => {
 
       const tripayPayment = await tripayService.createTransaction(transactionData);
 
-      console.log('📥 Tripay response:', tripayPayment);
+      console.log('🔥 Tripay response:', tripayPayment);
 
       if (!tripayPayment || !tripayPayment.success) {
         console.error('❌ Payment creation failed:', tripayPayment);
@@ -338,16 +346,20 @@ const Checkout = () => {
 
       console.log('🎉 Order placement completed successfully!');
 
-      // Redirect or show success
+      // ✅ PENTING: Clear cart SEBELUM redirect (untuk mock payment)
       if (tripayPayment.data.checkout_url && tripayPayment.data.checkout_url !== '#') {
         console.log('🚀 Redirecting to payment page:', tripayPayment.data.checkout_url);
+        // Clear cart sebelum redirect ke Tripay
+        clearCart();
         window.location.href = tripayPayment.data.checkout_url;
       } else {
+        // Mock payment - langsung success
         console.log('✅ Mock payment - showing success page');
         setOrderId(order.id);
         setTripayReference(tripayPayment.data.reference);
         setPaymentStatus('success');
         setCurrentStep(4);
+        // Clear cart untuk mock payment
         clearCart();
         toast.success(t('Pembayaran berhasil!', 'Payment successful!'));
       }
