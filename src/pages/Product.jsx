@@ -5,6 +5,7 @@ import ProductCard from '../components/ProductCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { toast } from 'react-toastify';
 import { useCart } from '../context/CartContext';
+import { useTheme } from '../context/ThemeContext';
 
 const Product = () => {
   const [products, setProducts] = useState([]);
@@ -203,13 +204,13 @@ const Product = () => {
   };
 
   return (
-    <div className="min-h-screen mt-16 bg-gray-50">
+     <div className="min-h-screen mt-16 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
       {/* Tokopedia Style Header */}
-      <div className="bg-white border-b border-gray-200 py-4">
+     <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-4 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold text-green-600">Green House</h1>
-            <div className="flex items-center gap-4 text-sm text-gray-600">
+            <h1 className="text-2xl font-bold text-green-600 dark:text-green-500">Green House</h1>
+            <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
               <span>{products.length} produk</span>
               <span>{categories.length} kategori</span>
             </div>
@@ -217,13 +218,13 @@ const Product = () => {
 
           {/* Search Bar - Tokopedia Style */}
           <div className="relative mb-4">
-            <input
-              type="text"
-              placeholder="Cari produk di Green House..."
-              value={filters.search}
-              onChange={(e) => handleFilterChange('search', e.target.value)}
-              className="w-full p-4 pl-12 border border-green-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
-            />
+           <input
+            type="text"
+            placeholder="Cari produk di Green House..."
+            value={filters.search}
+            onChange={(e) => handleFilterChange('search', e.target.value)}
+            className="w-full p-4 pl-12 border border-green-500 dark:border-green-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-colors duration-300"
+                      />
             <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -235,12 +236,12 @@ const Product = () => {
           <div className="flex gap-4 overflow-x-auto pb-2">
             <button
               onClick={() => handleFilterChange('productType', 'all')}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap ${
-                filters.productType === 'all' 
-                  ? 'bg-green-600 text-white' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
+              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors duration-300 ${
+              filters.productType === 'all' 
+                ? 'bg-green-600 dark:bg-green-700 text-white' 
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+                        >
               Semua
             </button>
             <button
@@ -281,13 +282,13 @@ const Product = () => {
         <div className="flex gap-6">
           {/* Sidebar Filter - Tokopedia Style */}
           <div className="hidden lg:block w-64 flex-shrink-0">
-            <div className="bg-white rounded-lg border border-gray-200 p-4 sticky top-24">
+  <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 sticky top-24 transition-colors duration-300">
               {/* Filter Header */}
               <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-200">
-                <h3 className="font-semibold text-gray-800">Filter</h3>
-                <button
-                  onClick={clearFilters}
-                  className="text-green-600 text-sm font-medium hover:text-green-700"
+               <h3 className="font-semibold text-gray-800 dark:text-white">Filter</h3>
+<button
+  onClick={clearFilters}
+  className="text-green-600 dark:text-green-400 text-sm font-medium hover:text-green-700 dark:hover:text-green-300 transition-colors duration-300"
                 >
                   Reset
                 </button>
