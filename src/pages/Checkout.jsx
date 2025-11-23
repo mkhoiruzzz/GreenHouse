@@ -34,8 +34,8 @@ const Checkout = () => {
     alamat_pengiriman: '',
     kode_pos: '',
     no_telepon: '',
-    metode_pengiriman: '',
-    biaya_pengiriman: 15000,
+    metode_pengiriman: '', // Empty string - belum dipilih
+    biaya_pengiriman: 0, // ✅ FIXED: Default 0, akan diisi setelah pilih di step 2
     metode_pembayaran: 'tripay',
     kode_kupon: ''
   });
@@ -51,26 +51,34 @@ const Checkout = () => {
 
   // ✅ FIXED: Cek parameter callback dari Tripay DAN clear cart
   useEffect(() => {
-    try {
-      const reference = searchParams.get('reference');
-      const status = searchParams.get('status');
+    const handleCallback = async () => {
+      try {
+        const reference = searchParams.get('reference');
+        const status = searchParams.get('status');
+        const tripayRef = searchParams.get('tripay_reference');
 
-      if (reference) {
-        console.log('🔄 Tripay callback detected:', { reference, status });
-        setTripayReference(reference);
-        checkPaymentStatus(reference);
+        if (reference || tripayRef) {
+          const finalReference = reference || tripayRef;
+          console.log('🔄 Tripay callback detected:', { reference: finalReference, status });
+          setTripayReference(finalReference);
+          
+          // Tunggu checkPaymentStatus selesai
+          await checkPaymentStatus(finalReference);
 
-        if (status === 'success') {
-          setPaymentStatus('success');
-          setCurrentStep(4);
-          // ✅ PENTING: Clear cart setelah payment success dari callback
-          console.log('✅ Clearing cart after successful payment callback');
-          clearCart();
+          if (status === 'success') {
+            setPaymentStatus('success');
+            setCurrentStep(4);
+            // ✅ PENTING: Clear cart setelah payment success dari callback
+            console.log('✅ Clearing cart after successful payment callback');
+            clearCart();
+          }
         }
+      } catch (error) {
+        console.error('❌ Error in callback effect:', error);
       }
-    } catch (error) {
-      console.error('❌ Error in callback effect:', error);
-    }
+    };
+
+    handleCallback();
   }, [searchParams, clearCart]);
 
   // ✅ FIXED: Fungsi cek status pembayaran dengan clear cart
@@ -385,6 +393,7 @@ const Checkout = () => {
   const handleNextStep = () => {
     console.log('➡️ Moving to next step. Current:', currentStep);
 
+    // Validasi Step 1
     if (currentStep === 1) {
       if (!formData.nama_lengkap || !formData.alamat_pengiriman || !formData.no_telepon) {
         toast.error(t('Harap lengkapi informasi pembeli', 'Please complete buyer information'));
@@ -392,11 +401,19 @@ const Checkout = () => {
       }
     }
 
-    if (currentStep === 2 && !formData.metode_pengiriman) {
-      toast.error(t('Pilih metode pengiriman', 'Select a shipping method'));
-      return;
+    // ✅ FIXED: Validasi Step 2 - harus pilih metode pengiriman
+    if (currentStep === 2) {
+      if (!formData.metode_pengiriman) {
+        toast.error(t('Pilih metode pengiriman', 'Select a shipping method'));
+        return;
+      }
+      if (formData.biaya_pengiriman <= 0) {
+        toast.error(t('Biaya pengiriman tidak valid', 'Invalid shipping cost'));
+        return;
+      }
     }
 
+    // Validasi Step 3
     if (currentStep === 3 && !selectedPaymentMethod) {
       toast.error(t('Pilih metode pembayaran', 'Select a payment method'));
       return;
@@ -421,7 +438,10 @@ const Checkout = () => {
   };
 
   const calculateTotal = () => {
-    return calculateSubtotal() + (formData.biaya_pengiriman || 0);
+    // ✅ FIXED: Hanya tambahkan ongkir jika sudah dipilih (> 0)
+    const subtotal = calculateSubtotal();
+    const shipping = formData.biaya_pengiriman > 0 ? formData.biaya_pengiriman : 0;
+    return subtotal + shipping;
   };
 
   // Empty cart check
@@ -558,41 +578,66 @@ const Checkout = () => {
             {/* STEP 2: Metode Pengiriman */}
             {currentStep === 2 && (
               <div className="bg-white dark:bg-gray-800 dark:border dark:border-gray-700 rounded-lg shadow p-6 transition-colors duration-300">
-                <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">{t('Metode Pengiriman','Shipping Method')}</h2>
+                <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">{t('Metode Pengiriman','Shipping Method')}</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  {t('Pilih metode pengiriman yang sesuai dengan kebutuhan Anda', 'Choose the shipping method that suits your needs')}
+                </p>
+                
                 <div className="space-y-3">
                   {[
-                    { value: 'jne', label: 'JNE Reguler', cost: 15000, estimate: '2-3 hari' },
-                    { value: 'jne_oke', label: 'JNE OKE', cost: 12000, estimate: '3-5 hari' },
-                    { value: 'tiki', label: 'TIKI Reguler', cost: 18000, estimate: '1-2 hari' },
-                    { value: 'pos', label: 'POS Indonesia', cost: 10000, estimate: '4-7 hari' }
+                    { value: 'jne', label: 'JNE Reguler', cost: 15000, estimate: '2-3 hari', icon: '📦' },
+                    { value: 'jne_oke', label: 'JNE OKE', cost: 12000, estimate: '3-5 hari', icon: '📮' },
+                    { value: 'tiki', label: 'TIKI Reguler', cost: 18000, estimate: '1-2 hari', icon: '🚚' },
+                    { value: 'pos', label: 'POS Indonesia', cost: 10000, estimate: '4-7 hari', icon: '📪' }
                   ].map((option) => (
                     <div 
                       key={option.value}
-                      className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer ${
+                      className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-all ${
                         formData.metode_pengiriman === option.value 
-                          ? 'border-green-500 bg-green-50 dark:bg-green-900/10' 
-                          : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800'
+                          ? 'border-green-500 bg-green-50 dark:bg-green-900/20 shadow-md' 
+                          : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-green-300 dark:hover:border-green-600'
                       }`}
                       onClick={() => {
                         handleInputChange('metode_pengiriman', option.value);
                         handleInputChange('biaya_pengiriman', option.cost);
+                        toast.success(t(`${option.label} dipilih - ${formatCurrency(option.cost)}`, `${option.label} selected - ${formatCurrency(option.cost)}`));
                       }}
                     >
-                      <div className="flex items-center">
+                      <div className="flex items-center gap-3">
                         <input
                           type="radio"
                           checked={formData.metode_pengiriman === option.value}
                           onChange={() => {}}
-                          className="mr-3"
+                          className="mr-2 w-4 h-4"
                         />
+                        <span className="text-2xl">{option.icon}</span>
                         <div>
-                          <p className="font-medium text-gray-900 dark:text-gray-200">{option.label}</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">{t('Estimasi','Estimate')}: {option.estimate}</p>
+                          <p className="font-semibold text-gray-900 dark:text-gray-200">{option.label}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {t('Estimasi','Estimate')}: <span className="font-medium">{option.estimate}</span>
+                          </p>
                         </div>
                       </div>
-                      <p className="font-semibold">{formatCurrency(option.cost)}</p>
+                      <div className="text-right">
+                        <p className="font-bold text-lg text-green-600 dark:text-green-400">{formatCurrency(option.cost)}</p>
+                      </div>
                     </div>
                   ))}
+                </div>
+                
+                {/* Info pengiriman */}
+                <div className="mt-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-blue-600 dark:text-blue-400 text-lg">ℹ️</span>
+                    <div>
+                      <p className="text-blue-900 dark:text-blue-200 font-semibold text-sm mb-1">
+                        {t('Pengiriman Tanaman','Plant Delivery')}
+                      </p>
+                      <p className="text-blue-700 dark:text-blue-300 text-xs">
+                        {t('Kami mengemas tanaman dengan aman untuk memastikan kondisi terbaik saat tiba di tangan Anda', 'We pack plants safely to ensure the best condition when they arrive')}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -636,7 +681,11 @@ const Checkout = () => {
               <div className="bg-white dark:bg-gray-800 dark:border dark:border-gray-700 rounded-lg shadow p-6 text-center transition-colors duration-300">
                 <div className="text-6xl mb-4">🎉</div>
                 <h2 className="text-2xl font-bold text-green-600 dark:text-green-400 mb-4">{t('Pembayaran Berhasil!','Payment Successful!')}</h2>
-                <p className="text-gray-600 dark:text-gray-300 mb-2">{t('Order ID','Order ID')}: <strong>#{orderId}</strong></p>
+                {orderId ? (
+                  <p className="text-gray-600 dark:text-gray-300 mb-2">{t('Order ID','Order ID')}: <strong>#{orderId}</strong></p>
+                ) : (
+                  <p className="text-gray-600 dark:text-gray-300 mb-2 text-sm italic">{t('Memuat Order ID...','Loading Order ID...')}</p>
+                )}
                 {tripayReference && (
                   <p className="text-gray-600 dark:text-gray-300 mb-4">{t('Reference','Reference')}: <strong>{tripayReference}</strong></p>
                 )}
@@ -662,6 +711,8 @@ const Checkout = () => {
           {currentStep < 4 && (
             <div className="bg-white dark:bg-gray-800 dark:border dark:border-gray-700 rounded-lg shadow p-6 h-fit transition-colors duration-300">
               <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">{t('Ringkasan Pesanan','Order Summary')}</h2>
+              
+              {/* Cart Items List */}
               <div className="space-y-3 mb-4">
                 {cartItems.map((item) => (
                   <div key={item.id} className="flex justify-between">
@@ -673,36 +724,60 @@ const Checkout = () => {
                   </div>
                 ))}
               </div>
+              
+              {/* Subtotal, Shipping, Total */}
               <div className="border-t pt-4 space-y-2 border-gray-200 dark:border-gray-700">
                 <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300">
                   <span>{t('Subtotal','Subtotal')}</span>
                   <span>{formatCurrency(calculateSubtotal())}</span>
                 </div>
-                <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300">
-                  <span>{t('Biaya Pengiriman','Shipping')}</span>
-                  <span>{formatCurrency(formData.biaya_pengiriman)}</span>
-                </div>
-                <div className="flex justify-between font-semibold text-gray-900 dark:text-gray-100">
-                  <span>{t('Total','Total')}</span>
-                  <span className="text-green-600 dark:text-green-400">{formatCurrency(calculateTotal())}</span>
+                
+              
+                
+                {/* Selected shipping method display */}
+                {currentStep >= 2 && formData.metode_pengiriman && (
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded p-2 text-xs">
+                    <p className="text-green-800 dark:text-green-300 font-medium">
+                      ✓ {formData.metode_pengiriman.toUpperCase().replace('_', ' ')}
+                    </p>
+                  </div>
+                )}
+                
+                <div className="flex justify-between font-bold text-base pt-2 border-t border-gray-200 dark:border-gray-700">
+                  <span className="text-gray-900 dark:text-gray-100">{t('Total','Total')}</span>
+                  <span className="text-green-600 dark:text-green-400 text-lg">{formatCurrency(calculateTotal())}</span>
                 </div>
               </div>
+              
+              {/* Action Buttons */}
               <div className="mt-6 space-y-3">
                 {currentStep > 1 && (
                   <button
                     onClick={handlePrevStep}
                     disabled={isSubmitting}
-                    className="w-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-4 py-3 rounded-lg hover:bg-gray-200"
+                    className="w-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-4 py-3 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
                   >
-                    {t('Kembali','Back')}
+                    ← {t('Kembali','Back')}
                   </button>
                 )}
                 <button
                   onClick={handleNextStep}
                   disabled={isSubmitting}
-                  className="w-full bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700"
+                  className="w-full bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? t('Memproses...','Processing...') : currentStep === 3 ? t('Buat Pesanan','Place Order') : t('Lanjutkan','Continue')}
+                  {isSubmitting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                      </svg>
+                      {t('Memproses...','Processing...')}
+                    </span>
+                  ) : currentStep === 3 ? (
+                    t('Buat Pesanan','Place Order') + ' 🛒'
+                  ) : (
+                    t('Lanjutkan','Continue') + ' →'
+                  )}
                 </button>
               </div>
             </div>

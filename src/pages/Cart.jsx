@@ -66,8 +66,8 @@ const Cart = () => {
   };
 
   const totalItems = cartItems ? cartItems.reduce((sum, item) => sum + (item.quantity || 0), 0) : 0;
-  const shippingCost = cartTotal > 0 ? 15000 : 0;
-  const total = cartTotal + shippingCost;
+  // ✅ FIXED: Hapus ongkir dari cart - ongkir ditentukan di checkout step 2
+  const total = cartTotal; // Tidak ada ongkir di cart
 
   if (!cartItems || cartItems.length === 0) {
     return (
@@ -199,15 +199,8 @@ const Cart = () => {
                     {formatCurrency(cartTotal)}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400 transition-colors duration-300">
-                    {t('Ongkir', 'Shipping')}
-                  </span>
-                  <span className="font-semibold text-gray-900 dark:text-white transition-colors duration-300">
-                    {formatCurrency(shippingCost)}
-                  </span>
-                </div>
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-2">
+                {/* ✅ REMOVED: Ongkir dari cart - akan ditentukan di checkout */}
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
                   <div className="flex justify-between font-bold">
                     <span className="text-gray-900 dark:text-white transition-colors duration-300">
                       Total
@@ -232,16 +225,6 @@ const Cart = () => {
               >
                 ➕ {t('Belanja Lagi', 'Continue Shopping')}
               </button>
-
-              {/* Info */}
-              <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded text-xs transition-colors duration-300">
-                <p className="text-gray-700 dark:text-gray-300">
-                  <strong>📦 Info:</strong> {t(
-                    'Pengiriman disesuaikan dengan ketahanan tanaman',
-                    'Delivery adjusted to plant durability'
-                  )}
-                </p>
-              </div>
             </div>
           </div>
         </div>
