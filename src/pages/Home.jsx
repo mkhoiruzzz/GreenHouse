@@ -25,7 +25,7 @@ const Home = () => {
       id: 1,
       name: t('Benih-Benih', 'Seeds'),
       image: 'https://ycwcbxbytdtmluzalofn.supabase.co/storage/v1/object/public/products/benih.png',
-      description: t('Benih tanaman berkualitas', 'Quality plant seeds'),
+      description: t('Benih tanaman', 'plant seeds'),
       link: '/products?category=benih',
       gradient: 'from-green-400 to-emerald-600',
       iconBg: 'bg-green-100 dark:bg-green-800/30',
@@ -35,7 +35,7 @@ const Home = () => {
       id: 2,
       name: t('Pupuk', 'Fertilizer'),
       image: 'https://ycwcbxbytdtmluzalofn.supabase.co/storage/v1/object/public/products/pupuk.png',
-      description: t('Pupuk organik & kimia', 'Organic & chemical fertilizer'),
+      description: t('Pupuk organik ', 'Organic fertilizers'),
       link: '/products?category=pupuk',
       gradient: 'from-amber-400 to-orange-600',
       iconBg: 'bg-amber-100 dark:bg-amber-800/30',
@@ -216,8 +216,8 @@ const Home = () => {
       </section>
 
       {/* Category Slider - Integrated */}
-     <section className="bg-white dark:bg-gray-800 transition-colors duration-300">
-  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-16">
+      <section className="py-6 md:py-16 bg-white dark:bg-gray-800 transition-colors duration-300">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-6 md:mb-8">
             <div>
