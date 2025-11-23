@@ -1,8 +1,8 @@
-// Checkout.jsx - FULL WORKING VERSION
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { formatCurrency } from '../utils/formatCurrency';
 import { toast } from 'react-toastify';
 import { supabase } from '../lib/supabase';
@@ -10,11 +10,12 @@ import { tripayService } from '../services/tripay';
 
 const Checkout = () => {
   console.log('🚀 Checkout component mounting...');
-  
+
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { cartItems, clearCart } = useCart();
   const { user } = useAuth();
+  const { t } = useTheme();
 
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
@@ -24,7 +25,7 @@ const Checkout = () => {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('pending');
   const [tripayReference, setTripayReference] = useState('');
-  
+
   const [formData, setFormData] = useState({
     email: '',
     subscribe_newsletter: false,
@@ -53,12 +54,12 @@ const Checkout = () => {
     try {
       const reference = searchParams.get('reference');
       const status = searchParams.get('status');
-      
+
       if (reference) {
         console.log('📄 Tripay callback detected:', { reference, status });
         setTripayReference(reference);
         checkPaymentStatus(reference);
-        
+
         if (status === 'success') {
           setPaymentStatus('success');
           setCurrentStep(4);
@@ -73,7 +74,7 @@ const Checkout = () => {
   const checkPaymentStatus = async (reference) => {
     try {
       console.log('🔍 Checking payment status for:', reference);
-      
+
       const { data: order, error } = await supabase
         .from('orders')
         .select('*')
@@ -87,13 +88,13 @@ const Checkout = () => {
 
       if (order) {
         console.log('📦 Order found:', order);
-        
+
         if (order.status_pembayaran === 'paid') {
           setPaymentStatus('success');
           setOrderId(order.id);
           setCurrentStep(4);
           await updateProductStockAfterPayment(order.id);
-          toast.success('Pembayaran berhasil!');
+          toast.success(t('Pembayaran berhasil!', 'Payment successful!'));
         }
       }
     } catch (error) {
@@ -107,14 +108,14 @@ const Checkout = () => {
       try {
         console.log('📄 Loading payment channels...');
         const response = await tripayService.getPaymentChannels();
-        
+
         if (response.success && response.data) {
           setPaymentChannels(response.data);
           console.log('✅ Payment channels loaded:', response.data.length);
         }
       } catch (error) {
         console.error('❌ Error loading payment channels:', error);
-        toast.error('Gagal memuat metode pembayaran');
+        toast.error(t('Gagal memuat metode pembayaran', 'Failed to load payment methods'));
       }
     };
 
@@ -125,7 +126,7 @@ const Checkout = () => {
   useEffect(() => {
     if (user) {
       console.log('📄 Auto-filling form from user');
-      
+
       setFormData(prev => ({
         ...prev,
         email: user.email || '',
@@ -180,14 +181,14 @@ const Checkout = () => {
 
       if (!user) {
         console.error('❌ No user found');
-        toast.error('Silakan login terlebih dahulu');
+        toast.error(t('Silakan login terlebih dahulu', 'Please login first'));
         navigate('/login');
         return;
       }
 
       if (!selectedPaymentMethod) {
         console.error('❌ No payment method selected');
-        toast.error('Pilih metode pembayaran');
+        toast.error(t('Pilih metode pembayaran', 'Choose a payment method'));
         return;
       }
 
@@ -259,8 +260,8 @@ const Checkout = () => {
 
       // Create payment
       const merchantRef = `ORDER-${order.id}-${Date.now()}`;
-      
-      // ✅ FIX: Include shipping fee in order items for Tripay validation
+
+      // Include shipping fee in order items for Tripay validation
       const tripayOrderItems = [
         // Product items
         ...cartItems.map(item => ({
@@ -275,7 +276,7 @@ const Checkout = () => {
           quantity: 1
         }
       ];
-      
+
       const transactionData = {
         method: selectedPaymentMethod,
         merchant_ref: merchantRef,
@@ -294,34 +295,34 @@ const Checkout = () => {
         amount: transactionData.amount,
         itemsCount: transactionData.order_items.length
       });
-      
-      // ✅ Validate: order_items total must equal amount
+
+      // Validate: order_items total must equal amount
       const itemsTotal = transactionData.order_items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       console.log('💰 Validation:', {
         itemsTotal: itemsTotal,
         amount: transactionData.amount,
         match: itemsTotal === transactionData.amount
       });
-      
+
       if (itemsTotal !== transactionData.amount) {
         console.error('❌ Amount mismatch!', { itemsTotal, amount: transactionData.amount });
         throw new Error(`Amount validation failed: items=${itemsTotal}, amount=${transactionData.amount}`);
       }
 
       const tripayPayment = await tripayService.createTransaction(transactionData);
-      
+
       console.log('📥 Tripay response:', tripayPayment);
 
       if (!tripayPayment || !tripayPayment.success) {
         console.error('❌ Payment creation failed:', tripayPayment);
-        throw new Error(tripayPayment?.message || 'Gagal membuat pembayaran');
+        throw new Error(tripayPayment?.message || t('Gagal membuat pembayaran', 'Failed to create payment'));
       }
 
       console.log('✅ Payment created successfully');
 
       // Update order with payment reference
       console.log('📝 Updating order with payment reference...');
-      
+
       const { error: updateError } = await supabase
         .from('orders')
         .update({
@@ -336,7 +337,7 @@ const Checkout = () => {
       }
 
       console.log('🎉 Order placement completed successfully!');
-      
+
       // Redirect or show success
       if (tripayPayment.data.checkout_url && tripayPayment.data.checkout_url !== '#') {
         console.log('🚀 Redirecting to payment page:', tripayPayment.data.checkout_url);
@@ -348,7 +349,7 @@ const Checkout = () => {
         setPaymentStatus('success');
         setCurrentStep(4);
         clearCart();
-        toast.success('Pembayaran berhasil!');
+        toast.success(t('Pembayaran berhasil!', 'Payment successful!'));
       }
 
     } catch (error) {
@@ -357,7 +358,7 @@ const Checkout = () => {
         stack: error.stack,
         error: error
       });
-      toast.error(error.message || 'Terjadi kesalahan saat membuat pesanan');
+      toast.error(error.message || t('Terjadi kesalahan saat membuat pesanan', 'An error occurred while creating the order'));
     } finally {
       console.log('🔄 Resetting loading states');
       setLoading(false);
@@ -371,21 +372,21 @@ const Checkout = () => {
 
   const handleNextStep = () => {
     console.log('➡️ Moving to next step. Current:', currentStep);
-    
+
     if (currentStep === 1) {
       if (!formData.nama_lengkap || !formData.alamat_pengiriman || !formData.no_telepon) {
-        toast.error('Harap lengkapi informasi pembeli');
+        toast.error(t('Harap lengkapi informasi pembeli', 'Please complete buyer information'));
         return;
       }
     }
-    
+
     if (currentStep === 2 && !formData.metode_pengiriman) {
-      toast.error('Pilih metode pengiriman');
+      toast.error(t('Pilih metode pengiriman', 'Select a shipping method'));
       return;
     }
-    
+
     if (currentStep === 3 && !selectedPaymentMethod) {
-      toast.error('Pilih metode pembayaran');
+      toast.error(t('Pilih metode pembayaran', 'Select a payment method'));
       return;
     }
 
@@ -414,15 +415,15 @@ const Checkout = () => {
   // Empty cart check
   if (!cartItems || cartItems.length === 0 && currentStep !== 4) {
     return (
-      <div className="min-h-screen mt-16 flex items-center justify-center">
+      <div className="min-h-screen mt-16 flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
         <div className="text-center">
           <div className="text-6xl mb-4">🛒</div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Keranjang Kosong</h2>
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">{t('Keranjang Kosong','Cart is empty')}</h2>
           <button
             onClick={() => navigate('/products')}
             className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700"
           >
-            Belanja Sekarang
+            {t('Belanja Sekarang','Shop Now')}
           </button>
         </div>
       </div>
@@ -430,41 +431,41 @@ const Checkout = () => {
   }
 
   return (
-    <div className="min-h-screen mt-16 bg-gray-50 py-6">
+    <div className="min-h-screen mt-16 bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
       <div className="max-w-4xl mx-auto px-4">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {currentStep === 4 ? 'Pembayaran Selesai' : 'Checkout'}
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            {currentStep === 4 ? t('Pembayaran Selesai','Payment Complete') : t('Pembayaran','Payment')}
           </h1>
-          <p className="text-gray-600">
+          <p className="text-gray-600 dark:text-gray-300">
             {currentStep === 4 
-              ? 'Terima kasih telah berbelanja' 
-              : 'Selesaikan pembelian dalam 3 langkah mudah'
+              ? t('Terima kasih telah berbelanja','Thank you for shopping with us')
+              : t('Selesaikan pembelian dalam 3 langkah mudah','Complete your purchase in 3 easy steps')
             }
           </p>
         </div>
 
         {/* Progress Steps */}
         {currentStep < 4 && (
-          <div className="bg-white rounded-lg shadow p-4 mb-6">
+          <div className="bg-white dark:bg-gray-800 dark:border dark:border-gray-700 rounded-lg shadow p-4 mb-6 transition-colors duration-300">
             <div className="flex items-center justify-between">
               {[1, 2, 3].map((step, index) => (
                 <div key={step} className="flex items-center">
                   <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
                     currentStep >= step 
                       ? 'bg-green-600 border-green-600 text-white' 
-                      : 'border-gray-300 text-gray-500'
+                      : 'border-gray-300 text-gray-500 dark:border-gray-600 dark:text-gray-400'
                   } font-semibold`}>
                     {step}
                   </div>
                   <span className={`ml-2 font-medium ${
-                    currentStep >= step ? 'text-green-600' : 'text-gray-500'
+                    currentStep >= step ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'
                   }`}>
-                    {step === 1 ? 'Info Pembeli' : step === 2 ? 'Pengiriman' : 'Pembayaran'}
+                    {step === 1 ? t('Info Pembeli','Buyer Info') : step === 2 ? t('Pengiriman','Shipping') : t('Pembayaran','Payment')}
                   </span>
                   {index < 2 && (
                     <div className={`w-16 h-0.5 mx-4 ${
-                      currentStep > step ? 'bg-green-600' : 'bg-gray-300'
+                      currentStep > step ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-700'
                     }`} />
                   )}
                 </div>
@@ -477,65 +478,65 @@ const Checkout = () => {
           <div className={currentStep === 4 ? 'lg:col-span-3' : 'lg:col-span-2'}>
             {/* STEP 1: Info Pembeli */}
             {currentStep === 1 && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold mb-4">Informasi Pembeli</h2>
+              <div className="bg-white dark:bg-gray-800 dark:border dark:border-gray-700 rounded-lg shadow p-6 transition-colors duration-300">
+                <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">{t('Informasi Pembeli','Buyer Information')}</h2>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Email</label>
+                    <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200">{t('Email','Email')}</label>
                     <input
                       type="email"
                       value={formData.email}
                       onChange={(e) => handleInputChange('email', e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 transition-colors"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Nama Lengkap</label>
+                    <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200">{t('Nama Lengkap','Full Name')}</label>
                     <input
                       type="text"
                       value={formData.nama_lengkap}
                       onChange={(e) => handleInputChange('nama_lengkap', e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 transition-colors"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">No. Telepon</label>
+                    <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200">{t('No. Telepon','Phone')}</label>
                     <input
                       type="tel"
                       value={formData.no_telepon}
                       onChange={(e) => handleInputChange('no_telepon', e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 transition-colors"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Kota</label>
+                    <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200">{t('Kota','City')}</label>
                     <input
                       type="text"
                       value={formData.kota}
                       onChange={(e) => handleInputChange('kota', e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 transition-colors"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Alamat Pengiriman</label>
+                    <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200">{t('Alamat Pengiriman','Shipping Address')}</label>
                     <textarea
                       value={formData.alamat_pengiriman}
                       onChange={(e) => handleInputChange('alamat_pengiriman', e.target.value)}
                       rows="3"
-                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 transition-colors"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Kode Pos</label>
+                    <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200">{t('Kode Pos','Postal Code')}</label>
                     <input
                       type="text"
                       value={formData.kode_pos}
                       onChange={(e) => handleInputChange('kode_pos', e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 transition-colors"
                     />
                   </div>
                 </div>
@@ -544,8 +545,8 @@ const Checkout = () => {
 
             {/* STEP 2: Metode Pengiriman */}
             {currentStep === 2 && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold mb-4">Metode Pengiriman</h2>
+              <div className="bg-white dark:bg-gray-800 dark:border dark:border-gray-700 rounded-lg shadow p-6 transition-colors duration-300">
+                <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">{t('Metode Pengiriman','Shipping Method')}</h2>
                 <div className="space-y-3">
                   {[
                     { value: 'jne', label: 'JNE Reguler', cost: 15000, estimate: '2-3 hari' },
@@ -557,8 +558,8 @@ const Checkout = () => {
                       key={option.value}
                       className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer ${
                         formData.metode_pengiriman === option.value 
-                          ? 'border-green-500 bg-green-50' 
-                          : 'border-gray-200'
+                          ? 'border-green-500 bg-green-50 dark:bg-green-900/10' 
+                          : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800'
                       }`}
                       onClick={() => {
                         handleInputChange('metode_pengiriman', option.value);
@@ -573,8 +574,8 @@ const Checkout = () => {
                           className="mr-3"
                         />
                         <div>
-                          <p className="font-medium">{option.label}</p>
-                          <p className="text-sm text-gray-500">Estimasi: {option.estimate}</p>
+                          <p className="font-medium text-gray-900 dark:text-gray-200">{option.label}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">{t('Estimasi','Estimate')}: {option.estimate}</p>
                         </div>
                       </div>
                       <p className="font-semibold">{formatCurrency(option.cost)}</p>
@@ -586,8 +587,8 @@ const Checkout = () => {
 
             {/* STEP 3: Metode Pembayaran */}
             {currentStep === 3 && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold mb-4">Metode Pembayaran</h2>
+              <div className="bg-white dark:bg-gray-800 dark:border dark:border-gray-700 rounded-lg shadow p-6 transition-colors duration-300">
+                <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">{t('Metode Pembayaran','Payment Method')}</h2>
                 {paymentChannels.length > 0 ? (
                   <PaymentMethodAccordion 
                     channels={paymentChannels}
@@ -597,20 +598,20 @@ const Checkout = () => {
                 ) : (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Memuat metode pembayaran...</p>
+                    <p className="text-gray-600 dark:text-gray-300">{t('Memuat metode pembayaran...','Loading payment methods...')}</p>
                   </div>
                 )}
-                
+
                 {/* Info Tripay */}
-                <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="mt-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
                   <div className="flex items-start">
                     <span className="text-blue-600 mr-2 text-lg">🔒</span>
                     <div>
-                      <p className="text-blue-900 font-semibold text-sm mb-1">
-                        Pembayaran Aman dengan Tripay
+                      <p className="text-blue-900 dark:text-blue-200 font-semibold text-sm mb-1">
+                        {t('Pembayaran Aman dengan Tripay','Secure Payments with Tripay')}
                       </p>
-                      <p className="text-blue-700 text-xs">
-                        Payment Gateway resmi dan terpercaya di Indonesia
+                      <p className="text-blue-700 dark:text-blue-100 text-xs">
+                        {t('Payment Gateway resmi dan terpercaya di Indonesia','Official and trusted payment gateway in Indonesia')}
                       </p>
                     </div>
                   </div>
@@ -620,25 +621,25 @@ const Checkout = () => {
 
             {/* STEP 4: Success */}
             {currentStep === 4 && paymentStatus === 'success' && (
-              <div className="bg-white rounded-lg shadow p-6 text-center">
+              <div className="bg-white dark:bg-gray-800 dark:border dark:border-gray-700 rounded-lg shadow p-6 text-center transition-colors duration-300">
                 <div className="text-6xl mb-4">🎉</div>
-                <h2 className="text-2xl font-bold text-green-600 mb-4">Pembayaran Berhasil!</h2>
-                <p className="text-gray-600 mb-2">Order ID: <strong>#{orderId}</strong></p>
+                <h2 className="text-2xl font-bold text-green-600 dark:text-green-400 mb-4">{t('Pembayaran Berhasil!','Payment Successful!')}</h2>
+                <p className="text-gray-600 dark:text-gray-300 mb-2">{t('Order ID','Order ID')}: <strong>#{orderId}</strong></p>
                 {tripayReference && (
-                  <p className="text-gray-600 mb-4">Reference: <strong>{tripayReference}</strong></p>
+                  <p className="text-gray-600 dark:text-gray-300 mb-4">{t('Reference','Reference')}: <strong>{tripayReference}</strong></p>
                 )}
-                <div className="flex gap-4 justify-center mt-6">
+                <div className="flex gap-4 justify-center mt-6 flex-wrap">
                   <button
                     onClick={() => navigate('/orders')}
                     className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700"
                   >
-                    Lihat Pesanan
+                    {t('Lihat Pesanan','View Orders')}
                   </button>
                   <button
                     onClick={() => navigate('/products')}
-                    className="border border-green-600 text-green-600 px-6 py-3 rounded-lg hover:bg-green-50"
+                    className="border border-green-600 text-green-600 px-6 py-3 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/10"
                   >
-                    Lanjut Belanja
+                    {t('Lanjut Belanja','Continue Shopping')}
                   </button>
                 </div>
               </div>
@@ -647,35 +648,31 @@ const Checkout = () => {
 
           {/* Order Summary - only show in steps 1-3 */}
           {currentStep < 4 && (
-            <div className="bg-white rounded-lg shadow p-6 h-fit">
-              <h2 className="text-xl font-semibold mb-4">Ringkasan Pesanan</h2>
+            <div className="bg-white dark:bg-gray-800 dark:border dark:border-gray-700 rounded-lg shadow p-6 h-fit transition-colors duration-300">
+              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">{t('Ringkasan Pesanan','Order Summary')}</h2>
               <div className="space-y-3 mb-4">
                 {cartItems.map((item) => (
                   <div key={item.id} className="flex justify-between">
                     <div className="flex-1">
-                      <p className="font-medium text-sm">{item.nama_produk}</p>
-                      <p className="text-xs text-gray-500">
-                        {formatCurrency(item.harga)} × {item.quantity}
-                      </p>
+                      <p className="font-medium text-sm text-gray-900 dark:text-gray-100">{item.nama_produk}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{formatCurrency(item.harga)} × {item.quantity}</p>
                     </div>
-                    <p className="font-semibold text-sm">
-                      {formatCurrency(item.harga * item.quantity)}
-                    </p>
+                    <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">{formatCurrency(item.harga * item.quantity)}</p>
                   </div>
                 ))}
               </div>
-              <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Subtotal</span>
+              <div className="border-t pt-4 space-y-2 border-gray-200 dark:border-gray-700">
+                <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300">
+                  <span>{t('Subtotal','Subtotal')}</span>
                   <span>{formatCurrency(calculateSubtotal())}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>Biaya Pengiriman</span>
+                <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300">
+                  <span>{t('Biaya Pengiriman','Shipping')}</span>
                   <span>{formatCurrency(formData.biaya_pengiriman)}</span>
                 </div>
-                <div className="flex justify-between font-semibold">
-                  <span>Total</span>
-                  <span className="text-green-600">{formatCurrency(calculateTotal())}</span>
+                <div className="flex justify-between font-semibold text-gray-900 dark:text-gray-100">
+                  <span>{t('Total','Total')}</span>
+                  <span className="text-green-600 dark:text-green-400">{formatCurrency(calculateTotal())}</span>
                 </div>
               </div>
               <div className="mt-6 space-y-3">
@@ -683,9 +680,9 @@ const Checkout = () => {
                   <button
                     onClick={handlePrevStep}
                     disabled={isSubmitting}
-                    className="w-full bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200"
+                    className="w-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-4 py-3 rounded-lg hover:bg-gray-200"
                   >
-                    Kembali
+                    {t('Kembali','Back')}
                   </button>
                 )}
                 <button
@@ -693,7 +690,7 @@ const Checkout = () => {
                   disabled={isSubmitting}
                   className="w-full bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700"
                 >
-                  {isSubmitting ? 'Memproses...' : currentStep === 3 ? 'Buat Pesanan' : 'Lanjutkan'}
+                  {isSubmitting ? t('Memproses...','Processing...') : currentStep === 3 ? t('Buat Pesanan','Place Order') : t('Lanjutkan','Continue')}
                 </button>
               </div>
             </div>
@@ -704,7 +701,7 @@ const Checkout = () => {
   );
 };
 
-// ✅ Payment Method Accordion Component
+// Payment Method Accordion Component
 const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod }) => {
   const [openCategories, setOpenCategories] = React.useState({
     'Virtual Account': true,
@@ -743,13 +740,13 @@ const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod }) =>
 
   const getCategoryColor = (category) => {
     const colors = {
-      'Virtual Account': 'bg-blue-50 border-blue-200',
-      'E-Wallet': 'bg-purple-50 border-purple-200',
-      'Convenience Store': 'bg-orange-50 border-orange-200',
-      'QR Code': 'bg-green-50 border-green-200',
-      'Lainnya': 'bg-gray-50 border-gray-200'
+      'Virtual Account': 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800',
+      'E-Wallet': 'bg-purple-50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800',
+      'Convenience Store': 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800',
+      'QR Code': 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800',
+      'Lainnya': 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
     };
-    return colors[category] || 'bg-gray-50 border-gray-200';
+    return colors[category] || 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700';
   };
 
   return (
@@ -757,8 +754,7 @@ const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod }) =>
       {Object.entries(groupedChannels).map(([category, categoryChannels]) => (
         <div 
           key={category} 
-          className={`border rounded-lg overflow-hidden ${getCategoryColor(category)}`}
-        >
+          className={`border rounded-lg overflow-hidden ${getCategoryColor(category)}`}>
           {/* Category Header - Clickable */}
           <button
             type="button"
@@ -768,10 +764,8 @@ const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod }) =>
             <div className="flex items-center gap-3">
               <span className="text-2xl">{getCategoryIcon(category)}</span>
               <div className="text-left">
-                <h3 className="font-semibold text-gray-900">{category}</h3>
-                <p className="text-xs text-gray-600">
-                  {categoryChannels.length} metode tersedia
-                </p>
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100">{category}</h3>
+                <p className="text-xs text-gray-600 dark:text-gray-400">{categoryChannels.length} metode tersedia</p>
               </div>
             </div>
             <svg
@@ -792,10 +786,10 @@ const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod }) =>
               {categoryChannels.map((channel) => (
                 <div
                   key={channel.code}
-                  className={`flex items-center justify-between p-3 bg-white border-2 rounded-lg cursor-pointer transition-all ${
+                  className={`flex items-center justify-between p-3 bg-white dark:bg-gray-800 border-2 rounded-lg cursor-pointer transition-all ${
                     selectedMethod === channel.code
                       ? 'border-green-500 shadow-md'
-                      : 'border-gray-200 hover:border-green-300'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-green-300'
                   }`}
                   onClick={() => onSelectMethod(channel.code)}
                 >
@@ -806,9 +800,9 @@ const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod }) =>
                       onChange={() => {}}
                       className="w-4 h-4 text-green-600"
                     />
-                    
+
                     {/* Payment Icon */}
-                    <div className="w-12 h-12 flex items-center justify-center bg-white rounded border border-gray-200 flex-shrink-0">
+                    <div className="w-12 h-12 flex items-center justify-center bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 flex-shrink-0">
                       {channel.icon_url ? (
                         <img
                           src={channel.icon_url}
@@ -827,29 +821,21 @@ const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod }) =>
 
                     {/* Payment Info */}
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 text-sm truncate">
-                        {channel.name}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {channel.group}
-                      </p>
+                      <p className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate">{channel.name}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{channel.group}</p>
                     </div>
                   </div>
 
                   {/* Fee Display */}
-                  <div className="text-right ml-3 flex-shrink-0">
+                  <div className="text-right ml-3 flex-shrink-0 text-sm">
                     {channel.total_fee?.flat > 0 && (
-                      <p className="text-xs font-semibold text-green-600">
-                        +{formatCurrency(channel.total_fee.flat)}
-                      </p>
+                      <p className="text-xs font-semibold text-green-600">+{formatCurrency(channel.total_fee.flat)}</p>
                     )}
                     {channel.total_fee?.percent > 0 && (
-                      <p className="text-xs font-semibold text-green-600">
-                        +{channel.total_fee.percent}%
-                      </p>
+                      <p className="text-xs font-semibold text-green-600">+{channel.total_fee.percent}%</p>
                     )}
                     {!channel.total_fee?.flat && !channel.total_fee?.percent && (
-                      <p className="text-xs text-gray-400">Gratis</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">{/* Gratis */}</p>
                     )}
                   </div>
                 </div>

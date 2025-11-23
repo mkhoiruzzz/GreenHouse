@@ -257,7 +257,7 @@ const Navbar = () => {
                     className="flex items-center w-full text-left py-3 px-4 hover:text-yellow-300 hover:bg-green-700 dark:hover:bg-green-800 rounded-lg transition duration-200"
                   >
                     <span className="mr-3 text-xl">🚪</span>
-                    <span className="text-lg">Logout</span>
+                    <span className="text-lg">{t('Keluar' ,'Logout')}</span>
                   </button>
                 </>
               )}
