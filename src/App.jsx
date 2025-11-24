@@ -22,6 +22,7 @@ import Accesories from './pages/Accesories'
 import AdminDashboard from './components/AdminDashboard'
 import ErrorBoundary from './components/ErrorBoundary'
 import { ThemeProvider } from './context/ThemeContext'
+import ProductForm from './components/ProductForm'
 
 function App() {
   return (
@@ -51,6 +52,7 @@ function App() {
                       <Route path="/accesories" element={<Accesories />} />
                       <Route path="/images/*" element={null} />
                       <Route path="/admin" element={<AdminDashboard />} />
+                      <Route path="/admin/add-product" element={<ProductForm />} />
                     </Routes>
                   </ErrorBoundary>
                 </main>
