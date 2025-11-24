@@ -13,20 +13,14 @@ const Cart = () => {
   const navigate = useNavigate();
   const [imageErrors, setImageErrors] = useState({});
 
-// Di Cart.jsx - tambahkan debug
-useEffect(() => {
-  console.log('🛒 Cart Debug - Prices:', {
-    items: cartItems?.map(item => ({
-      name: item.nama_produk,
-      price: item.harga,
-      type: typeof item.harga,
-      quantity: item.quantity,
-      subtotal: item.harga * item.quantity
-    })),
-    cartTotal: cartTotal,
-    cartTotalType: typeof cartTotal
-  });
-}, [cartItems, cartTotal]);
+  // AUTO SCROLL TO TOP WHEN CART ITEMS CHANGE
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  }, [cartItems]);
+
   const handleImageError = (itemId) => {
     setImageErrors(prev => ({ ...prev, [itemId]: true }));
   };
