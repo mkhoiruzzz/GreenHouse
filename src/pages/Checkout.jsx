@@ -23,9 +23,17 @@ const Checkout = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentChannels, setPaymentChannels] = useState([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
-  const [paymentFee, setPaymentFee] = useState(0); // ✅ NEW: Track payment fee
+  const [paymentFee, setPaymentFee] = useState(0);
   const [paymentStatus, setPaymentStatus] = useState('pending');
   const [tripayReference, setTripayReference] = useState('');
+  
+  // ✅ NEW: State untuk menyimpan total yang sudah dibayar
+  const [paidAmounts, setPaidAmounts] = useState({
+    subtotal: 0,
+    shipping: 0,
+    admin: 0,
+    total: 0
+  });
 
   const [formData, setFormData] = useState({
     email: '',
@@ -35,8 +43,8 @@ const Checkout = () => {
     alamat_pengiriman: '',
     kode_pos: '',
     no_telepon: '',
-    metode_pengiriman: '', // Empty string - belum dipilih
-    biaya_pengiriman: 0, // ✅ FIXED: Default 0, akan diisi setelah pilih di step 2
+    metode_pengiriman: '',
+    biaya_pengiriman: 0,
     metode_pembayaran: 'tripay',
     kode_kupon: ''
   });
@@ -50,7 +58,7 @@ const Checkout = () => {
     });
   }, []);
 
-  // ✅ FIXED: Cek parameter callback dari Tripay DAN clear cart
+  // ✅ FIXED: Cek parameter callback dari Tripay - DIPERBAIKI
   useEffect(() => {
     const handleCallback = async () => {
       try {
@@ -63,16 +71,11 @@ const Checkout = () => {
           console.log('🔄 Tripay callback detected:', { reference: finalReference, status });
           setTripayReference(finalReference);
           
-          // Tunggu checkPaymentStatus selesai
+          // Tunggu beberapa detik untuk memastikan database sudah update
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Cek status pembayaran
           await checkPaymentStatus(finalReference);
-
-          if (status === 'success') {
-            setPaymentStatus('success');
-            setCurrentStep(4);
-            // ✅ PENTING: Clear cart setelah payment success dari callback
-            console.log('✅ Clearing cart after successful payment callback');
-            clearCart();
-          }
         }
       } catch (error) {
         console.error('❌ Error in callback effect:', error);
@@ -80,9 +83,9 @@ const Checkout = () => {
     };
 
     handleCallback();
-  }, [searchParams, clearCart]);
+  }, [searchParams]);
 
-  // ✅ FIXED: Fungsi cek status pembayaran dengan clear cart
+  // ✅ FIXED: Fungsi cek status pembayaran - DIPERBAIKI
   const checkPaymentStatus = async (reference) => {
     try {
       console.log('🔍 Checking payment status for:', reference);
@@ -99,20 +102,46 @@ const Checkout = () => {
       }
 
       if (order) {
-        console.log('📦 Order found:', order);
+        console.log('📦 Order found:', {
+          id: order.id,
+          status: order.status_pembayaran,
+          total: order.total_harga,
+          shipping: order.biaya_pengiriman,
+          admin: order.biaya_admin
+        });
 
-        if (order.status_pembayaran === 'paid') {
+        if (order.status_pengiriman === 'paid') {
           setPaymentStatus('success');
           setOrderId(order.id);
+          
+          // ✅ PERBAIKAN: Update formData dengan nilai dari database
+          setFormData(prev => ({
+            ...prev,
+            biaya_pengiriman: order.biaya_pengiriman || 0
+          }));
+          
+          // ✅ PERBAIKAN: Set payment fee dari database
+          setPaymentFee(order.biaya_admin || 0);
+          
+          // ✅ NEW: Simpan jumlah yang sudah dibayar sebelum clear cart
+          setPaidAmounts({
+            subtotal: order.total_harga || calculateSubtotal(),
+            shipping: order.biaya_pengiriman || 0,
+            admin: order.biaya_admin || 0,
+            total: (order.total_harga || 0) + (order.biaya_pengiriman || 0) + (order.biaya_admin || 0)
+          });
+          
           setCurrentStep(4);
           await updateProductStockAfterPayment(order.id);
           
-          // ✅ PENTING: Clear cart setelah payment berhasil
+          // ✅ PERBAIKAN: Clear cart hanya setelah semua data tersimpan
           console.log('✅ Clearing cart after payment verification');
           clearCart();
           
           toast.success(t('Pembayaran berhasil!', 'Payment successful!'));
         }
+      } else {
+        console.log('❌ No order found for reference:', reference);
       }
     } catch (error) {
       console.error('❌ Error checking payment status:', error);
@@ -188,6 +217,56 @@ const Checkout = () => {
     } catch (error) {
       console.error('❌ Error updating stock:', error);
     }
+  };
+
+  // ✅ TAMBAHKAN: Fungsi handleNextStep yang hilang
+  const handleNextStep = () => {
+    console.log('➡️ Moving to next step. Current:', currentStep);
+
+    // Validasi Step 1
+    if (currentStep === 1) {
+      if (!formData.nama_lengkap || !formData.alamat_pengiriman || !formData.no_telepon) {
+        toast.error(t('Harap lengkapi informasi pembeli', 'Please complete buyer information'));
+        return;
+      }
+    }
+
+    // ✅ FIXED: Validasi Step 2 - harus pilih metode pengiriman
+    if (currentStep === 2) {
+      if (!formData.metode_pengiriman) {
+        toast.error(t('Pilih metode pengiriman', 'Select a shipping method'));
+        return;
+      }
+      if (formData.biaya_pengiriman <= 0) {
+        toast.error(t('Biaya pengiriman tidak valid', 'Invalid shipping cost'));
+        return;
+      }
+    }
+
+    // Validasi Step 3
+    if (currentStep === 3 && !selectedPaymentMethod) {
+      toast.error(t('Pilih metode pembayaran', 'Select a payment method'));
+      return;
+    }
+
+    if (currentStep < 3) {
+      setCurrentStep(currentStep + 1);
+    } else {
+      handlePlaceOrder();
+    }
+  };
+
+  // ✅ TAMBAHKAN: Fungsi handlePrevStep yang hilang
+  const handlePrevStep = () => {
+    if (currentStep > 1 && currentStep < 4) {
+      console.log('⬅️ Moving to previous step');
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  // ✅ TAMBAHKAN: Fungsi handleInputChange yang hilang
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handlePlaceOrder = async () => {
@@ -398,51 +477,20 @@ const Checkout = () => {
     }
   };
 
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  // ✅ NEW: Fungsi untuk mendapatkan subtotal yang aman (tidak 0 setelah clear cart)
+  const getSafeSubtotal = () => {
+    if (currentStep === 4 && paymentStatus === 'success') {
+      return paidAmounts.subtotal;
+    }
+    return calculateSubtotal();
   };
 
-  const handleNextStep = () => {
-    console.log('➡️ Moving to next step. Current:', currentStep);
-
-    // Validasi Step 1
-    if (currentStep === 1) {
-      if (!formData.nama_lengkap || !formData.alamat_pengiriman || !formData.no_telepon) {
-        toast.error(t('Harap lengkapi informasi pembeli', 'Please complete buyer information'));
-        return;
-      }
+  // ✅ NEW: Fungsi untuk mendapatkan total yang aman
+  const getSafeTotal = () => {
+    if (currentStep === 4 && paymentStatus === 'success') {
+      return paidAmounts.total;
     }
-
-    // ✅ FIXED: Validasi Step 2 - harus pilih metode pengiriman
-    if (currentStep === 2) {
-      if (!formData.metode_pengiriman) {
-        toast.error(t('Pilih metode pengiriman', 'Select a shipping method'));
-        return;
-      }
-      if (formData.biaya_pengiriman <= 0) {
-        toast.error(t('Biaya pengiriman tidak valid', 'Invalid shipping cost'));
-        return;
-      }
-    }
-
-    // Validasi Step 3
-    if (currentStep === 3 && !selectedPaymentMethod) {
-      toast.error(t('Pilih metode pembayaran', 'Select a payment method'));
-      return;
-    }
-
-    if (currentStep < 3) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      handlePlaceOrder();
-    }
-  };
-
-  const handlePrevStep = () => {
-    if (currentStep > 1 && currentStep < 4) {
-      console.log('⬅️ Moving to previous step');
-      setCurrentStep(currentStep - 1);
-    }
+    return calculateTotal();
   };
 
   const calculateSubtotal = () => {
@@ -450,7 +498,6 @@ const Checkout = () => {
   };
 
   const calculateTotal = () => {
-    // ✅ FIXED: Tambahkan subtotal + ongkir + payment fee
     const subtotal = calculateSubtotal();
     const shipping = formData.biaya_pengiriman > 0 ? formData.biaya_pengiriman : 0;
     const fee = paymentFee > 0 ? paymentFee : 0;
@@ -474,7 +521,7 @@ const Checkout = () => {
       </div>
     );
   }
-
+  
   return (
     <div className="min-h-screen mt-16 bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
       <div className="max-w-4xl mx-auto px-4">
