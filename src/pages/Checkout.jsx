@@ -23,17 +23,9 @@ const Checkout = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentChannels, setPaymentChannels] = useState([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
-  const [paymentFee, setPaymentFee] = useState(0);
+  const [paymentFee, setPaymentFee] = useState(0); // ✅ NEW: Track payment fee
   const [paymentStatus, setPaymentStatus] = useState('pending');
   const [tripayReference, setTripayReference] = useState('');
-  
-  // ✅ NEW: State untuk menyimpan total yang sudah dibayar
-  const [paidAmounts, setPaidAmounts] = useState({
-    subtotal: 0,
-    shipping: 0,
-    admin: 0,
-    total: 0
-  });
 
   const [formData, setFormData] = useState({
     email: '',
@@ -43,8 +35,8 @@ const Checkout = () => {
     alamat_pengiriman: '',
     kode_pos: '',
     no_telepon: '',
-    metode_pengiriman: '',
-    biaya_pengiriman: 0,
+    metode_pengiriman: '', // Empty string - belum dipilih
+    biaya_pengiriman: 0, // ✅ FIXED: Default 0, akan diisi setelah pilih di step 2
     metode_pembayaran: 'tripay',
     kode_kupon: ''
   });
@@ -58,197 +50,74 @@ const Checkout = () => {
     });
   }, []);
 
- // ✅ FIXED: Cek parameter callback dari Tripay - DIPERBAIKI
-useEffect(() => {
-  const handleCallback = async () => {
-    try {
-      const reference = searchParams.get('reference');
-      const status = searchParams.get('status');
-      const tripayRef = searchParams.get('tripay_reference');
+  // ✅ FIXED: Cek parameter callback dari Tripay DAN clear cart
+  useEffect(() => {
+    const handleCallback = async () => {
+      try {
+        const reference = searchParams.get('reference');
+        const status = searchParams.get('status');
+        const tripayRef = searchParams.get('tripay_reference');
 
-      console.log('🔄 Callback parameters:', { reference, status, tripayRef });
-
-      // Handle berbagai skenario callback
-      if (reference || tripayRef) {
-        const finalReference = reference || tripayRef;
-        console.log('🔄 Tripay callback detected:', { reference: finalReference, status });
-        setTripayReference(finalReference);
-        
-        // Tunggu beberapa detik untuk memastikan database sudah update
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        // Cek status pembayaran
-        await checkPaymentStatus(finalReference);
-      }
-      
-      // ✅ NEW: Handle status parameter langsung
-      if (status === 'success') {
-        console.log('✅ Success status detected in URL');
-        // Coba cari order yang belum diproses
-        await checkRecentOrders();
-      }
-      
-    } catch (error) {
-      console.error('❌ Error in callback effect:', error);
-    }
-  };
-
-  handleCallback();
-}, [searchParams]);
-
-// ✅ NEW: Fungsi untuk cek order terbaru
-const checkRecentOrders = async () => {
-  try {
-    console.log('🔍 Checking recent orders for user:', user?.id);
-    
-    if (!user) return;
-
-    // Cari order terbaru user ini yang statusnya unpaid
-    const { data: recentOrders, error } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('status_pembayaran', 'unpaid')
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (error) {
-      console.error('❌ Error fetching recent orders:', error);
-      return;
-    }
-
-    if (recentOrders && recentOrders.length > 0) {
-      const recentOrder = recentOrders[0];
-      console.log('📦 Recent order found:', recentOrder);
-      
-      // Cek status pembayaran untuk order ini
-      if (recentOrder.tripay_reference) {
-        await checkTripayPaymentStatus(recentOrder.tripay_reference, recentOrder.id);
-      }
-    }
-  } catch (error) {
-    console.error('❌ Error checking recent orders:', error);
-  }
-};
-
-const checkPaymentStatus = async (reference) => {
-  try {
-    console.log('🔍 Checking payment status for:', reference);
-
-    const { data: order, error } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('tripay_reference', reference)
-      .single();
-
-    if (error) {
-      console.error('❌ Error fetching order:', error);
-      return;
-    }
-
-    if (order) {
-      console.log('📦 Order found:', {
-        id: order.id,
-        status_pembayaran: order.status_pembayaran,
-        status_pengiriman: order.status_pengiriman,
-        total: order.total_harga,
-        shipping: order.biaya_pengiriman,
-        admin: order.biaya_admin
-      });
-
-      // ✅ PERBAIKAN: Gunakan status_pembayaran bukan status_pengiriman
-      if (order.status_pembayaran === 'paid') {
-        setPaymentStatus('success');
-        setOrderId(order.id);
-        
-        // ✅ PERBAIKAN: Update formData dengan nilai dari database
-        setFormData(prev => ({
-          ...prev,
-          biaya_pengiriman: order.biaya_pengiriman || 0
-        }));
-        
-        // ✅ PERBAIKAN: Set payment fee dari database
-        setPaymentFee(order.biaya_admin || 0);
-        
-        // ✅ NEW: Simpan jumlah yang sudah dibayar sebelum clear cart
-        setPaidAmounts({
-          subtotal: order.total_harga || calculateSubtotal(),
-          shipping: order.biaya_pengiriman || 0,
-          admin: order.biaya_admin || 0,
-          total: (order.total_harga || 0) + (order.biaya_pengiriman || 0) + (order.biaya_admin || 0)
-        });
-        
-        setCurrentStep(4);
-        await updateProductStockAfterPayment(order.id);
-        
-        // ✅ PERBAIKAN: Clear cart hanya setelah semua data tersimpan
-        console.log('✅ Clearing cart after payment verification');
-        clearCart();
-        
-        toast.success(t('Pembayaran berhasil!', 'Payment successful!'));
-      } else {
-        console.log('💰 Payment status:', order.status_pembayaran);
-        
-        // ✅ NEW: Jika status masih unpaid, cek ke Tripay API langsung
-        if (order.status_pembayaran === 'unpaid') {
-          console.log('🔄 Checking payment status directly from Tripay...');
-          await checkTripayPaymentStatus(reference, order.id);
-        }
-      }
-    } else {
-      console.log('❌ No order found for reference:', reference);
-    }
-  } catch (error) {
-    console.error('❌ Error checking payment status:', error);
-  }
-};
-
-// ✅ NEW: Fungsi untuk cek status pembayaran langsung ke Tripay
-const checkTripayPaymentStatus = async (reference, orderId) => {
-  try {
-    console.log('🔍 Checking Tripay payment status for:', reference);
-    
-    const paymentStatus = await tripayService.getTransactionDetail(reference);
-    
-    if (paymentStatus && paymentStatus.success) {
-      console.log('💰 Tripay payment status:', paymentStatus.data.status);
-      
-      // Jika status di Tripay adalah paid, update database
-      if (paymentStatus.data.status === 'PAID' || paymentStatus.data.status === 'UNPAID') {
-        const newStatus = paymentStatus.data.status === 'PAID' ? 'paid' : 'unpaid';
-        
-        console.log('📝 Updating order status to:', newStatus);
-        
-        // Update status di database
-        const { error: updateError } = await supabase
-          .from('orders')
-          .update({ 
-            status_pembayaran: newStatus,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', orderId);
-
-        if (updateError) {
-          console.error('❌ Error updating order status:', updateError);
-        } else {
-          console.log('✅ Order status updated to:', newStatus);
+        if (reference || tripayRef) {
+          const finalReference = reference || tripayRef;
+          console.log('🔄 Tripay callback detected:', { reference: finalReference, status });
+          setTripayReference(finalReference);
           
-          // Jika berhasil dibayar, proses success
-          if (newStatus === 'paid') {
+          // Tunggu checkPaymentStatus selesai
+          await checkPaymentStatus(finalReference);
+
+          if (status === 'success') {
             setPaymentStatus('success');
-            setOrderId(orderId);
             setCurrentStep(4);
-            await updateProductStockAfterPayment(orderId);
+            // ✅ PENTING: Clear cart setelah payment success dari callback
+            console.log('✅ Clearing cart after successful payment callback');
             clearCart();
-            toast.success(t('Pembayaran berhasil!', 'Payment successful!'));
           }
         }
+      } catch (error) {
+        console.error('❌ Error in callback effect:', error);
       }
+    };
+
+    handleCallback();
+  }, [searchParams, clearCart]);
+
+  // ✅ FIXED: Fungsi cek status pembayaran dengan clear cart
+  const checkPaymentStatus = async (reference) => {
+    try {
+      console.log('🔍 Checking payment status for:', reference);
+
+      const { data: order, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('tripay_reference', reference)
+        .single();
+
+      if (error) {
+        console.error('❌ Error fetching order:', error);
+        return;
+      }
+
+      if (order) {
+        console.log('📦 Order found:', order);
+
+        if (order.status_pembayaran === 'paid') {
+          setPaymentStatus('success');
+          setOrderId(order.id);
+          setCurrentStep(4);
+          await updateProductStockAfterPayment(order.id);
+          
+          // ✅ PENTING: Clear cart setelah payment berhasil
+          console.log('✅ Clearing cart after payment verification');
+          clearCart();
+          
+          toast.success(t('Pembayaran berhasil!', 'Payment successful!'));
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error checking payment status:', error);
     }
-  } catch (error) {
-    console.error('❌ Error checking Tripay payment status:', error);
-  }
-};
+  };
 
   // Load payment channels
   useEffect(() => {
@@ -319,56 +188,6 @@ const checkTripayPaymentStatus = async (reference, orderId) => {
     } catch (error) {
       console.error('❌ Error updating stock:', error);
     }
-  };
-
-  // ✅ TAMBAHKAN: Fungsi handleNextStep yang hilang
-  const handleNextStep = () => {
-    console.log('➡️ Moving to next step. Current:', currentStep);
-
-    // Validasi Step 1
-    if (currentStep === 1) {
-      if (!formData.nama_lengkap || !formData.alamat_pengiriman || !formData.no_telepon) {
-        toast.error(t('Harap lengkapi informasi pembeli', 'Please complete buyer information'));
-        return;
-      }
-    }
-
-    // ✅ FIXED: Validasi Step 2 - harus pilih metode pengiriman
-    if (currentStep === 2) {
-      if (!formData.metode_pengiriman) {
-        toast.error(t('Pilih metode pengiriman', 'Select a shipping method'));
-        return;
-      }
-      if (formData.biaya_pengiriman <= 0) {
-        toast.error(t('Biaya pengiriman tidak valid', 'Invalid shipping cost'));
-        return;
-      }
-    }
-
-    // Validasi Step 3
-    if (currentStep === 3 && !selectedPaymentMethod) {
-      toast.error(t('Pilih metode pembayaran', 'Select a payment method'));
-      return;
-    }
-
-    if (currentStep < 3) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      handlePlaceOrder();
-    }
-  };
-
-  // ✅ TAMBAHKAN: Fungsi handlePrevStep yang hilang
-  const handlePrevStep = () => {
-    if (currentStep > 1 && currentStep < 4) {
-      console.log('⬅️ Moving to previous step');
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
-  // ✅ TAMBAHKAN: Fungsi handleInputChange yang hilang
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handlePlaceOrder = async () => {
@@ -579,20 +398,51 @@ const checkTripayPaymentStatus = async (reference, orderId) => {
     }
   };
 
-  // ✅ NEW: Fungsi untuk mendapatkan subtotal yang aman (tidak 0 setelah clear cart)
-  const getSafeSubtotal = () => {
-    if (currentStep === 4 && paymentStatus === 'success') {
-      return paidAmounts.subtotal;
-    }
-    return calculateSubtotal();
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  // ✅ NEW: Fungsi untuk mendapatkan total yang aman
-  const getSafeTotal = () => {
-    if (currentStep === 4 && paymentStatus === 'success') {
-      return paidAmounts.total;
+  const handleNextStep = () => {
+    console.log('➡️ Moving to next step. Current:', currentStep);
+
+    // Validasi Step 1
+    if (currentStep === 1) {
+      if (!formData.nama_lengkap || !formData.alamat_pengiriman || !formData.no_telepon) {
+        toast.error(t('Harap lengkapi informasi pembeli', 'Please complete buyer information'));
+        return;
+      }
     }
-    return calculateTotal();
+
+    // ✅ FIXED: Validasi Step 2 - harus pilih metode pengiriman
+    if (currentStep === 2) {
+      if (!formData.metode_pengiriman) {
+        toast.error(t('Pilih metode pengiriman', 'Select a shipping method'));
+        return;
+      }
+      if (formData.biaya_pengiriman <= 0) {
+        toast.error(t('Biaya pengiriman tidak valid', 'Invalid shipping cost'));
+        return;
+      }
+    }
+
+    // Validasi Step 3
+    if (currentStep === 3 && !selectedPaymentMethod) {
+      toast.error(t('Pilih metode pembayaran', 'Select a payment method'));
+      return;
+    }
+
+    if (currentStep < 3) {
+      setCurrentStep(currentStep + 1);
+    } else {
+      handlePlaceOrder();
+    }
+  };
+
+  const handlePrevStep = () => {
+    if (currentStep > 1 && currentStep < 4) {
+      console.log('⬅️ Moving to previous step');
+      setCurrentStep(currentStep - 1);
+    }
   };
 
   const calculateSubtotal = () => {
@@ -600,6 +450,7 @@ const checkTripayPaymentStatus = async (reference, orderId) => {
   };
 
   const calculateTotal = () => {
+    // ✅ FIXED: Tambahkan subtotal + ongkir + payment fee
     const subtotal = calculateSubtotal();
     const shipping = formData.biaya_pengiriman > 0 ? formData.biaya_pengiriman : 0;
     const fee = paymentFee > 0 ? paymentFee : 0;
