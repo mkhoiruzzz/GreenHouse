@@ -1,6 +1,5 @@
-// AdminDashboard.jsx FINAL VERSION
-// --- Full integration with ProductForm.jsx ---
-// This file is fully cleaned, optimized, and safely separated from the form.
+// AdminDashboard.jsx FIXED VERSION
+// Fixed: Delete function with proper image cleanup
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
@@ -58,7 +57,8 @@ const AdminDashboard = () => {
 
       if (error) throw error;
       setProducts(data || []);
-    } catch {
+    } catch (error) {
+      console.error("Error fetching products:", error);
       toast.error("Gagal memuat produk");
     } finally {
       setLoading(false);
@@ -81,6 +81,19 @@ const AdminDashboard = () => {
 
       const file = event.target.files?.[0];
       if (!file) return;
+
+      // Validasi ukuran file (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Ukuran file maksimal 5MB");
+        return;
+      }
+
+      // Validasi tipe file
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!validTypes.includes(file.type)) {
+        toast.error("Format file harus JPG, PNG, atau WEBP");
+        return;
+      }
 
       const reader = new FileReader();
       reader.onload = (e) => setImagePreview(e.target.result);
@@ -105,122 +118,167 @@ const AdminDashboard = () => {
       else setNewProduct((p) => ({ ...p, gambar_url: url }));
 
       toast.success("Gambar berhasil diupload");
-    } catch {
+    } catch (error) {
+      console.error("Upload error:", error);
       toast.error("Upload gagal");
     } finally {
       setUploading(false);
     }
   };
 
- const handleAddProduct = async (e) => {
-  e.preventDefault();
-  
-  // Validasi data wajib
-  if (!newProduct.nama_produk || !newProduct.harga || !newProduct.stok || 
-      !newProduct.kategori_id || !newProduct.gambar_url || !newProduct.deskripsi) {
-    toast.error("Harap isi semua field yang wajib diisi");
-    return;
-  }
-
-  try {
-    setLoading(true);
-
-    const payload = {
-      nama_produk: newProduct.nama_produk,
-      deskripsi: newProduct.deskripsi,
-      deskripsi_lengkap: newProduct.deskripsi_lengkap || "",
-      harga: Number(newProduct.harga),
-      stok: Number(newProduct.stok),
-      gambar_url: newProduct.gambar_url,
-      kategori_id: newProduct.kategori_id,
-      max_pengiriman_hari: Number(newProduct.max_pengiriman_hari) || 3,
-      cara_perawatan: newProduct.cara_perawatan || "",
-      icon: newProduct.icon || "🌿"
-      // JANGAN sertakan id, created_at, updated_at - biar database handle
-    };
-
-    console.log("Payload yang dikirim:", payload);
-
-    const { data, error } = await supabase
-      .from("products")
-      .insert(payload)
-      .select();
-
-    if (error) {
-      console.error("Error detail:", error);
-      throw error;
+  const handleAddProduct = async (e) => {
+    e.preventDefault();
+    
+    // Validasi data wajib
+    if (!newProduct.nama_produk || !newProduct.harga || !newProduct.stok || 
+        !newProduct.kategori_id || !newProduct.gambar_url || !newProduct.deskripsi) {
+      toast.error("Harap isi semua field yang wajib diisi");
+      return;
     }
 
-    toast.success("Produk berhasil ditambahkan");
-    fetchProducts();
+    try {
+      setLoading(true);
 
-    setShowAddProduct(false);
-    setImagePreview(null);
-    setNewProduct(emptyProduct);
-    
-  } catch (error) {
-    console.error("Full error:", error);
-    toast.error(`Gagal menambahkan produk: ${error.message}`);
-  } finally {
-    setLoading(false);
-  }
-};
+      const payload = {
+        nama_produk: newProduct.nama_produk,
+        deskripsi: newProduct.deskripsi,
+        deskripsi_lengkap: newProduct.deskripsi_lengkap || "",
+        harga: Number(newProduct.harga),
+        stok: Number(newProduct.stok),
+        gambar_url: newProduct.gambar_url,
+        kategori_id: newProduct.kategori_id,
+        max_pengiriman_hari: Number(newProduct.max_pengiriman_hari) || 3,
+        cara_perawatan: newProduct.cara_perawatan || "",
+        icon: newProduct.icon || "🌿"
+      };
 
-const handleUpdateProduct = async (e) => {
-  e.preventDefault();
+      console.log("Payload yang dikirim:", payload);
 
-  try {
-    setLoading(true);
+      const { data, error } = await supabase
+        .from("products")
+        .insert(payload)
+        .select();
 
-    const payload = {
-      nama_produk: editProduct.nama_produk,
-      deskripsi: editProduct.deskripsi,
-      deskripsi_lengkap: editProduct.deskripsi_lengkap || "",
-      harga: Number(editProduct.harga),
-      stok: Number(editProduct.stok),
-      gambar_url: editProduct.gambar_url,
-      kategori_id: editProduct.kategori_id,
-      tingkat_kesulitan: editProduct.tingkat_kesulitan || "Mudah",
-      max_pengiriman_hari: Number(editProduct.max_pengiriman_hari) || 3,
-      cara_perawatan: editProduct.cara_perawatan || "",
-      icon: editProduct.icon || "🌿"
-      // JANGAN sertakan updated_at - biar database handle otomatis
-    };
+      if (error) {
+        console.error("Error detail:", error);
+        throw error;
+      }
 
-    console.log("Update payload:", payload);
+      toast.success("Produk berhasil ditambahkan");
+      await fetchProducts();
 
-    const { error } = await supabase
-      .from("products")
-      .update(payload)
-      .eq("id", editProduct.id);
+      setShowAddProduct(false);
+      setImagePreview(null);
+      setNewProduct(emptyProduct);
+      
+    } catch (error) {
+      console.error("Full error:", error);
+      toast.error(`Gagal menambahkan produk: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    if (error) throw error;
-
-    toast.success("Produk berhasil diperbarui");
-    fetchProducts();
-
-    setShowEditProduct(false);
-    setEditProduct(null);
-    setImagePreview(null);
-  } catch (error) {
-    console.error("Update error:", error);
-    toast.error(`Gagal memperbarui produk: ${error.message}`);
-  } finally {
-    setLoading(false);
-  }
-};
-
-  const handleDeleteProduct = async (id) => {
-    if (!confirm("Hapus produk ini?")) return;
+  const handleUpdateProduct = async (e) => {
+    e.preventDefault();
 
     try {
-      const { error } = await supabase.from("products").delete().eq("id", id);
+      setLoading(true);
+
+      const payload = {
+        nama_produk: editProduct.nama_produk,
+        deskripsi: editProduct.deskripsi,
+        deskripsi_lengkap: editProduct.deskripsi_lengkap || "",
+        harga: Number(editProduct.harga),
+        stok: Number(editProduct.stok),
+        gambar_url: editProduct.gambar_url,
+        kategori_id: editProduct.kategori_id,
+        max_pengiriman_hari: Number(editProduct.max_pengiriman_hari) || 3,
+        cara_perawatan: editProduct.cara_perawatan || "",
+        icon: editProduct.icon || "🌿"
+      };
+
+      console.log("Update payload:", payload);
+
+      const { error } = await supabase
+        .from("products")
+        .update(payload)
+        .eq("id", editProduct.id);
+
       if (error) throw error;
 
-      toast.success("Produk dihapus");
-      fetchProducts();
-    } catch {
-      toast.error("Gagal menghapus produk");
+      toast.success("Produk berhasil diperbarui");
+      await fetchProducts();
+
+      setShowEditProduct(false);
+      setEditProduct(null);
+      setImagePreview(null);
+    } catch (error) {
+      console.error("Update error:", error);
+      toast.error(`Gagal memperbarui produk: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteProduct = async (id, productData) => {
+    // Konfirmasi penghapusan
+    if (!window.confirm(`Apakah Anda yakin ingin menghapus produk "${productData.nama_produk}"?`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // 1. Hapus gambar dari storage terlebih dahulu (jika ada)
+      if (productData?.gambar_url) {
+        try {
+          // Extract filename dari URL
+          const urlParts = productData.gambar_url.split('/');
+          const fileName = urlParts[urlParts.length - 1];
+          
+          console.log("Menghapus gambar:", fileName);
+          
+          // Hapus dari storage bucket
+          const { error: storageError } = await supabase.storage
+            .from('products')
+            .remove([fileName]);
+          
+          if (storageError) {
+            console.warn("Warning - Gagal menghapus gambar:", storageError.message);
+            // Lanjutkan proses hapus produk meski gambar gagal dihapus
+          } else {
+            console.log("Gambar berhasil dihapus dari storage");
+          }
+        } catch (storageErr) {
+          console.warn("Warning - Error saat hapus gambar:", storageErr.message);
+          // Lanjutkan proses
+        }
+      }
+
+      // 2. Hapus produk dari database
+      const { error: deleteError } = await supabase
+        .from("products")
+        .delete()
+        .eq("id", id);
+
+      if (deleteError) {
+        console.error("Error menghapus produk:", deleteError);
+        throw deleteError;
+      }
+
+      console.log("Produk berhasil dihapus dari database");
+
+      toast.success(`Produk "${productData.nama_produk}" berhasil dihapus!`);
+      
+      // 3. Refresh list produk
+      await fetchProducts();
+      
+    } catch (error) {
+      console.error("Error menghapus produk:", error);
+      toast.error(`Gagal menghapus produk: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -231,156 +289,229 @@ const handleUpdateProduct = async (e) => {
     return sMatch && cMatch;
   });
 
-  // Test connection dulu
-const testConnection = async () => {
-  const { data, error } = await supabase
-    .from('products')
-    .select('*')
-    .limit(1);
-    
-  if (error) console.error("RLS Error:", error);
-  else console.log("Connection OK");
-};
-
   return (
-    <div className="min-h-screen bg-green-50 p-4">
-      <h1 className="text-3xl font-bold mb-4">Admin Dashboard</h1>
-
-      <div className="flex gap-4 mb-6">
-        <input
-          type="text"
-          placeholder="Cari produk..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="border p-2 rounded"
-        />
-
-        <select
-          value={filterCategory}
-          onChange={(e) => setFilterCategory(e.target.value)}
-          className="border p-2 rounded"
-        >
-          <option value="">Semua Kategori</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name_kategori}
-            </option>
-          ))}
-        </select>
-
-        <button
-          className="bg-green-600 text-white px-4 py-2 rounded"
-          onClick={() => {
-            setShowAddProduct(true);
-            setShowEditProduct(false);
-            setNewProduct(emptyProduct);
-            setImagePreview(null);
-          }}
-        >
-          + Tambah Produk
-        </button>
-      </div>
-
-      {/* ADD PRODUCT */}
-      {showAddProduct && (
-        <div className="bg-white p-6 rounded-xl shadow-md mb-6">
-          <h2 className="text-xl font-bold mb-4">Tambah Produk</h2>
-
-          <ProductForm
-            product={newProduct}
-            setProduct={setNewProduct}
-            onSubmit={handleAddProduct}
-            onCancel={() => setShowAddProduct(false)}
-            isEdit={false}
-            categories={categories}
-            imagePreview={imagePreview}
-            uploading={uploading}
-            loading={loading}
-            handleImageUpload={handleImageUpload}
-          />
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 p-4">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">Admin Dashboard</h1>
+          <p className="text-gray-600">Kelola produk tanaman Anda</p>
         </div>
-      )}
 
-      {/* EDIT PRODUCT */}
-      {showEditProduct && editProduct && (
-        <div className="bg-white p-6 rounded-xl shadow-md mb-6">
-          <h2 className="text-xl font-bold mb-4">Edit Produk</h2>
+        {/* Filter & Search Bar */}
+        <div className="bg-white rounded-2xl shadow-md p-6 mb-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <input
+                type="text"
+                placeholder="🔍 Cari produk..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
+              />
+            </div>
 
-          <ProductForm
-            product={editProduct}
-            setProduct={setEditProduct}
-            onSubmit={handleUpdateProduct}
-            onCancel={() => setShowEditProduct(false)}
-            isEdit={true}
-            categories={categories}
-            imagePreview={imagePreview}
-            uploading={uploading}
-            loading={loading}
-            handleImageUpload={handleImageUpload}
-          />
-        </div>
-      )}
-
-      {/* PRODUCT LIST */}
-      <div className="bg-white rounded-xl shadow-md p-6">
-        <h2 className="text-xl font-bold mb-4">Daftar Produk</h2>
-
-        {loading ? (
-          <p>Memuat...</p>
-        ) : (
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b">
-                <th className="p-3 text-left">Produk</th>
-                <th className="p-3 text-left">Harga</th>
-                <th className="p-3 text-left">Stok</th>
-                <th className="p-3 text-left">Kategori</th>
-                <th className="p-3 text-left">Aksi</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {filteredProducts.map((p) => (
-                <tr key={p.id} className="border-b hover:bg-gray-50">
-                  <td className="p-3 flex items-center gap-3">
-                    <img
-                      src={p.gambar_url}
-                      alt="thumb"
-                      className="w-14 h-14 object-cover rounded"
-                    />
-                    <div>
-                      <p className="font-bold">{p.nama_produk}</p>
-                      <p className="text-sm text-gray-600">{p.deskripsi}</p>
-                    </div>
-                  </td>
-                  <td className="p-3">Rp {Number(p.harga).toLocaleString("id-ID")}</td>
-                  <td className="p-3">{p.stok}</td>
-                  <td className="p-3">{p.categories?.name_kategori}</td>
-                  <td className="p-3 flex gap-2">
-                    <button
-                      className="px-3 py-1 bg-blue-500 text-white rounded"
-                      onClick={() => {
-                        setEditProduct(p);
-                        setShowEditProduct(true);
-                        setShowAddProduct(false);
-                        setImagePreview(p.gambar_url);
-                      }}
-                    >
-                      Edit
-                    </button>
-
-                    <button
-                      className="px-3 py-1 bg-red-600 text-white rounded"
-                      onClick={() => handleDeleteProduct(p.id)}
-                    >
-                      Hapus
-                    </button>
-                  </td>
-                </tr>
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
+            >
+              <option value="">🏷️ Semua Kategori</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name_kategori}
+                </option>
               ))}
-            </tbody>
-          </table>
+            </select>
+
+            <button
+              className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-green-600 hover:to-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2"
+              onClick={() => {
+                setShowAddProduct(true);
+                setShowEditProduct(false);
+                setNewProduct(emptyProduct);
+                setImagePreview(null);
+              }}
+            >
+              <span className="text-xl">+</span>
+              Tambah Produk
+            </button>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-4 mt-6">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4">
+              <p className="text-sm text-blue-600 font-medium">Total Produk</p>
+              <p className="text-2xl font-bold text-blue-700">{products.length}</p>
+            </div>
+            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4">
+              <p className="text-sm text-green-600 font-medium">Kategori</p>
+              <p className="text-2xl font-bold text-green-700">{categories.length}</p>
+            </div>
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4">
+              <p className="text-sm text-purple-600 font-medium">Hasil Filter</p>
+              <p className="text-2xl font-bold text-purple-700">{filteredProducts.length}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ADD PRODUCT */}
+        {showAddProduct && (
+          <div className="bg-white rounded-2xl shadow-lg mb-6 overflow-hidden">
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-4">
+              <h2 className="text-xl font-bold text-white">➕ Tambah Produk Baru</h2>
+            </div>
+            <div className="p-6">
+              <ProductForm
+                product={newProduct}
+                setProduct={setNewProduct}
+                onSubmit={handleAddProduct}
+                onCancel={() => {
+                  setShowAddProduct(false);
+                  setImagePreview(null);
+                  setNewProduct(emptyProduct);
+                }}
+                isEdit={false}
+                categories={categories}
+                imagePreview={imagePreview}
+                uploading={uploading}
+                loading={loading}
+                handleImageUpload={handleImageUpload}
+              />
+            </div>
+          </div>
         )}
+
+        {/* EDIT PRODUCT */}
+        {showEditProduct && editProduct && (
+          <div className="bg-white rounded-2xl shadow-lg mb-6 overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-4">
+              <h2 className="text-xl font-bold text-white">✏️ Edit Produk</h2>
+            </div>
+            <div className="p-6">
+              <ProductForm
+                product={editProduct}
+                setProduct={setEditProduct}
+                onSubmit={handleUpdateProduct}
+                onCancel={() => {
+                  setShowEditProduct(false);
+                  setEditProduct(null);
+                  setImagePreview(null);
+                }}
+                isEdit={true}
+                categories={categories}
+                imagePreview={imagePreview}
+                uploading={uploading}
+                loading={loading}
+                handleImageUpload={handleImageUpload}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* PRODUCT LIST */}
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+          <div className="bg-gradient-to-r from-gray-700 to-gray-800 px-6 py-4">
+            <h2 className="text-xl font-bold text-white">📦 Daftar Produk</h2>
+          </div>
+
+          <div className="p-6">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+                <p className="mt-4 text-gray-600">Memuat produk...</p>
+              </div>
+            ) : filteredProducts.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-4">🌱</div>
+                <p className="text-xl font-semibold text-gray-700 mb-2">Tidak ada produk</p>
+                <p className="text-gray-500">Mulai tambahkan produk pertama Anda</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b-2 border-gray-200">
+                      <th className="p-4 text-left text-sm font-bold text-gray-700">Produk</th>
+                      <th className="p-4 text-left text-sm font-bold text-gray-700">Harga</th>
+                      <th className="p-4 text-left text-sm font-bold text-gray-700">Stok</th>
+                      <th className="p-4 text-left text-sm font-bold text-gray-700">Kategori</th>
+                      <th className="p-4 text-center text-sm font-bold text-gray-700">Aksi</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {filteredProducts.map((p) => (
+                      <tr 
+                        key={p.id} 
+                        className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="p-4">
+                          <div className="flex items-center gap-4">
+                            <img
+                              src={p.gambar_url}
+                              alt={p.nama_produk}
+                              className="w-16 h-16 object-cover rounded-xl shadow-md"
+                            />
+                            <div>
+                              <p className="font-bold text-gray-800">{p.nama_produk}</p>
+                              <p className="text-sm text-gray-500 line-clamp-1">{p.deskripsi}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <span className="font-semibold text-green-600">
+                            Rp {Number(p.harga).toLocaleString("id-ID")}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            p.stok > 10 
+                              ? 'bg-green-100 text-green-700' 
+                              : p.stok > 0 
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : 'bg-red-100 text-red-700'
+                          }`}>
+                            {p.stok} unit
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+                            {p.categories?.name_kategori || '-'}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex gap-2 justify-center">
+                            <button
+                              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={() => {
+                                setEditProduct(p);
+                                setShowEditProduct(true);
+                                setShowAddProduct(false);
+                                setImagePreview(p.gambar_url);
+                              }}
+                              disabled={loading}
+                            >
+                              ✏️ Edit
+                            </button>
+
+                            <button
+                              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={() => handleDeleteProduct(p.id, p)}
+                              disabled={loading}
+                            >
+                              {loading ? "⏳" : "🗑️"} Hapus
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,17 +1,20 @@
 // src/pages/ProductDetail.jsx
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { productsService } from '../services/productsService';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useCart } from '../context/CartContext';
 import { toast } from 'react-toastify';
 import ProductCard from '../components/ProductCard';
+import { useAuth } from '../context/AuthContext';
 
 const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToCart } = useCart();
+  const location = useLocation();
   const [product, setProduct] = useState(null);
+  const { isAuthenticated } = useAuth();
   const [relatedProducts, setRelatedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingRelated, setLoadingRelated] = useState(false);
@@ -89,33 +92,46 @@ const ProductDetail = () => {
     }
   };
 
-  const handleAddToCart = async () => {
-    try {
-      if (!product) {
-        toast.error('Produk tidak tersedia');
-        return;
-      }
-      
-      if (quantity < 1) {
-        toast.error('Quantity harus minimal 1');
-        return;
-      }
-      
-      if (quantity > product.stok) {
-        toast.error(`Stok tidak mencukupi. Stok tersedia: ${product.stok}`);
-        return;
-      }
-      
-      await addToCart(product, quantity);
-      toast.success(`${product.nama_produk} berhasil ditambahkan ke keranjang!`);
-      
-      setQuantity(1);
-      
-    } catch (error) {
-      console.error('❌ Error adding to cart:', error);
-      toast.error(error.message || 'Gagal menambahkan ke keranjang');
+const handleAddToCart = async () => {
+  try {
+    // ✅ Cek apakah user sudah login
+    if (!isAuthenticated) {
+      toast.info('Silakan login terlebih dahulu untuk menambahkan produk ke keranjang');
+      // Simpan lokasi saat ini untuk redirect setelah login
+      navigate('/login', { 
+        state: { 
+          from: location,
+          message: 'Silakan login untuk melanjutkan' 
+        } 
+      });
+      return;
     }
-  };
+    
+    if (!product) {
+      toast.error('Produk tidak tersedia');
+      return;
+    }
+    
+    if (quantity < 1) {
+      toast.error('Quantity harus minimal 1');
+      return;
+    }
+    
+    if (quantity > product.stok) {
+      toast.error(`Stok tidak mencukupi. Stok tersedia: ${product.stok}`);
+      return;
+    }
+    
+    await addToCart(product, quantity);
+    toast.success(`${product.nama_produk} berhasil ditambahkan ke keranjang!`);
+    
+    setQuantity(1);
+    
+  } catch (error) {
+    console.error('❌ Error adding to cart:', error);
+    toast.error(error.message || 'Gagal menambahkan ke keranjang');
+  }
+};
 
   if (loading) {
     return (
@@ -227,17 +243,18 @@ const ProductDetail = () => {
                       </span>
                     </div>
                   </div>
-                  <button 
-                    onClick={handleAddToCart}
-                    disabled={product.stok === 0}
-                    className={`w-full py-3 px-6 rounded-lg font-semibold transition-all duration-300 text-sm md:text-base ${
-                      product.stok === 0 
-                        ? 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed text-gray-200 dark:text-gray-400' 
-                        : 'bg-emerald-600 dark:bg-emerald-700 hover:bg-emerald-700 dark:hover:bg-emerald-600 text-white'
-                    }`}
-                  >
-                    {product.stok === 0 ? 'Stok Habis' : 'Tambah ke Keranjang'}
-                  </button>
+
+                <button 
+                  onClick={handleAddToCart}
+                  disabled={product.stok === 0}
+                  className={`w-full py-3 px-6 rounded-lg font-semibold transition-all duration-300 text-sm md:text-base ${
+                    product.stok === 0 
+                      ? 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed text-gray-200 dark:text-gray-400' 
+                      : 'bg-emerald-600 dark:bg-emerald-700 hover:bg-emerald-700 dark:hover:bg-emerald-600 text-white'
+                  }`}
+                >
+                  {product.stok === 0 ? 'Stok Habis' : !isAuthenticated ? 'Tambah ke keranjang' : 'Tambah ke Keranjang'}
+                </button>
                 </div>
               </div>
             </div>
