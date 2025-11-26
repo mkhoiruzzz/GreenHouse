@@ -47,23 +47,24 @@ const AdminDashboard = () => {
     }
   }, [isAdmin]);
 
-  const fetchProducts = useCallback(async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("products")
-        .select("*, categories(name_kategori)")
-        .order("created_at", { ascending: false });
+const fetchProducts = useCallback(async () => {
+  try {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("products")
+      .select("*, categories(name_kategori)")
+      .or("is_deleted.is.null,is_deleted.eq.false") // ✅ Filter produk yang tidak dihapus
+      .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setProducts(data || []);
-    } catch (error) {
-      console.error("Error fetching products:", error);
-      toast.error("Gagal memuat produk");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    if (error) throw error;
+    setProducts(data || []);
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    toast.error("Gagal memuat produk");
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
   const fetchCategories = useCallback(async () => {
     const { data } = await supabase.from("categories").select("*");
@@ -221,66 +222,136 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleDeleteProduct = async (id, productData) => {
-    // Konfirmasi penghapusan
-    if (!window.confirm(`Apakah Anda yakin ingin menghapus produk "${productData.nama_produk}"?`)) {
-      return;
+const handleDeleteProduct = async (id, productData) => {
+  if (!window.confirm(`Apakah Anda yakin ingin menghapus produk "${productData.nama_produk}"?`)) {
+    return;
+  }
+
+  try {
+    setLoading(true);
+    console.log("🗑️ Memulai proses hapus produk ID:", id);
+
+    // ✅ SELALU GUNAKAN SOFT DELETE
+    // Cek dulu apakah produk pernah dipesan
+    const { data: orderItems, error: checkError } = await supabase
+      .from('order_items')
+      .select('id')
+      .eq('product_id', id)
+      .limit(1);
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      console.error("❌ Error checking order items:", checkError);
+      throw new Error("Gagal mengecek riwayat pesanan");
     }
 
-    try {
-      setLoading(true);
+    const hasOrders = orderItems && orderItems.length > 0;
 
-      // 1. Hapus gambar dari storage terlebih dahulu (jika ada)
+    if (hasOrders) {
+      console.log("⚠️ Produk pernah dipesan, melakukan SOFT DELETE...");
+      
+      // SOFT DELETE - Tandai sebagai dihapus
+      const { error: softDeleteError } = await supabase
+        .from("products")
+        .update({ 
+          is_deleted: true,
+          stok: 0
+        })
+        .eq("id", id);
+
+      if (softDeleteError) {
+        console.error("❌ Error soft delete:", softDeleteError);
+        throw softDeleteError;
+      }
+
+      toast.success(`✅ Produk "${productData.nama_produk}" berhasil dihapus dari katalog!`);
+      console.log("✅ Soft delete berhasil - produk disembunyikan dari katalog");
+
+    } else {
+      console.log("ℹ️ Produk belum pernah dipesan, tetap gunakan SOFT DELETE untuk konsistensi");
+      
+      // TETAP SOFT DELETE untuk konsistensi
+      const { error: softDeleteError } = await supabase
+        .from("products")
+        .update({ 
+          is_deleted: true,
+          stok: 0
+        })
+        .eq("id", id);
+
+      if (softDeleteError) {
+        console.error("❌ Error soft delete:", softDeleteError);
+        throw softDeleteError;
+      }
+
+      // Opsional: Hapus gambar jika ingin menghemat storage
       if (productData?.gambar_url) {
         try {
-          // Extract filename dari URL
           const urlParts = productData.gambar_url.split('/');
           const fileName = urlParts[urlParts.length - 1];
           
-          console.log("Menghapus gambar:", fileName);
+          console.log("🖼️ Menghapus gambar:", fileName);
           
-          // Hapus dari storage bucket
           const { error: storageError } = await supabase.storage
             .from('products')
             .remove([fileName]);
           
           if (storageError) {
-            console.warn("Warning - Gagal menghapus gambar:", storageError.message);
-            // Lanjutkan proses hapus produk meski gambar gagal dihapus
+            console.warn("⚠️ Gagal menghapus gambar, tapi produk sudah dihapus:", storageError.message);
           } else {
-            console.log("Gambar berhasil dihapus dari storage");
+            console.log("✅ Gambar berhasil dihapus dari storage");
           }
         } catch (storageErr) {
-          console.warn("Warning - Error saat hapus gambar:", storageErr.message);
-          // Lanjutkan proses
+          console.warn("⚠️ Error saat hapus gambar:", storageErr.message);
         }
       }
 
-      // 2. Hapus produk dari database
-      const { error: deleteError } = await supabase
-        .from("products")
-        .delete()
-        .eq("id", id);
-
-      if (deleteError) {
-        console.error("Error menghapus produk:", deleteError);
-        throw deleteError;
-      }
-
-      console.log("Produk berhasil dihapus dari database");
-
-      toast.success(`Produk "${productData.nama_produk}" berhasil dihapus!`);
-      
-      // 3. Refresh list produk
-      await fetchProducts();
-      
-    } catch (error) {
-      console.error("Error menghapus produk:", error);
-      toast.error(`Gagal menghapus produk: ${error.message}`);
-    } finally {
-      setLoading(false);
+      toast.success(`✅ Produk "${productData.nama_produk}" berhasil dihapus!`);
+      console.log("✅ Soft delete berhasil");
     }
-  };
+
+    // Refresh list produk
+    await fetchProducts();
+    
+  } catch (error) {
+    console.error("❌ Error menghapus produk:", error);
+    toast.error(`Gagal menghapus produk: ${error.message}`);
+  } finally {
+    setLoading(false);
+  }
+};
+
+// ============================================
+// OPSIONAL: Tambah fitur RESTORE produk
+// ============================================
+const handleRestoreProduct = async (id, productData) => {
+  if (!window.confirm(`Restore produk "${productData.nama_produk}" kembali ke katalog?`)) {
+    return;
+  }
+
+  try {
+    setLoading(true);
+    
+    const { error } = await supabase
+      .from("products")
+      .update({ 
+        is_deleted: false,
+        stok: 1 // Restore dengan stok minimal
+      })
+      .eq("id", id);
+
+    if (error) throw error;
+
+    toast.success(`Produk "${productData.nama_produk}" berhasil di-restore!`);
+    await fetchProducts();
+    
+  } catch (error) {
+    console.error("Error restore produk:", error);
+    toast.error(`Gagal restore produk: ${error.message}`);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const filteredProducts = products.filter((p) => {
     const search = searchTerm.toLowerCase();

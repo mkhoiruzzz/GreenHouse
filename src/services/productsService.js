@@ -10,26 +10,28 @@ export const productsService = {
       
       const startTime = performance.now();
       
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          id,
-          nama_produk,
-          deskripsi,
-          deskripsi_lengkap,
-          harga,
-          stok,
-          gambar_url,
-          kategori_id,
-          max_pengiriman_hari,
-          cara_perawatan,
-          created_at,
-          categories (
-            id,
-            name_kategori
-          )
-        `)
-        .order('created_at', { ascending: false });
+   // KODE BARU (line 23-44)
+const { data, error } = await supabase
+  .from('products')
+  .select(`
+    id,
+    nama_produk,
+    deskripsi,
+    deskripsi_lengkap,
+    harga,
+    stok,
+    gambar_url,
+    kategori_id,
+    max_pengiriman_hari,
+    cara_perawatan,
+    created_at,
+    categories (
+      id,
+      name_kategori
+    )
+  `)
+  .or("is_deleted.is.null,is_deleted.eq.false") // ✅ TAMBAH INI
+  .order('created_at', { ascending: false });
 
       const endTime = performance.now();
       console.log(`⏱️ [getAllProducts] Query took ${(endTime - startTime).toFixed(2)}ms`);
@@ -137,27 +139,29 @@ export const productsService = {
       
       const startTime = performance.now();
       
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          id,
-          nama_produk,
-          deskripsi,
-          deskripsi_lengkap,
-          harga,
-          stok,
-          gambar_url,
-          kategori_id,
-          max_pengiriman_hari,
-          cara_perawatan,
-          created_at,
-          categories (
-            id,
-            name_kategori
-          )
-        `)
-        .eq('id', id)
-        .single();
+      // KODE BARU (line 114-135)
+const { data, error } = await supabase
+  .from('products')
+  .select(`
+    id,
+    nama_produk,
+    deskripsi,
+    deskripsi_lengkap,
+    harga,
+    stok,
+    gambar_url,
+    kategori_id,
+    max_pengiriman_hari,
+    cara_perawatan,
+    created_at,
+    categories (
+      id,
+      name_kategori
+    )
+  `)
+  .eq('id', id)
+  .or("is_deleted.is.null,is_deleted.eq.false") // ✅ TAMBAH INI
+  .single();
 
       const endTime = performance.now();
       console.log(`⏱️ [getProductById] Query took ${(endTime - startTime).toFixed(2)}ms`);
@@ -216,29 +220,31 @@ export const productsService = {
     try {
       console.log(`🔍 [searchProducts] Searching for: "${searchTerm}"`);
       
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          id,
-          nama_produk,
-          deskripsi,
-          deskripsi_lengkap,
-          harga,
-          stok,
-          gambar_url,
-          kategori_id,
-          durability,
-          tingkat_kesulitan,
-          max_pengiriman_hari,
-          cara_perawatan,
-          created_at,
-          categories (
-            id,
-            name_kategori
-          )
-        `)
-        .or(`nama_produk.ilike.%${searchTerm}%,deskripsi.ilike.%${searchTerm}%,deskripsi_lengkap.ilike.%${searchTerm}%`)
-        .order('created_at', { ascending: false });
+    // KODE BARU (line 183-205)
+const { data, error } = await supabase
+  .from('products')
+  .select(`
+    id,
+    nama_produk,
+    deskripsi,
+    deskripsi_lengkap,
+    harga,
+    stok,
+    gambar_url,
+    kategori_id,
+    durability,
+    tingkat_kesulitan,
+    max_pengiriman_hari,
+    cara_perawatan,
+    created_at,
+    categories (
+      id,
+      name_kategori
+    )
+  `)
+  .or(`nama_produk.ilike.%${searchTerm}%,deskripsi.ilike.%${searchTerm}%,deskripsi_lengkap.ilike.%${searchTerm}%`)
+  .or("is_deleted.is.null,is_deleted.eq.false") // ✅ TAMBAH INI
+  .order('created_at', { ascending: false });
 
       if (error) {
         console.error('❌ [searchProducts] Supabase error:', error);
@@ -265,29 +271,31 @@ export const productsService = {
     try {
       console.log(`🔍 [getProductsByCategory] Fetching category ID: ${categoryId}`);
       
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          id,
-          nama_produk,
-          deskripsi,
-          deskripsi_lengkap,
-          harga,
-          stok,
-          gambar_url,
-          kategori_id,
-          durability,
-          tingkat_kesulitan,
-          max_pengiriman_hari,
-          cara_perawatan,
-          created_at,
-          categories (
-            id,
-            name_kategori
-          )
-        `)
-        .eq('kategori_id', categoryId)
-        .order('created_at', { ascending: false });
+      // KODE BARU (line 237-259)
+const { data, error } = await supabase
+  .from('products')
+  .select(`
+    id,
+    nama_produk,
+    deskripsi,
+    deskripsi_lengkap,
+    harga,
+    stok,
+    gambar_url,
+    kategori_id,
+    durability,
+    tingkat_kesulitan,
+    max_pengiriman_hari,
+    cara_perawatan,
+    created_at,
+    categories (
+      id,
+      name_kategori
+    )
+  `)
+  .eq('kategori_id', categoryId)
+  .or("is_deleted.is.null,is_deleted.eq.false") // ✅ TAMBAH INI
+  .order('created_at', { ascending: false });
 
       if (error) {
         console.error('❌ [getProductsByCategory] Supabase error:', error);
@@ -314,29 +322,31 @@ export const productsService = {
     try {
       console.log('🔄 [getFeaturedProducts] Fetching featured products...');
       
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          id,
-          nama_produk,
-          deskripsi,
-          deskripsi_lengkap,
-          harga,
-          stok,
-          gambar_url,
-          kategori_id,
-          durability,
-          tingkat_kesulitan,
-          max_pengiriman_hari,
-          cara_perawatan,
-          created_at,
-          categories (
-            id,
-            name_kategori
-          )
-        `)
-        .order('created_at', { ascending: false })
-        .limit(8);
+      // KODE BARU (line 291-313)
+const { data, error } = await supabase
+  .from('products')
+  .select(`
+    id,
+    nama_produk,
+    deskripsi,
+    deskripsi_lengkap,
+    harga,
+    stok,
+    gambar_url,
+    kategori_id,
+    durability,
+    tingkat_kesulitan,
+    max_pengiriman_hari,
+    cara_perawatan,
+    created_at,
+    categories (
+      id,
+      name_kategori
+    )
+  `)
+  .or("is_deleted.is.null,is_deleted.eq.false") // ✅ TAMBAH INI
+  .order('created_at', { ascending: false })
+  .limit(8);
 
       if (error) {
         console.error('❌ [getFeaturedProducts] Supabase error:', error);
