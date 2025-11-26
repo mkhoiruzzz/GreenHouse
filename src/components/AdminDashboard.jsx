@@ -6,9 +6,11 @@ import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { toast } from "react-toastify";
 import ProductForm from "../components/ProductForm";
+import { useTheme } from "../context/ThemeContext";
 
 const AdminDashboard = () => {
   const { user, logout, isAdmin } = useAuth();
+  const { t } = useTheme();
 
   const [activeTab, setActiveTab] = useState("products");
   const [products, setProducts] = useState([]);
@@ -361,161 +363,282 @@ const handleRestoreProduct = async (id, productData) => {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 p-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">Admin Dashboard</h1>
-          <p className="text-gray-600">Kelola produk tanaman Anda</p>
-        </div>
+  <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 dark:from-gray-900 dark:to-gray-800 p-4 transition-colors duration-300">
+    <div className="max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold text-gray-800 dark:text-white mb-2 transition-colors duration-300">
+          {t('Admin Dashboard', 'Admin Dashboard')}
+        </h1>
+        <p className="text-gray-600 dark:text-gray-300 transition-colors duration-300">
+          {t('Kelola produk tanaman Anda', 'Manage your plant products')}
+        </p>
+      </div>
 
         {/* Filter & Search Bar */}
-        <div className="bg-white rounded-2xl shadow-md p-6 mb-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder="🔍 Cari produk..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
-              />
-            </div>
-
-            <select
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
-              className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
-            >
-              <option value="">🏷️ Semua Kategori</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name_kategori}
-                </option>
-              ))}
-            </select>
-
-            <button
-              className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-green-600 hover:to-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2"
-              onClick={() => {
-                setShowAddProduct(true);
-                setShowEditProduct(false);
-                setNewProduct(emptyProduct);
-                setImagePreview(null);
-              }}
-            >
-              <span className="text-xl">+</span>
-              Tambah Produk
-            </button>
+         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-6 mb-6 border border-gray-100 dark:border-gray-700 transition-colors duration-300">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder={t('🔍 Cari produk...', '🔍 Search products...')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+            />
           </div>
+
+           <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          >
+            <option value="">{t('🏷️ Semua Kategori', '🏷️ All Categories')}</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name_kategori}
+              </option>
+            ))}
+          </select>
+
+          <button
+            className="bg-gradient-to-r from-green-500 to-emerald-600 dark:from-green-600 dark:to-emerald-700 text-white px-6 py-3 rounded-xl font-semibold hover:from-green-600 hover:to-emerald-700 dark:hover:from-green-500 dark:hover:to-emerald-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2"
+            onClick={() => {
+              setShowAddProduct(true);
+              setShowEditProduct(false);
+              setNewProduct(emptyProduct);
+              setImagePreview(null);
+            }}
+          >
+            <span className="text-xl">+</span>
+            {t('Tambah Produk', 'Add Product')}
+          </button>
+        </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-4 mt-6">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4">
-              <p className="text-sm text-blue-600 font-medium">Total Produk</p>
-              <p className="text-2xl font-bold text-blue-700">{products.length}</p>
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4">
-              <p className="text-sm text-green-600 font-medium">Kategori</p>
-              <p className="text-2xl font-bold text-green-700">{categories.length}</p>
-            </div>
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4">
-              <p className="text-sm text-purple-600 font-medium">Hasil Filter</p>
-              <p className="text-2xl font-bold text-purple-700">{filteredProducts.length}</p>
-            </div>
+           <div className="grid grid-cols-3 gap-4 mt-6">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800/30 transition-colors duration-300">
+            <p className="text-sm text-blue-600 dark:text-blue-400 font-medium transition-colors duration-300">
+              {t('Total Produk', 'Total Products')}
+            </p>
+            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 transition-colors duration-300">
+              {products.length}
+            </p>
+          </div>
+          <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-xl p-4 border border-green-100 dark:border-green-800/30 transition-colors duration-300">
+            <p className="text-sm text-green-600 dark:text-green-400 font-medium transition-colors duration-300">
+              {t('Kategori', 'Categories')}
+            </p>
+            <p className="text-2xl font-bold text-green-700 dark:text-green-300 transition-colors duration-300">
+              {categories.length}
+            </p>
+          </div>
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800/30 transition-colors duration-300">
+            <p className="text-sm text-purple-600 dark:text-purple-400 font-medium transition-colors duration-300">
+              {t('Hasil Filter', 'Filtered Results')}
+            </p>
+            <p className="text-2xl font-bold text-purple-700 dark:text-purple-300 transition-colors duration-300">
+              {filteredProducts.length}
+            </p>
           </div>
         </div>
+      </div>
 
         {/* ADD PRODUCT */}
         {showAddProduct && (
-          <div className="bg-white rounded-2xl shadow-lg mb-6 overflow-hidden">
-            <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-4">
-              <h2 className="text-xl font-bold text-white">➕ Tambah Produk Baru</h2>
-            </div>
-            <div className="p-6">
-              <ProductForm
-                product={newProduct}
-                setProduct={setNewProduct}
-                onSubmit={handleAddProduct}
-                onCancel={() => {
-                  setShowAddProduct(false);
-                  setImagePreview(null);
-                  setNewProduct(emptyProduct);
-                }}
-                isEdit={false}
-                categories={categories}
-                imagePreview={imagePreview}
-                uploading={uploading}
-                loading={loading}
-                handleImageUpload={handleImageUpload}
-              />
-            </div>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg mb-6 overflow-hidden border border-gray-100 dark:border-gray-700 transition-colors duration-300">
+          <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-4">
+            <h2 className="text-xl font-bold text-white">
+              ➕ {t('Tambah Produk Baru', 'Add New Product')}
+            </h2>
           </div>
-        )}
+          <div className="p-6">
+            <ProductForm
+              product={newProduct}
+              setProduct={setNewProduct}
+              onSubmit={handleAddProduct}
+              onCancel={() => {
+                setShowAddProduct(false);
+                setImagePreview(null);
+                setNewProduct(emptyProduct);
+              }}
+              isEdit={false}
+              categories={categories}
+              imagePreview={imagePreview}
+              uploading={uploading}
+              loading={loading}
+              handleImageUpload={handleImageUpload}
+            />
+          </div>
+        </div>
+      )}
+
 
         {/* EDIT PRODUCT */}
-        {showEditProduct && editProduct && (
-          <div className="bg-white rounded-2xl shadow-lg mb-6 overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-4">
-              <h2 className="text-xl font-bold text-white">✏️ Edit Produk</h2>
-            </div>
-            <div className="p-6">
-              <ProductForm
-                product={editProduct}
-                setProduct={setEditProduct}
-                onSubmit={handleUpdateProduct}
-                onCancel={() => {
-                  setShowEditProduct(false);
-                  setEditProduct(null);
-                  setImagePreview(null);
-                }}
-                isEdit={true}
-                categories={categories}
-                imagePreview={imagePreview}
-                uploading={uploading}
-                loading={loading}
-                handleImageUpload={handleImageUpload}
-              />
-            </div>
+       {showEditProduct && editProduct && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg mb-6 overflow-hidden border border-gray-100 dark:border-gray-700 transition-colors duration-300">
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-4">
+            <h2 className="text-xl font-bold text-white">
+              ✏️ {t('Edit Produk', 'Edit Product')}
+            </h2>
           </div>
-        )}
-
-        {/* PRODUCT LIST */}
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-          <div className="bg-gradient-to-r from-gray-700 to-gray-800 px-6 py-4">
-            <h2 className="text-xl font-bold text-white">📦 Daftar Produk</h2>
-          </div>
-
           <div className="p-6">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
-                <p className="mt-4 text-gray-600">Memuat produk...</p>
+            <ProductForm
+              product={editProduct}
+              setProduct={setEditProduct}
+              onSubmit={handleUpdateProduct}
+              onCancel={() => {
+                setShowEditProduct(false);
+                setEditProduct(null);
+                setImagePreview(null);
+              }}
+              isEdit={true}
+              categories={categories}
+              imagePreview={imagePreview}
+              uploading={uploading}
+              loading={loading}
+              handleImageUpload={handleImageUpload}
+            />
+          </div>
+        </div>
+      )}
+        
+
+{/* PRODUCT LIST */}
+  <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden border border-gray-100 dark:border-gray-700 transition-colors duration-300">
+        <div className="bg-gradient-to-r from-gray-700 to-gray-800 dark:from-gray-600 dark:to-gray-700 px-6 py-4">
+          <h2 className="text-xl font-bold text-white">
+            📦 {t('Daftar Produk', 'Product List')}
+          </h2>
+        </div>
+
+        <div className="p-4 md:p-6">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 dark:border-green-400"></div>
+              <p className="mt-4 text-gray-600 dark:text-gray-300 transition-colors duration-300">
+                {t('Memuat produk...', 'Loading products...')}
+              </p>
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4">🌱</div>
+              <p className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2 transition-colors duration-300">
+                {t('Tidak ada produk', 'No products')}
+              </p>
+              <p className="text-gray-500 dark:text-gray-400 transition-colors duration-300">
+                {t('Mulai tambahkan produk pertama Anda', 'Start adding your first product')}
+              </p>
+            </div>
+          ) : (
+            <>
+
+        {/* 📱 MOBILE VIEW - Card Layout */}
+        <div className="block md:hidden space-y-4">
+                {filteredProducts.map((p) => (
+                  <div 
+                    key={p.id}
+                    className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-300"
+                  >
+                    <div className="flex gap-3 mb-3">
+                      <img
+                        src={p.gambar_url}
+                        alt={p.nama_produk}
+                        className="w-20 h-20 object-cover rounded-lg shadow-sm flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-gray-800 dark:text-white text-sm mb-1 line-clamp-2 transition-colors duration-300">
+                          {p.nama_produk}
+                        </h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-2 transition-colors duration-300">
+                          {p.deskripsi}
+                        </p>
+                        <span className="inline-block px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium transition-colors duration-300">
+                          {p.categories?.name_kategori || '-'}
+                        </span>
+                      </div>
+                    </div>
+
+              {/* Product Info */}
+          <div className="grid grid-cols-2 gap-2 mb-3 pt-3 border-t border-gray-100 dark:border-gray-600 transition-colors duration-300">
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 transition-colors duration-300">
+                          {t('Harga', 'Price')}
+                        </p>
+                        <p className="font-bold text-green-600 dark:text-green-400 text-sm transition-colors duration-300">
+                          Rp {Number(p.harga).toLocaleString("id-ID")}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 transition-colors duration-300">
+                          {t('Stok', 'Stock')}
+                        </p>
+                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium transition-colors duration-300 ${
+                          p.stok > 10 
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
+                            : p.stok > 0 
+                              ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                              : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                        }`}>
+                          {p.stok} unit
+                        </span>
+                      </div>
+                    </div>
+
+             
+              {/* Action Buttons */}
+              <div className="flex gap-2">
+                      <button
+                        className="flex-1 px-3 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded-lg hover:bg-blue-600 dark:hover:bg-blue-500 transition-colors duration-300 font-medium text-sm shadow-sm disabled:opacity-50"
+                        onClick={() => {
+                          setEditProduct(p);
+                          setShowEditProduct(true);
+                          setShowAddProduct(false);
+                          setImagePreview(p.gambar_url);
+                        }}
+                        disabled={loading}
+                      >
+                        ✏️ {t('Edit', 'Edit')}
+                      </button>
+                      <button
+                        className="flex-1 px-3 py-2 bg-red-500 dark:bg-red-600 text-white rounded-lg hover:bg-red-600 dark:hover:bg-red-500 transition-colors duration-300 font-medium text-sm shadow-sm disabled:opacity-50"
+                        onClick={() => handleDeleteProduct(p.id, p)}
+                        disabled={loading}
+                      >
+                        {loading ? "⏳" : "🗑️"} {t('Hapus', 'Delete')}
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ) : filteredProducts.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="text-6xl mb-4">🌱</div>
-                <p className="text-xl font-semibold text-gray-700 mb-2">Tidak ada produk</p>
-                <p className="text-gray-500">Mulai tambahkan produk pertama Anda</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
+
+        {/* 💻 DESKTOP VIEW - Table Layout */}
+        <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b-2 border-gray-200">
-                      <th className="p-4 text-left text-sm font-bold text-gray-700">Produk</th>
-                      <th className="p-4 text-left text-sm font-bold text-gray-700">Harga</th>
-                      <th className="p-4 text-left text-sm font-bold text-gray-700">Stok</th>
-                      <th className="p-4 text-left text-sm font-bold text-gray-700">Kategori</th>
-                      <th className="p-4 text-center text-sm font-bold text-gray-700">Aksi</th>
+                    <tr className="border-b-2 border-gray-200 dark:border-gray-600 transition-colors duration-300">
+                      <th className="p-4 text-left text-sm font-bold text-gray-700 dark:text-gray-300 transition-colors duration-300">
+                        {t('Produk', 'Product')}
+                      </th>
+                      <th className="p-4 text-left text-sm font-bold text-gray-700 dark:text-gray-300 transition-colors duration-300">
+                        {t('Harga', 'Price')}
+                      </th>
+                      <th className="p-4 text-left text-sm font-bold text-gray-700 dark:text-gray-300 transition-colors duration-300">
+                        {t('Stok', 'Stock')}
+                      </th>
+                      <th className="p-4 text-left text-sm font-bold text-gray-700 dark:text-gray-300 transition-colors duration-300">
+                        {t('Kategori', 'Category')}
+                      </th>
+                      <th className="p-4 text-center text-sm font-bold text-gray-700 dark:text-gray-300 transition-colors duration-300">
+                        {t('Aksi', 'Actions')}
+                      </th>
                     </tr>
                   </thead>
-
                   <tbody>
                     {filteredProducts.map((p) => (
                       <tr 
                         key={p.id} 
-                        className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                        className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-300"
                       >
                         <td className="p-4">
                           <div className="flex items-center gap-4">
@@ -525,36 +648,40 @@ const handleRestoreProduct = async (id, productData) => {
                               className="w-16 h-16 object-cover rounded-xl shadow-md"
                             />
                             <div>
-                              <p className="font-bold text-gray-800">{p.nama_produk}</p>
-                              <p className="text-sm text-gray-500 line-clamp-1">{p.deskripsi}</p>
+                              <p className="font-bold text-gray-800 dark:text-white transition-colors duration-300">
+                                {p.nama_produk}
+                              </p>
+                              <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1 transition-colors duration-300">
+                                {p.deskripsi}
+                              </p>
                             </div>
                           </div>
                         </td>
                         <td className="p-4">
-                          <span className="font-semibold text-green-600">
+                          <span className="font-semibold text-green-600 dark:text-green-400 transition-colors duration-300">
                             Rp {Number(p.harga).toLocaleString("id-ID")}
                           </span>
                         </td>
                         <td className="p-4">
-                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium transition-colors duration-300 ${
                             p.stok > 10 
-                              ? 'bg-green-100 text-green-700' 
+                              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
                               : p.stok > 0 
-                                ? 'bg-yellow-100 text-yellow-700'
-                                : 'bg-red-100 text-red-700'
+                                ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
                           }`}>
                             {p.stok} unit
                           </span>
                         </td>
                         <td className="p-4">
-                          <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+                          <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-full text-sm font-medium transition-colors duration-300">
                             {p.categories?.name_kategori || '-'}
                           </span>
                         </td>
                         <td className="p-4">
                           <div className="flex gap-2 justify-center">
                             <button
-                              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded-lg hover:bg-blue-600 dark:hover:bg-blue-500 transition-colors duration-300 font-medium shadow-sm hover:shadow-md disabled:opacity-50"
                               onClick={() => {
                                 setEditProduct(p);
                                 setShowEditProduct(true);
@@ -563,26 +690,26 @@ const handleRestoreProduct = async (id, productData) => {
                               }}
                               disabled={loading}
                             >
-                              ✏️ Edit
+                              ✏️ {t('Edit', 'Edit')}
                             </button>
-
                             <button
-                              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="px-4 py-2 bg-red-500 dark:bg-red-600 text-white rounded-lg hover:bg-red-600 dark:hover:bg-red-500 transition-colors duration-300 font-medium shadow-sm hover:shadow-md disabled:opacity-50"
                               onClick={() => handleDeleteProduct(p.id, p)}
                               disabled={loading}
                             >
-                              {loading ? "⏳" : "🗑️"} Hapus
+                              {loading ? "⏳" : "🗑️"} {t('Hapus', 'Delete')}
                             </button>
                           </div>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
+      </>
+    )}
+  </div>
+</div>
       </div>
     </div>
   );

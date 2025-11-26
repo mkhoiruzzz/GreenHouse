@@ -1,8 +1,10 @@
+// src/pages/Login.jsx - With Dark Mode & Language Support
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext'; // ✅ Import ThemeContext
 import { toast } from 'react-toastify';
-import { FcGoogle } from 'react-icons/fc'; // ✅ Tambahkan ini
+import { FcGoogle } from 'react-icons/fc';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -11,7 +13,8 @@ const Login = () => {
   });
   const [loading, setLoading] = useState(false);
   
-  const { login, loginWithGoogle, isAuthenticated } = useAuth(); // ✅ Tambahkan loginWithGoogle jika sudah ada di context
+  const { login, loginWithGoogle, isAuthenticated } = useAuth();
+  const { t } = useTheme(); // ✅ Tambahkan useTheme untuk translate
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -33,7 +36,7 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.email || !formData.password) {
-      toast.error('Email dan password wajib diisi');
+      toast.error(t('Email dan password wajib diisi', 'Email and password are required'));
       return;
     }
 
@@ -43,41 +46,44 @@ const Login = () => {
       if (result.success) {
         setFormData({ email: '', password: '' });
       } else {
-        toast.error(result.message || 'Login gagal');
+        toast.error(result.message || t('Login gagal', 'Login failed'));
       }
     } catch (error) {
       console.error('Login component error:', error);
-      toast.error('Terjadi kesalahan sistem');
+      toast.error(t('Terjadi kesalahan sistem', 'System error occurred'));
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ Fungsi untuk login dengan Google
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
-      await loginWithGoogle(); // pastikan sudah diimplementasi di AuthContext
+      await loginWithGoogle();
     } catch (error) {
-      toast.error('Gagal login dengan Google');
+      toast.error(t('Gagal login dengan Google', 'Failed to login with Google'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen mt-16 py-12 bg-gray-50 flex items-center justify-center">
+    <div className="min-h-screen mt-16 py-12 bg-gray-50 dark:bg-gray-900 flex items-center justify-center transition-colors duration-300">
       <div className="max-w-md w-full mx-auto px-4">
-        <div className="bg-white rounded-lg shadow-md p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 border border-gray-100 dark:border-gray-700 transition-colors duration-300">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-green-600 mb-2">Login</h1>
-            <p className="text-gray-600">Masuk ke akun Green House Anda</p>
+            <h1 className="text-3xl font-bold text-green-600 dark:text-green-400 mb-2 transition-colors duration-300">
+              {t('Login', 'Login')}
+            </h1>
+            <p className="text-gray-600 dark:text-gray-300 transition-colors duration-300">
+              {t('Masuk ke akun Green House Anda', 'Sign in to your Green House account')}
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email *
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 transition-colors duration-300">
+                {t('Email', 'Email')} *
               </label>
               <input
                 type="email"
@@ -86,14 +92,14 @@ const Login = () => {
                 onChange={handleChange}
                 required
                 disabled={loading}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50"
-                placeholder="masukkan email Anda"
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-600 dark:focus:ring-green-500 focus:border-transparent disabled:opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-colors duration-300"
+                placeholder={t('masukkan email Anda', 'enter your email')}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Password *
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 transition-colors duration-300">
+                {t('Password', 'Password')} *
               </label>
               <input
                 type="password"
@@ -102,8 +108,8 @@ const Login = () => {
                 onChange={handleChange}
                 required
                 disabled={loading}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50"
-                placeholder="masukkan password"
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-600 dark:focus:ring-green-500 focus:border-transparent disabled:opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-colors duration-300"
+                placeholder={t('masukkan password', 'enter password')}
                 minLength="6"
               />
             </div>
@@ -111,7 +117,7 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-green-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-green-600 dark:bg-green-700 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-700 dark:hover:bg-green-600 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
             >
               {loading ? (
                 <span className="flex items-center justify-center">
@@ -119,52 +125,59 @@ const Login = () => {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Memproses...
+                  {t('Memproses...', 'Processing...')}
                 </span>
               ) : (
-                'Login'
+                t('Login', 'Login')
               )}
             </button>
           </form>
 
-          {/* ✅ Tambahan tombol Continue with Google */}
+          {/* Divider */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300"></div>
+              <div className="w-full border-t border-gray-300 dark:border-gray-600 transition-colors duration-300"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="bg-white px-2 text-gray-500">atau</span>
+              <span className="bg-white dark:bg-gray-800 px-2 text-gray-500 dark:text-gray-400 transition-colors duration-300">
+                {t('atau', 'or')}
+              </span>
             </div>
           </div>
 
+          {/* Google Login */}
           <button
             onClick={handleGoogleLogin}
             disabled={loading}
-            className="w-full border border-gray-300 rounded-lg py-3 flex items-center justify-center space-x-2 hover:bg-gray-50 transition disabled:opacity-50"
+            className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg py-3 flex items-center justify-center space-x-2 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors duration-300 disabled:opacity-50 shadow-sm hover:shadow-md"
           >
             <FcGoogle className="text-2xl" />
-            <span className="text-gray-700 font-medium">Continue with Google</span>
+            <span className="text-gray-700 dark:text-gray-200 font-medium transition-colors duration-300">
+              {t('Continue with Google', 'Continue with Google')}
+            </span>
           </button>
 
+          {/* Register Link */}
           <div className="mt-6 text-center">
-            <p className="text-gray-600">
-              Belum punya akun?{' '}
+            <p className="text-gray-600 dark:text-gray-300 transition-colors duration-300">
+              {t('Belum punya akun?', "Don't have an account?")}{' '}
               <Link
                 to="/register"
-                className="text-green-600 hover:text-green-700 font-semibold"
+                className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-semibold transition-colors duration-300"
               >
-                Daftar di sini
+                {t('Daftar di sini', 'Register here')}
               </Link>
             </p>
           </div>
 
-          <div className="mt-6 pt-6 border-t border-gray-200">
+          {/* Back to Home */}
+          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700 transition-colors duration-300">
             <div className="text-center">
               <Link
                 to="/"
-                className="text-gray-500 hover:text-green-600 text-sm"
+                className="text-gray-500 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 text-sm transition-colors duration-300"
               >
-                ← Kembali ke Beranda
+                ← {t('Kembali ke Beranda', 'Back to Home')}
               </Link>
             </div>
           </div>
