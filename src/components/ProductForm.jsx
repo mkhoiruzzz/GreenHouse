@@ -99,48 +99,6 @@ const ProductForm = ({
               ))}
             </select>
           </div>
-
-          {/* Tingkat Kesulitan + Max Pengiriman */}
-          <div className="grid grid-cols-2 gap-4">
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Tingkat Kesulitan
-              </label>
-              <select
-                value={product.tingkat_kesulitan}
-                onChange={(e) =>
-                  setProduct((prev) => ({ ...prev, tingkat_kesulitan: e.target.value }))
-                }
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl"
-              >
-                <option value="Mudah">🟢 Mudah</option>
-                <option value="Sedang">🟡 Sedang</option>
-                <option value="Sulit">🔴 Sulit</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Max Pengiriman (Hari)
-              </label>
-              <input
-                type="number"
-                value={product.max_pengiriman_hari}
-                onChange={(e) =>
-                  setProduct((prev) => ({
-                    ...prev,
-                    max_pengiriman_hari: e.target.value,
-                  }))
-                }
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl"
-                placeholder="3"
-                min="1"
-              />
-            </div>
-
-          </div>
-
         </div>
 
         {/* Kolom Kanan – Upload Gambar */}
