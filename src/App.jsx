@@ -18,7 +18,6 @@ import Orders from './pages/Orders'
 import About from './pages/About'
 import Contact from './pages/Contact'
 import Profil from './pages/Profile'
-import Accesories from './pages/Accesories'
 import AdminDashboard from './components/AdminDashboard'
 import ErrorBoundary from './components/ErrorBoundary'
 import { ThemeProvider } from './context/ThemeContext'
@@ -49,7 +48,6 @@ function App() {
                       <Route path="/about" element={<About />} />
                       <Route path="/contact" element={<Contact />} />
                       <Route path="/profile" element={<Profil />} />
-                      <Route path="/accesories" element={<Accesories />} />
                       <Route path="/images/*" element={null} />
                       <Route path="/admin" element={<AdminDashboard />} />
                       <Route path="/admin/add-product" element={<ProductForm />} />

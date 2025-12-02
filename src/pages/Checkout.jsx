@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // ✅ Added useRef
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
@@ -23,9 +23,14 @@ const Checkout = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentChannels, setPaymentChannels] = useState([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
-  const [paymentFee, setPaymentFee] = useState(0); // ✅ NEW: Track payment fee
+  const [paymentFee, setPaymentFee] = useState(0);
   const [paymentStatus, setPaymentStatus] = useState('pending');
   const [tripayReference, setTripayReference] = useState('');
+  
+  // ✅ NEW: State untuk menyimpan ringkasan order sebelum cart dikosongkan
+  const [orderSummary, setOrderSummary] = useState(null);
+  const [tempCartItems, setTempCartItems] = useState([]); // ✅ Menyimpan cart items sementara
+  const hasClearedCartRef = useRef(false); // ✅ Mencegah multiple clear cart
 
   const [formData, setFormData] = useState({
     email: '',
@@ -35,8 +40,8 @@ const Checkout = () => {
     alamat_pengiriman: '',
     kode_pos: '',
     no_telepon: '',
-    metode_pengiriman: '', // Empty string - belum dipilih
-    biaya_pengiriman: 0, // ✅ FIXED: Default 0, akan diisi setelah pilih di step 2
+    metode_pengiriman: '',
+    biaya_pengiriman: 0,
     metode_pembayaran: 'tripay',
     kode_kupon: ''
   });
@@ -50,7 +55,7 @@ const Checkout = () => {
     });
   }, []);
 
-  // ✅ FIXED: Cek parameter callback dari Tripay DAN clear cart
+  // ✅ FIXED: Cek parameter callback dari Tripay
   useEffect(() => {
     const handleCallback = async () => {
       try {
@@ -65,14 +70,6 @@ const Checkout = () => {
           
           // Tunggu checkPaymentStatus selesai
           await checkPaymentStatus(finalReference);
-
-          if (status === 'success') {
-            setPaymentStatus('success');
-            setCurrentStep(4);
-            // ✅ PENTING: Clear cart setelah payment success dari callback
-            console.log('✅ Clearing cart after successful payment callback');
-            clearCart();
-          }
         }
       } catch (error) {
         console.error('❌ Error in callback effect:', error);
@@ -80,9 +77,9 @@ const Checkout = () => {
     };
 
     handleCallback();
-  }, [searchParams, clearCart]);
+  }, [searchParams]);
 
-  // ✅ FIXED: Fungsi cek status pembayaran dengan clear cart
+  // ✅ FIXED: Fungsi cek status pembayaran
   const checkPaymentStatus = async (reference) => {
     try {
       console.log('🔍 Checking payment status for:', reference);
@@ -107,9 +104,14 @@ const Checkout = () => {
           setCurrentStep(4);
           await updateProductStockAfterPayment(order.id);
           
-          // ✅ PENTING: Clear cart setelah payment berhasil
-          console.log('✅ Clearing cart after payment verification');
-          clearCart();
+          // ✅ Simpan ringkasan order sebelum clear cart
+          saveOrderSummary();
+          
+          // ✅ Clear cart dengan flag untuk mencegah duplikasi
+          if (!hasClearedCartRef.current) {
+            hasClearedCartRef.current = true;
+            clearCart();
+          }
           
           toast.success(t('Pembayaran berhasil!', 'Payment successful!'));
         }
@@ -118,6 +120,38 @@ const Checkout = () => {
       console.error('❌ Error checking payment status:', error);
     }
   };
+
+  // ✅ NEW: Simpan ringkasan order
+  const saveOrderSummary = () => {
+    const summary = {
+      subtotal: calculateSubtotal(),
+      shipping: formData.biaya_pengiriman,
+      paymentFee: paymentFee,
+      total: calculateTotal(),
+      items: [...cartItems], // Salinan cart items
+      timestamp: new Date().toISOString()
+    };
+    
+    setOrderSummary(summary);
+    // Simpan juga ke sessionStorage sebagai backup
+    sessionStorage.setItem('lastOrderSummary', JSON.stringify(summary));
+    
+    // Simpan cart items sementara
+    setTempCartItems([...cartItems]);
+  };
+
+  // ✅ NEW: Load order summary dari storage jika ada
+  useEffect(() => {
+    const savedSummary = sessionStorage.getItem('lastOrderSummary');
+    if (savedSummary && currentStep === 4) {
+      try {
+        const parsed = JSON.parse(savedSummary);
+        setOrderSummary(parsed);
+      } catch (e) {
+        console.error('❌ Error parsing saved order summary:', e);
+      }
+    }
+  }, [currentStep]);
 
   // Load payment channels
   useEffect(() => {
@@ -214,7 +248,7 @@ const Checkout = () => {
 
       const orderItems = formatOrderItems();
       const totalHarga = calculateSubtotal();
-      const totalAmount = calculateTotal(); // Sudah include subtotal + shipping + payment fee
+      const totalAmount = calculateTotal();
 
       console.log('💰 Order totals:', {
         subtotal: totalHarga,
@@ -224,12 +258,15 @@ const Checkout = () => {
         items: orderItems.length
       });
 
+      // ✅ Simpan ringkasan order SEBELUM clear cart
+      saveOrderSummary();
+
       // Create order in database
       const orderData = {
         user_id: user.id,
         total_harga: totalHarga,
         biaya_pengiriman: formData.biaya_pengiriman,
-        biaya_admin: paymentFee, // ✅ NEW: Save payment fee
+        biaya_admin: paymentFee,
         status_pembayaran: 'unpaid',
         status_pengiriman: 'pending',
         metode_pembayaran: `tripay_${selectedPaymentMethod}`,
@@ -296,7 +333,7 @@ const Checkout = () => {
         }
       ];
 
-      // ✅ NEW: Add payment fee if exists
+      // Add payment fee if exists
       if (paymentFee > 0) {
         tripayOrderItems.push({
           name: `Biaya Admin Pembayaran`,
@@ -365,22 +402,29 @@ const Checkout = () => {
       }
 
       console.log('🎉 Order placement completed successfully!');
+      setOrderId(order.id);
+      setTripayReference(tripayPayment.data.reference);
 
-      // ✅ PENTING: Clear cart SEBELUM redirect (untuk mock payment)
       if (tripayPayment.data.checkout_url && tripayPayment.data.checkout_url !== '#') {
         console.log('🚀 Redirecting to payment page:', tripayPayment.data.checkout_url);
-        // Clear cart sebelum redirect ke Tripay
-        clearCart();
+        // ✅ Clear cart sebelum redirect ke Tripay
+        if (!hasClearedCartRef.current) {
+          hasClearedCartRef.current = true;
+          clearCart();
+        }
         window.location.href = tripayPayment.data.checkout_url;
       } else {
         // Mock payment - langsung success
         console.log('✅ Mock payment - showing success page');
-        setOrderId(order.id);
-        setTripayReference(tripayPayment.data.reference);
         setPaymentStatus('success');
         setCurrentStep(4);
-        // Clear cart untuk mock payment
-        clearCart();
+        // ✅ Update order status di database untuk mock payment
+        await supabase
+          .from('orders')
+          .update({ status_pembayaran: 'paid' })
+          .eq('id', order.id);
+        
+        await updateProductStockAfterPayment(order.id);
         toast.success(t('Pembayaran berhasil!', 'Payment successful!'));
       }
 
@@ -391,6 +435,9 @@ const Checkout = () => {
         error: error
       });
       toast.error(error.message || t('Terjadi kesalahan saat membuat pesanan', 'An error occurred while creating the order'));
+      
+      // Reset flag jika error
+      hasClearedCartRef.current = false;
     } finally {
       console.log('🔄 Resetting loading states');
       setLoading(false);
@@ -413,7 +460,7 @@ const Checkout = () => {
       }
     }
 
-    // ✅ FIXED: Validasi Step 2 - harus pilih metode pengiriman
+    // Validasi Step 2
     if (currentStep === 2) {
       if (!formData.metode_pengiriman) {
         toast.error(t('Pilih metode pengiriman', 'Select a shipping method'));
@@ -446,18 +493,27 @@ const Checkout = () => {
   };
 
   const calculateSubtotal = () => {
-    return cartItems.reduce((total, item) => total + (item.harga * item.quantity), 0);
+    // ✅ Gunakan tempCartItems jika ada, jika tidak gunakan cartItems
+    const itemsToCalculate = tempCartItems.length > 0 ? tempCartItems : cartItems;
+    return itemsToCalculate.reduce((total, item) => total + (item.harga * item.quantity), 0);
   };
 
   const calculateTotal = () => {
-    // ✅ FIXED: Tambahkan subtotal + ongkir + payment fee
     const subtotal = calculateSubtotal();
     const shipping = formData.biaya_pengiriman > 0 ? formData.biaya_pengiriman : 0;
     const fee = paymentFee > 0 ? paymentFee : 0;
     return subtotal + shipping + fee;
   };
 
-  // Empty cart check
+  // ✅ NEW: Fungsi untuk mendapatkan items untuk ditampilkan
+  const getDisplayItems = () => {
+    if (currentStep === 4 && orderSummary?.items) {
+      return orderSummary.items;
+    }
+    return cartItems;
+  };
+
+  // Empty cart check (kecuali step 4)
   if (!cartItems || cartItems.length === 0 && currentStep !== 4) {
     return (
       <div className="min-h-screen mt-16 flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
@@ -493,7 +549,7 @@ const Checkout = () => {
         {/* Progress Steps */}
         {currentStep < 4 && (
           <div className="bg-white dark:bg-gray-800 dark:border dark:border-gray-700 rounded-lg shadow p-4 mb-6 transition-colors duration-300">
-            <div className="flex items-center justify-between">
+           <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6">
               {[1, 2, 3].map((step, index) => (
                 <div key={step} className="flex items-center">
                   <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
@@ -509,7 +565,7 @@ const Checkout = () => {
                     {step === 1 ? t('Info Pembeli','Buyer Info') : step === 2 ? t('Pengiriman','Shipping') : t('Pembayaran','Payment')}
                   </span>
                   {index < 2 && (
-                    <div className={`w-16 h-0.5 mx-4 ${
+                    <div className={`hidden sm:block w-12 h-0.5 mx-2 ${
                       currentStep > step ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-700'
                     }`} />
                   )}
@@ -519,7 +575,7 @@ const Checkout = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
           <div className={currentStep === 4 ? 'lg:col-span-3' : 'lg:col-span-2'}>
             {/* STEP 1: Info Pembeli */}
             {currentStep === 1 && (
@@ -677,10 +733,10 @@ const Checkout = () => {
                   </div>
                 )}
 
-                {/* ✅ NEW: Display selected payment with fee */}
+                {/* Display selected payment with fee */}
                 {selectedPaymentMethod && (
                   <div className="mt-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
+                   <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6">
                       <div className="flex items-center gap-2">
                         <span className="text-green-600 dark:text-green-400">✓</span>
                         <p className="text-green-800 dark:text-green-200 font-medium text-sm">
@@ -729,42 +785,77 @@ const Checkout = () => {
                   <p className="text-gray-600 dark:text-gray-300 mb-4">{t('Reference','Reference')}: <strong>{tripayReference}</strong></p>
                 )}
                 
-                {/* ✅ NEW: Order Summary on Success */}
+                {/* Order Summary on Success */}
                 <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mt-6 mb-6 text-left max-w-md mx-auto">
                   <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3 text-center">{t('Ringkasan Pembayaran','Payment Summary')}</h3>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">{t('Subtotal Produk','Products Subtotal')}</span>
-                      <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(calculateSubtotal())}</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">
+                        {formatCurrency(orderSummary?.subtotal || calculateSubtotal())}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">{t('Biaya Pengiriman','Shipping')}</span>
-                      <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(formData.biaya_pengiriman)}</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">
+                        {formatCurrency(orderSummary?.shipping || formData.biaya_pengiriman)}
+                      </span>
                     </div>
-                    {paymentFee > 0 && (
+                    {(orderSummary?.paymentFee || paymentFee) > 0 && (
                       <div className="flex justify-between">
                         <span className="text-gray-600 dark:text-gray-400">{t('Biaya Admin','Admin Fee')}</span>
-                        <span className="font-medium text-amber-600 dark:text-amber-400">{formatCurrency(paymentFee)}</span>
+                        <span className="font-medium text-amber-600 dark:text-amber-400">
+                          {formatCurrency(orderSummary?.paymentFee || paymentFee)}
+                        </span>
                       </div>
                     )}
                     <div className="border-t border-gray-300 dark:border-gray-600 pt-2 mt-2">
                       <div className="flex justify-between font-bold text-base">
                         <span className="text-gray-900 dark:text-gray-100">{t('Total Dibayar','Total Paid')}</span>
-                        <span className="text-green-600 dark:text-green-400 text-lg">{formatCurrency(calculateTotal())}</span>
+                        <span className="text-green-600 dark:text-green-400 text-lg">
+                          {formatCurrency(orderSummary?.total || calculateTotal())}
+                        </span>
                       </div>
                     </div>
                   </div>
                 </div>
                 
+                {/* Items purchased list */}
+                {orderSummary?.items && orderSummary.items.length > 0 && (
+                  <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-6 text-left max-w-md mx-auto">
+                    <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">{t('Produk yang dibeli','Products Purchased')}:</h4>
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {orderSummary.items.map((item, index) => (
+                        <div key={index} className="flex justify-between text-sm">
+                          <span className="text-gray-600 dark:text-gray-300 truncate max-w-[180px]">
+                            {item.nama_produk} × {item.quantity}
+                          </span>
+                          <span className="font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                            {formatCurrency(item.harga * item.quantity)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
                 <div className="flex gap-4 justify-center mt-6 flex-wrap">
                   <button
-                    onClick={() => navigate('/orders')}
+                    onClick={() => {
+                      // Clear session storage
+                      sessionStorage.removeItem('lastOrderSummary');
+                      navigate('/orders');
+                    }}
                     className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-semibold transition-colors"
                   >
                     📦 {t('Lihat Pesanan','View Orders')}
                   </button>
                   <button
-                    onClick={() => navigate('/products')}
+                    onClick={() => {
+                      // Clear session storage
+                      sessionStorage.removeItem('lastOrderSummary');
+                      navigate('/products');
+                    }}
                     className="border border-green-600 text-green-600 dark:text-green-400 dark:border-green-500 px-6 py-3 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/10 font-semibold transition-colors"
                   >
                     🛍️ {t('Lanjut Belanja','Continue Shopping')}
@@ -780,14 +871,16 @@ const Checkout = () => {
               <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">{t('Ringkasan Pesanan','Order Summary')}</h2>
               
               {/* Cart Items List */}
-              <div className="space-y-3 mb-4">
-                {cartItems.map((item) => (
+              <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
+                {getDisplayItems().map((item) => (
                   <div key={item.id} className="flex justify-between">
                     <div className="flex-1">
-                      <p className="font-medium text-sm text-gray-900 dark:text-gray-100">{item.nama_produk}</p>
+                      <p className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">{item.nama_produk}</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">{formatCurrency(item.harga)} × {item.quantity}</p>
                     </div>
-                    <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">{formatCurrency(item.harga * item.quantity)}</p>
+                    <p className="font-semibold text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                      {formatCurrency(item.harga * item.quantity)}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -799,7 +892,7 @@ const Checkout = () => {
                   <span>{formatCurrency(calculateSubtotal())}</span>
                 </div>
                 
-                {/* ✅ Shipping Info based on step */}
+                {/* Shipping Info based on step */}
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-700 dark:text-gray-300">{t('Biaya Pengiriman','Shipping')}</span>
                   {currentStep === 1 ? (
@@ -816,6 +909,14 @@ const Checkout = () => {
                     </span>
                   )}
                 </div>
+                
+                {/* Payment Fee Info */}
+                {currentStep === 3 && paymentFee > 0 && (
+                  <div className="flex justify-between text-sm text-amber-600 dark:text-amber-400">
+                    <span>{t('Biaya Admin','Admin Fee')}</span>
+                    <span className="font-medium">+{formatCurrency(paymentFee)}</span>
+                  </div>
+                )}
                 
                 {/* Selected shipping method display */}
                 {currentStep >= 2 && formData.metode_pengiriman && (
@@ -919,14 +1020,14 @@ const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod, onFe
     return colors[category] || 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700';
   };
 
-  // ✅ NEW: Calculate fee for a channel
+  // Calculate fee for a channel
   const calculateChannelFee = (channel) => {
     const flatFee = channel.total_fee?.flat || 0;
     const percentFee = channel.total_fee?.percent || 0;
     return { flat: flatFee, percent: percentFee };
   };
 
-  // ✅ NEW: Handle payment method selection with fee
+  // Handle payment method selection with fee
   const handleSelectMethod = (channel) => {
     const fee = calculateChannelFee(channel);
     const totalFee = fee.flat; // For now, we'll use flat fee
@@ -1015,7 +1116,7 @@ const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod, onFe
                       </div>
                     </div>
 
-                    {/* ✅ UPDATED: Fee Display with better styling */}
+                    {/* Fee Display with better styling */}
                     <div className="text-right ml-3 flex-shrink-0">
                       {fee.flat > 0 || fee.percent > 0 ? (
                         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded px-2 py-1">
