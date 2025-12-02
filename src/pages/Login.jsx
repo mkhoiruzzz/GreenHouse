@@ -2,9 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext'; // ✅ Import ThemeContext
+import { useTheme } from '../context/ThemeContext';
 import { toast } from 'react-toastify';
 import { FcGoogle } from 'react-icons/fc';
+import { FaEye, FaEyeSlash } from 'react-icons/fa'; // ✅ Tambahkan icon mata
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -12,9 +13,10 @@ const Login = () => {
     password: ''
   });
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // ✅ State untuk show/hide password
   
   const { login, loginWithGoogle, isAuthenticated } = useAuth();
-  const { t } = useTheme(); // ✅ Tambahkan useTheme untuk translate
+  const { t } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -67,6 +69,11 @@ const Login = () => {
     }
   };
 
+  // ✅ Fungsi untuk toggle show/hide password
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   return (
     <div className="min-h-screen mt-16 py-12 bg-gray-50 dark:bg-gray-900 flex items-center justify-center transition-colors duration-300">
       <div className="max-w-md w-full mx-auto px-4">
@@ -97,21 +104,46 @@ const Login = () => {
               />
             </div>
 
-            <div>
+            <div className="relative"> {/* ✅ Wrapper relative untuk icon */}
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 transition-colors duration-300">
                 {t('Password', 'Password')} *
               </label>
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                required
-                disabled={loading}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-600 dark:focus:ring-green-500 focus:border-transparent disabled:opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-colors duration-300"
-                placeholder={t('masukkan password', 'enter password')}
-                minLength="6"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"} // ✅ Toggle type
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  disabled={loading}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-600 dark:focus:ring-green-500 focus:border-transparent disabled:opacity-50 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-colors duration-300 pr-12" // ✅ pr-12 untuk memberi ruang icon
+                  placeholder={t('masukkan password', 'enter password')}
+                  minLength="6"
+                />
+                {/* ✅ Icon mata untuk toggle password visibility */}
+                <button
+                  type="button"
+                  onClick={togglePasswordVisibility}
+                  disabled={loading}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 focus:outline-none disabled:opacity-50"
+                  aria-label={showPassword ? t('Sembunyikan password', 'Hide password') : t('Tampilkan password', 'Show password')}
+                >
+                  {showPassword ? (
+                    <FaEyeSlash className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 text-xl transition-colors duration-300" />
+                  ) : (
+                    <FaEye className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 text-xl transition-colors duration-300" />
+                  )}
+                </button>
+              </div>
+              {/* ✅ Link forgot password */}
+              <div className="mt-2 text-right">
+                <Link
+                  to="/forgot-password"
+                  className="text-sm text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors duration-300"
+                >
+                  {t('Lupa password?', 'Forgot password?')}
+                </Link>
+              </div>
             </div>
 
             <button
