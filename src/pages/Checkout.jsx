@@ -265,8 +265,8 @@ const Checkout = () => {
       const orderData = {
         user_id: user.id,
         total_harga: totalHarga,
-        biaya_pengiriman: formData.biaya_pengiriman,
-        biaya_admin: paymentFee,
+        biaya_pengiriman: formData.biaya_pengiriman || 0,
+        biaya_admin: paymentFee || 0,
         status_pembayaran: 'unpaid',
         status_pengiriman: 'pending',
         metode_pembayaran: `tripay_${selectedPaymentMethod}`,
@@ -274,10 +274,22 @@ const Checkout = () => {
         customer_name: formData.nama_lengkap,
         customer_email: formData.email,
         customer_phone: formData.no_telepon,
-        created_at: new Date().toISOString()
+        catatan: formData.catatan || null
       };
 
+      // Validasi data sebelum insert
+      if (!orderData.user_id) {
+        throw new Error('User ID is required');
+      }
+      if (!orderData.total_harga || orderData.total_harga <= 0) {
+        throw new Error('Total harga must be greater than 0');
+      }
+      if (!orderData.alamat_pengiriman) {
+        throw new Error('Alamat pengiriman is required');
+      }
+
       console.log('📝 Creating order with data:', orderData);
+      console.log('📝 Order data validation passed');
 
       const { data: order, error: orderError } = await supabase
         .from('orders')
@@ -297,22 +309,77 @@ const Checkout = () => {
 
       console.log('✅ Order created in database:', order.id);
 
-      // Insert order items
-      const orderItemsData = orderItems.map(item => ({
-        ...item,
-        order_id: order.id
-      }));
+      // Insert order items dengan nama_produk
+      if (!cartItems || cartItems.length === 0) {
+        throw new Error('Cart items is empty');
+      }
+
+      const orderItemsData = cartItems.map((item, index) => {
+        if (!item.id) {
+          throw new Error(`Cart item at index ${index} has no product ID`);
+        }
+        if (!item.quantity || item.quantity <= 0) {
+          throw new Error(`Cart item at index ${index} has invalid quantity`);
+        }
+        if (!item.harga || item.harga <= 0) {
+          throw new Error(`Cart item at index ${index} has invalid price`);
+        }
+
+        return {
+          order_id: order.id,
+          product_id: item.id,
+          quantity: item.quantity,
+          harga_satuan: item.harga,
+          nama_produk: item.nama_produk || item.nama || 'Produk'
+        };
+      });
 
       console.log('📦 Inserting order items:', orderItemsData);
+      console.log('📦 Order items count:', orderItemsData.length);
+      console.log('📦 Order ID:', order.id);
+      console.log('📦 Order items validation passed');
 
-      const { error: itemsError } = await supabase.from('order_items').insert(orderItemsData);
+      const { data: insertedItems, error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItemsData)
+        .select();
 
       if (itemsError) {
         console.error('❌ Order items error:', itemsError);
+        console.error('❌ Error details:', JSON.stringify(itemsError, null, 2));
         throw new Error(`Failed to insert order items: ${itemsError.message}`);
       }
 
-      console.log('✅ Order items created');
+      if (!insertedItems || insertedItems.length === 0) {
+        console.error('❌ No order items returned after insert');
+        throw new Error('Failed to insert order items - no data returned');
+      }
+
+      console.log('✅ Order items created successfully:', insertedItems.length, 'items');
+      console.log('✅ Inserted order items:', insertedItems);
+
+      // ✅ VERIFIKASI: Cek apakah data benar-benar ter-insert
+      console.log('🔍 Verifying order and order items in database...');
+      const { data: verifyOrder, error: verifyOrderError } = await supabase
+        .from('orders')
+        .select('*, order_items(*)')
+        .eq('id', order.id)
+        .single();
+
+      if (verifyOrderError) {
+        console.error('⚠️ Warning: Could not verify order:', verifyOrderError);
+        console.error('⚠️ This might indicate a problem with RLS policies or database access');
+      } else {
+        console.log('✅ Verification successful - Order found:', verifyOrder.id);
+        console.log('✅ Order items count in database:', verifyOrder.order_items?.length || 0);
+        
+        if (verifyOrder.order_items?.length !== orderItemsData.length) {
+          console.warn('⚠️ Warning: Order items count mismatch!');
+          console.warn('Expected:', orderItemsData.length, 'Found:', verifyOrder.order_items?.length);
+        } else {
+          console.log('✅ All order items verified successfully');
+        }
+      }
 
       // Create payment
       const merchantRef = `ORDER-${order.id}-${Date.now()}`;
