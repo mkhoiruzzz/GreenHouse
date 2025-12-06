@@ -6,6 +6,8 @@ import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { toast } from "react-toastify";
 import ProductForm from "../components/ProductForm";
+import AdminOrders from "./AdminOrders";
+import AdminUsers from "./AdminUsers";
 import { useTheme } from "../context/ThemeContext";
 
 const AdminDashboard = () => {
@@ -363,21 +365,62 @@ const handleRestoreProduct = async (id, productData) => {
   });
 
   return (
-  <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 dark:from-gray-900 dark:to-gray-800 p-4 transition-colors duration-300">
-    <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 dark:from-gray-900 dark:to-gray-800 p-4 transition-colors duration-300">
+      <div className="max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-gray-800 dark:text-white mb-2 transition-colors duration-300">
           {t('Admin Dashboard', 'Admin Dashboard')}
         </h1>
         <p className="text-gray-600 dark:text-gray-300 transition-colors duration-300">
-          {t('Kelola produk tanaman Anda', 'Manage your plant products')}
+          {t('Kelola produk, pesanan, dan pengguna', 'Manage products, orders, and users')}
         </p>
       </div>
 
-        {/* Filter & Search Bar */}
-         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-6 mb-6 border border-gray-100 dark:border-gray-700 transition-colors duration-300">
-        <div className="flex flex-col md:flex-row gap-4">
+      {/* Tab Navigation */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md mb-6 border border-gray-100 dark:border-gray-700">
+        <div className="flex border-b border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => setActiveTab("products")}
+            className={`flex-1 px-6 py-4 font-semibold transition-colors duration-300 ${
+              activeTab === "products"
+                ? "text-green-600 dark:text-green-400 border-b-2 border-green-600 dark:border-green-400 bg-green-50 dark:bg-green-900/20"
+                : "text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+            }`}
+          >
+            📦 {t('Produk', 'Products')}
+          </button>
+          <button
+            onClick={() => setActiveTab("orders")}
+            className={`flex-1 px-6 py-4 font-semibold transition-colors duration-300 ${
+              activeTab === "orders"
+                ? "text-green-600 dark:text-green-400 border-b-2 border-green-600 dark:border-green-400 bg-green-50 dark:bg-green-900/20"
+                : "text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+            }`}
+          >
+            📋 {t('Pesanan', 'Orders')}
+          </button>
+          <button
+            onClick={() => setActiveTab("users")}
+            className={`flex-1 px-6 py-4 font-semibold transition-colors duration-300 ${
+              activeTab === "users"
+                ? "text-green-600 dark:text-green-400 border-b-2 border-green-600 dark:border-green-400 bg-green-50 dark:bg-green-900/20"
+                : "text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+            }`}
+          >
+            👥 {t('Pengguna', 'Users')}
+          </button>
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === "orders" && <AdminOrders />}
+      {activeTab === "users" && <AdminUsers />}
+      {activeTab === "products" && (
+        <>
+          {/* Filter & Search Bar */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-6 mb-6 border border-gray-100 dark:border-gray-700 transition-colors duration-300">
+            <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <input
               type="text"
@@ -386,22 +429,22 @@ const handleRestoreProduct = async (id, productData) => {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
             />
-          </div>
+            </div>
 
-           <select
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          >
-            <option value="">{t('🏷️ Semua Kategori', '🏷️ All Categories')}</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name_kategori}
-              </option>
-            ))}
-          </select>
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              <option value="">{t('🏷️ Semua Kategori', '🏷️ All Categories')}</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name_kategori}
+                </option>
+              ))}
+            </select>
 
-          <button
+            <button
             className="bg-gradient-to-r from-green-500 to-emerald-600 dark:from-green-600 dark:to-emerald-700 text-white px-6 py-3 rounded-xl font-semibold hover:from-green-600 hover:to-emerald-700 dark:hover:from-green-500 dark:hover:to-emerald-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2"
             onClick={() => {
               setShowAddProduct(true);
@@ -410,43 +453,43 @@ const handleRestoreProduct = async (id, productData) => {
               setImagePreview(null);
             }}
           >
-            <span className="text-xl">+</span>
-            {t('Tambah Produk', 'Add Product')}
-          </button>
-        </div>
+              <span className="text-xl">+</span>
+              {t('Tambah Produk', 'Add Product')}
+            </button>
+          </div>
 
           {/* Stats */}
-           <div className="grid grid-cols-3 gap-4 mt-6">
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800/30 transition-colors duration-300">
-            <p className="text-sm text-blue-600 dark:text-blue-400 font-medium transition-colors duration-300">
-              {t('Total Produk', 'Total Products')}
-            </p>
-            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 transition-colors duration-300">
-              {products.length}
-            </p>
-          </div>
-          <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-xl p-4 border border-green-100 dark:border-green-800/30 transition-colors duration-300">
-            <p className="text-sm text-green-600 dark:text-green-400 font-medium transition-colors duration-300">
-              {t('Kategori', 'Categories')}
-            </p>
-            <p className="text-2xl font-bold text-green-700 dark:text-green-300 transition-colors duration-300">
-              {categories.length}
-            </p>
-          </div>
-          <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800/30 transition-colors duration-300">
-            <p className="text-sm text-purple-600 dark:text-purple-400 font-medium transition-colors duration-300">
-              {t('Hasil Filter', 'Filtered Results')}
-            </p>
-            <p className="text-2xl font-bold text-purple-700 dark:text-purple-300 transition-colors duration-300">
-              {filteredProducts.length}
-            </p>
+          <div className="grid grid-cols-3 gap-4 mt-6">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800/30 transition-colors duration-300">
+              <p className="text-sm text-blue-600 dark:text-blue-400 font-medium transition-colors duration-300">
+                {t('Total Produk', 'Total Products')}
+              </p>
+              <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 transition-colors duration-300">
+                {products.length}
+              </p>
+            </div>
+            <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-xl p-4 border border-green-100 dark:border-green-800/30 transition-colors duration-300">
+              <p className="text-sm text-green-600 dark:text-green-400 font-medium transition-colors duration-300">
+                {t('Kategori', 'Categories')}
+              </p>
+              <p className="text-2xl font-bold text-green-700 dark:text-green-300 transition-colors duration-300">
+                {categories.length}
+              </p>
+            </div>
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800/30 transition-colors duration-300">
+              <p className="text-sm text-purple-600 dark:text-purple-400 font-medium transition-colors duration-300">
+                {t('Hasil Filter', 'Filtered Results')}
+              </p>
+              <p className="text-2xl font-bold text-purple-700 dark:text-purple-300 transition-colors duration-300">
+                {filteredProducts.length}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-        {/* ADD PRODUCT */}
-        {showAddProduct && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg mb-6 overflow-hidden border border-gray-100 dark:border-gray-700 transition-colors duration-300">
+          {/* ADD PRODUCT */}
+          {showAddProduct && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg mb-6 overflow-hidden border border-gray-100 dark:border-gray-700 transition-colors duration-300">
           <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-4">
             <h2 className="text-xl font-bold text-white">
               ➕ {t('Tambah Produk Baru', 'Add New Product')}
@@ -468,15 +511,14 @@ const handleRestoreProduct = async (id, productData) => {
               uploading={uploading}
               loading={loading}
               handleImageUpload={handleImageUpload}
-            />
+              />
+            </div>
           </div>
-        </div>
-      )}
+          )}
 
-
-        {/* EDIT PRODUCT */}
-       {showEditProduct && editProduct && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg mb-6 overflow-hidden border border-gray-100 dark:border-gray-700 transition-colors duration-300">
+          {/* EDIT PRODUCT */}
+          {showEditProduct && editProduct && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg mb-6 overflow-hidden border border-gray-100 dark:border-gray-700 transition-colors duration-300">
           <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-4">
             <h2 className="text-xl font-bold text-white">
               ✏️ {t('Edit Produk', 'Edit Product')}
@@ -497,15 +539,14 @@ const handleRestoreProduct = async (id, productData) => {
               imagePreview={imagePreview}
               uploading={uploading}
               loading={loading}
-              handleImageUpload={handleImageUpload}
-            />
+                handleImageUpload={handleImageUpload}
+              />
+            </div>
           </div>
-        </div>
-      )}
-        
+          )}
 
-{/* PRODUCT LIST */}
-  <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden border border-gray-100 dark:border-gray-700 transition-colors duration-300">
+          {/* PRODUCT LIST */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden border border-gray-100 dark:border-gray-700 transition-colors duration-300">
         <div className="bg-gradient-to-r from-gray-700 to-gray-800 dark:from-gray-600 dark:to-gray-700 px-6 py-4">
           <h2 className="text-xl font-bold text-white">
             📦 {t('Daftar Produk', 'Product List')}
@@ -706,10 +747,12 @@ const handleRestoreProduct = async (id, productData) => {
             </tbody>
           </table>
         </div>
-      </>
-    )}
-  </div>
-</div>
+            </>
+          )}
+        </div>
+      </div>
+        </>
+      )}
       </div>
     </div>
   );
