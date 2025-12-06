@@ -173,22 +173,22 @@ const Checkout = () => {
     loadPaymentChannels();
   }, []);
 
-  // Auto-fill form dari user profile
-  useEffect(() => {
-    if (user) {
-      console.log('🔄 Auto-filling form from user');
+  // Auto-fill form dari user profile - DISABLED (user harus mengisi sendiri)
+  // useEffect(() => {
+  //   if (user) {
+  //     console.log('🔄 Auto-filling form from user');
 
-      setFormData(prev => ({
-        ...prev,
-        email: user.email || '',
-        nama_lengkap: user.user_metadata?.full_name || '',
-        kota: user.user_metadata?.city || '',
-        alamat_pengiriman: user.user_metadata?.address || '',
-        kode_pos: user.user_metadata?.postal_code || '',
-        no_telepon: user.user_metadata?.phone || ''
-      }));
-    }
-  }, [user]);
+  //     setFormData(prev => ({
+  //       ...prev,
+  //       email: user.email || '',
+  //       nama_lengkap: user.user_metadata?.full_name || '',
+  //       kota: user.user_metadata?.city || '',
+  //       alamat_pengiriman: user.user_metadata?.address || '',
+  //       kode_pos: user.user_metadata?.postal_code || '',
+  //       no_telepon: user.user_metadata?.phone || ''
+  //     }));
+  //   }
+  // }, [user]);
 
   const formatOrderItems = () => {
     return cartItems.map(item => ({
@@ -800,26 +800,6 @@ const Checkout = () => {
                   </div>
                 )}
 
-                {/* Display selected payment with fee */}
-                {selectedPaymentMethod && (
-                  <div className="mt-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3">
-                   <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6">
-                      <div className="flex items-center gap-2">
-                        <span className="text-green-600 dark:text-green-400">✓</span>
-                        <p className="text-green-800 dark:text-green-200 font-medium text-sm">
-                          {t('Metode terpilih:', 'Selected method:')} <strong>{selectedPaymentMethod.toUpperCase()}</strong>
-                        </p>
-                      </div>
-                      {paymentFee > 0 && (
-                        <div className="bg-amber-100 dark:bg-amber-900/30 px-2 py-1 rounded">
-                          <p className="text-amber-800 dark:text-amber-300 text-xs font-semibold">
-                            Fee: {formatCurrency(paymentFee)}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
 
                 {/* Info Tripay */}
                 <div className="mt-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
@@ -887,16 +867,38 @@ const Checkout = () => {
                   </div>
                 </div>
                 
-                {/* Items purchased list */}
+                {/* Items purchased list with images */}
                 {orderSummary?.items && orderSummary.items.length > 0 && (
                   <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-6 text-left max-w-md mx-auto">
                     <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">{t('Produk yang dibeli','Products Purchased')}:</h4>
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                    <div className="space-y-3 max-h-40 overflow-y-auto">
                       {orderSummary.items.map((item, index) => (
-                        <div key={index} className="flex justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-300 truncate max-w-[180px]">
-                            {item.nama_produk} × {item.quantity}
-                          </span>
+                        <div key={index} className="flex items-center gap-3 text-sm">
+                          {/* Product Image */}
+                          <div className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+                            {item.gambar_url || item.image_url ? (
+                              <img
+                                src={item.gambar_url || item.image_url}
+                                alt={item.nama_produk}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-xl">🌱</div>';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-xl">
+                                🌱
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            <span className="text-gray-600 dark:text-gray-300 truncate block">
+                              {item.nama_produk} × {item.quantity}
+                            </span>
+                          </div>
+                          
                           <span className="font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">
                             {formatCurrency(item.harga * item.quantity)}
                           </span>
@@ -937,14 +939,36 @@ const Checkout = () => {
             <div className="bg-white dark:bg-gray-800 dark:border dark:border-gray-700 rounded-lg shadow p-6 h-fit transition-colors duration-300">
               <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">{t('Ringkasan Pesanan','Order Summary')}</h2>
               
-              {/* Cart Items List */}
+              {/* Cart Items List with Images */}
               <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
                 {getDisplayItems().map((item) => (
-                  <div key={item.id} className="flex justify-between">
-                    <div className="flex-1">
+                  <div key={item.id} className="flex items-center gap-3">
+                    {/* Product Image */}
+                    <div className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+                      {item.gambar_url || item.image_url ? (
+                        <img
+                          src={item.gambar_url || item.image_url}
+                          alt={item.nama_produk}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-2xl">🌱</div>';
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-2xl">
+                          🌱
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Product Info */}
+                    <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">{item.nama_produk}</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">{formatCurrency(item.harga)} × {item.quantity}</p>
                     </div>
+                    
+                    {/* Product Total */}
                     <p className="font-semibold text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">
                       {formatCurrency(item.harga * item.quantity)}
                     </p>
@@ -977,11 +1001,25 @@ const Checkout = () => {
                   )}
                 </div>
                 
-                {/* Payment Fee Info */}
-                {currentStep === 3 && paymentFee > 0 && (
-                  <div className="flex justify-between text-sm text-amber-600 dark:text-amber-400">
+                {/* Payment Fee Info - Similar to shipping */}
+                {currentStep === 3 ? (
+                  paymentFee > 0 ? (
+                    <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300">
+                      <span>{t('Biaya Admin','Admin Fee')}</span>
+                      <span className="font-medium">{formatCurrency(paymentFee)}</span>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-700 dark:text-gray-300">{t('Biaya Admin','Admin Fee')}</span>
+                      <span className="text-xs text-amber-600 dark:text-amber-400 italic font-medium">
+                        {t('Pilih metode pembayaran','Select payment method')} →
+                      </span>
+                    </div>
+                  )
+                ) : currentStep > 3 && paymentFee > 0 && (
+                  <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300">
                     <span>{t('Biaya Admin','Admin Fee')}</span>
-                    <span className="font-medium">+{formatCurrency(paymentFee)}</span>
+                    <span className="font-medium">{formatCurrency(paymentFee)}</span>
                   </div>
                 )}
                 
@@ -990,6 +1028,15 @@ const Checkout = () => {
                   <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded p-2 text-xs">
                     <p className="text-green-800 dark:text-green-300 font-medium">
                       ✓ {formData.metode_pengiriman.toUpperCase().replace('_', ' ')}
+                    </p>
+                  </div>
+                )}
+                
+                {/* Selected payment method display */}
+                {currentStep >= 3 && selectedPaymentMethod && (
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded p-2 text-xs">
+                    <p className="text-green-800 dark:text-green-300 font-medium">
+                      ✓ {selectedPaymentMethod.toUpperCase().replace('_', ' ')}
                     </p>
                   </div>
                 )}
@@ -1143,21 +1190,21 @@ const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod, onFe
                 return (
                   <div
                     key={channel.code}
-                    className={`flex items-center justify-between p-3 bg-white dark:bg-gray-800 border-2 rounded-lg cursor-pointer transition-all ${
+                    className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-all ${
                       selectedMethod === channel.code
-                        ? 'border-green-500 shadow-md bg-green-50 dark:bg-green-900/20'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-green-300'
+                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20 shadow-md'
+                        : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-green-300 dark:hover:border-green-600'
                     }`}
                     onClick={() => handleSelectMethod(channel)}
                   >
-                    <div className="flex items-center gap-3 flex-1">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
                       <input
                         type="radio"
                         checked={selectedMethod === channel.code}
                         onChange={() => {}}
                         className="w-4 h-4 text-green-600"
                       />
-
+                      
                       {/* Payment Icon */}
                       <div className="w-12 h-12 flex items-center justify-center bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 flex-shrink-0">
                         {channel.icon_url ? (
@@ -1172,36 +1219,26 @@ const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod, onFe
                             }}
                           />
                         ) : (
-                          <span className="text-xl">💳</span>
+                          <span className="text-2xl">💳</span>
                         )}
                       </div>
-
-                      {/* Payment Info */}
+                      
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate">{channel.name}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{channel.group}</p>
+                        <p className="font-semibold text-gray-900 dark:text-gray-200">{channel.name}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {channel.group}
+                        </p>
                       </div>
                     </div>
-
-                    {/* Fee Display with better styling */}
+                    
+                    {/* Fee Display - Similar to Step 2 */}
                     <div className="text-right ml-3 flex-shrink-0">
-                      {fee.flat > 0 || fee.percent > 0 ? (
-                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded px-2 py-1">
-                          {fee.flat > 0 && (
-                            <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
-                              +{formatCurrency(fee.flat)}
-                            </p>
-                          )}
-                          {fee.percent > 0 && (
-                            <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
-                              +{fee.percent}%
-                            </p>
-                          )}
-                        </div>
+                      {fee.flat > 0 ? (
+                        <p className="font-bold text-lg text-green-600 dark:text-green-400">{formatCurrency(fee.flat)}</p>
+                      ) : fee.percent > 0 ? (
+                        <p className="font-bold text-lg text-green-600 dark:text-green-400">{fee.percent}%</p>
                       ) : (
-                        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded px-2 py-1">
-                          <p className="text-xs font-semibold text-green-700 dark:text-green-400">Gratis</p>
-                        </div>
+                        <p className="font-bold text-lg text-green-600 dark:text-green-400">Gratis</p>
                       )}
                     </div>
                   </div>

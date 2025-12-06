@@ -204,89 +204,107 @@ const Product = () => {
   };
 
   return (
-     <div className="min-h-screen mt-16 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-      {/* Tokopedia Style Header */}
-     <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-4 transition-colors duration-300">
+     <div className="min-h-screen mt-16 bg-gradient-to-br from-green-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
+      {/* Modern Hero Section */}
+      <div className="bg-gradient-to-r from-green-600 to-emerald-600 dark:from-green-700 dark:to-emerald-700 text-white py-8 sm:py-12 shadow-lg">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold text-green-600 dark:text-green-500">Green House</h1>
-            <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-            </div>
+          <div className="text-center mb-6">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-3 drop-shadow-lg">
+              🌱 Green House
+            </h1>
+            <p className="text-green-100 text-sm sm:text-base max-w-2xl mx-auto">
+              Temukan tanaman hias dan aksesoris berkualitas untuk menghiasi rumah Anda
+            </p>
           </div>
 
-          {/* Search Bar - Tokopedia Style */}
-          <div className="relative mb-4">
-           <input
-            type="text"
-            placeholder="Cari produk di Green House..."
-            value={filters.search}
-            onChange={(e) => handleFilterChange('search', e.target.value)}
-            className="w-full p-4 pl-12 border border-green-500 dark:border-green-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-colors duration-300"
-                      />
-            <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400">
+          {/* Enhanced Search Bar */}
+          <div className="relative max-w-2xl mx-auto">
+            <input
+              type="text"
+              placeholder="Cari produk... (contoh: Monstera, Pot, Pupuk)"
+              value={filters.search}
+              onChange={(e) => handleFilterChange('search', e.target.value)}
+              className="w-full p-4 pl-14 pr-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-xl shadow-lg focus:outline-none focus:ring-4 focus:ring-green-300 dark:focus:ring-green-600 transition-all duration-300 placeholder-gray-400 dark:placeholder-gray-500"
+            />
+            <div className="absolute left-5 top-1/2 transform -translate-y-1/2 text-green-600 dark:text-green-400">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
+            {filters.search && (
+              <button
+                onClick={() => handleFilterChange('search', '')}
+                className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
 
-          {/* Quick Categories - Tokopedia Style */}
-          <div className="flex gap-4 overflow-x-auto pb-2">
+          {/* Enhanced Quick Categories */}
+          <div className="flex gap-3 overflow-x-auto pb-2 mt-6 px-2 scrollbar-hide">
             <button
               onClick={() => handleFilterChange('productType', 'all')}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors duration-300 ${
+              className={`px-5 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-300 shadow-md ${
               filters.productType === 'all' 
-                ? 'bg-green-600 dark:bg-green-700 text-white' 
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                ? 'bg-white text-green-600 shadow-lg scale-105' 
+                : 'bg-green-500/20 text-white hover:bg-green-500/30 backdrop-blur-sm'
             }`}
-                        >
-              Semua
+            >
+              🌿 Semua
             </button>
             <button
               onClick={() => handleFilterChange('productType', 'plants')}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap ${
+              className={`px-5 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-300 shadow-md ${
                 filters.productType === 'plants' 
-                  ? 'bg-green-600 text-white' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-white text-green-600 shadow-lg scale-105' 
+                  : 'bg-green-500/20 text-white hover:bg-green-500/30 backdrop-blur-sm'
               }`}
             >
-              Tanaman Hias
+              🌱 Tanaman Hias
             </button>
             <button
               onClick={() => handleFilterChange('productType', 'accessories')}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap ${
+              className={`px-5 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-300 shadow-md ${
                 filters.productType === 'accessories' 
-                  ? 'bg-green-600 text-white' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-white text-green-600 shadow-lg scale-105' 
+                  : 'bg-green-500/20 text-white hover:bg-green-500/30 backdrop-blur-sm'
               }`}
             >
-              Aksesoris
+              🪴 Aksesoris
             </button>
             <button
               onClick={() => handleFilterChange('durability', 'easy')}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap ${
+              className={`px-5 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-300 shadow-md ${
                 filters.durability === 'easy' 
-                  ? 'bg-green-600 text-white' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-white text-green-600 shadow-lg scale-105' 
+                  : 'bg-green-500/20 text-white hover:bg-green-500/30 backdrop-blur-sm'
               }`}
             >
-              Mudah Rawat
+              ⭐ Mudah Rawat
             </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-4 py-6 sm:py-8">
         <div className="flex gap-6">
-          {/* Sidebar Filter - Tokopedia Style */}
+          {/* Enhanced Sidebar Filter */}
           <div className="hidden lg:block w-64 flex-shrink-0">
-  <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 sticky top-24 transition-colors duration-300">
+            <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl p-5 sticky top-24 transition-all duration-300 hover:shadow-2xl">
               {/* Filter Header */}
-              <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-200">
-               <h3 className="font-semibold text-gray-800 dark:text-white">Filter</h3>
-<button
-  onClick={clearFilters}
-  className="text-green-600 dark:text-green-400 text-sm font-medium hover:text-green-700 dark:hover:text-green-300 transition-colors duration-300"
+              <div className="flex items-center justify-between mb-5 pb-4 border-b-2 border-green-100 dark:border-gray-700">
+                <h3 className="font-bold text-lg text-gray-800 dark:text-white flex items-center gap-2">
+                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
+                  </svg>
+                  Filter
+                </h3>
+                <button
+                  onClick={clearFilters}
+                  className="text-green-600 dark:text-green-400 text-sm font-semibold hover:text-green-700 dark:hover:text-green-300 transition-colors duration-300 px-3 py-1 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20"
                 >
                   Reset
                 </button>
@@ -294,23 +312,27 @@ const Product = () => {
 
               {/* Sort Options */}
               <div className="mb-6">
-                <h4 className="font-medium text-gray-700 mb-3">Urutkan</h4>
+                <h4 className="font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
+                  <span className="text-green-600">📊</span>
+                  Urutkan
+                </h4>
                 <div className="space-y-2">
                   {[
-                    { value: 'newest', label: 'Terbaru' },
-                    { value: 'price_low', label: 'Harga Terendah' },
-                    { value: 'price_high', label: 'Harga Tertinggi' },
-                    { value: 'name', label: 'Nama A-Z' }
+                    { value: 'newest', label: 'Terbaru', icon: '🆕' },
+                    { value: 'price_low', label: 'Harga Terendah', icon: '💰' },
+                    { value: 'price_high', label: 'Harga Tertinggi', icon: '💎' },
+                    { value: 'name', label: 'Nama A-Z', icon: '🔤' }
                   ].map((option) => (
                     <button
                       key={option.value}
                       onClick={() => handleFilterChange('sort', option.value)}
-                      className={`w-full text-left p-2 rounded text-sm ${
+                      className={`w-full text-left p-3 rounded-lg text-sm transition-all duration-300 flex items-center gap-2 ${
                         filters.sort === option.value
-                          ? 'bg-green-50 text-green-600 font-medium'
-                          : 'text-gray-600 hover:bg-gray-50'
+                          ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold shadow-md transform scale-105'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-green-50 dark:hover:bg-gray-700 hover:shadow-sm'
                       }`}
                     >
+                      <span>{option.icon}</span>
                       {option.label}
                     </button>
                   ))}
@@ -319,11 +341,14 @@ const Product = () => {
 
               {/* Categories */}
               <div className="mb-6">
-                <h4 className="font-medium text-gray-700 mb-3">Kategori</h4>
+                <h4 className="font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
+                  <span className="text-green-600">🏷️</span>
+                  Kategori
+                </h4>
                 <select
                   value={filters.category}
                   onChange={(e) => handleFilterChange('category', e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                  className="w-full p-3 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all duration-300 hover:border-green-300 dark:hover:border-green-600"
                 >
                   <option value="">Semua Kategori</option>
                   {categories.map((category) => (
@@ -382,22 +407,23 @@ const Product = () => {
               </div>
             </div>
 
-            {/* Sort Bar - Tokopedia Style */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  Menampilkan <span className="font-semibold text-green-600">{products.length}</span> produk
+            {/* Enhanced Sort Bar */}
+            <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl border border-gray-200/50 dark:border-gray-700/50 shadow-lg p-4 mb-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="text-sm text-gray-700 dark:text-gray-300">
+                  Menampilkan <span className="font-bold text-green-600 dark:text-green-400 text-lg">{products.length}</span> produk
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Urutkan:</span>
                   <select
                     value={filters.sort}
                     onChange={(e) => handleFilterChange('sort', e.target.value)}
-                    className="text-sm border border-gray-300 rounded p-2 focus:outline-none focus:ring-1 focus:ring-green-500"
+                    className="flex-1 sm:flex-none text-sm border-2 border-gray-200 dark:border-gray-700 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all duration-300 hover:border-green-300 dark:hover:border-green-600"
                   >
-                    <option value="newest">Terbaru</option>
-                    <option value="price_low">Harga Terendah</option>
-                    <option value="price_high">Harga Tertinggi</option>
-                    <option value="name">Nama A-Z</option>
+                    <option value="newest">🆕 Terbaru</option>
+                    <option value="price_low">💰 Harga Terendah</option>
+                    <option value="price_high">💎 Harga Tertinggi</option>
+                    <option value="name">🔤 Nama A-Z</option>
                   </select>
                 </div>
               </div>
