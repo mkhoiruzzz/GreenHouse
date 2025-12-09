@@ -348,10 +348,16 @@ export const AuthProvider = ({ children }) => {
 
   const loginWithGoogle = async () => {
     try {
+      // ✅ FIX: Gunakan URL dinamis berdasarkan environment
+      // Mendeteksi URL saat ini (localhost atau production)
+      const redirectUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+      
+      console.log('🔐 Google login redirect URL:', redirectUrl);
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: "https://green-house-khoiruz.vercel.app/",
+          redirectTo: `${redirectUrl}/`,
         },
       });
 

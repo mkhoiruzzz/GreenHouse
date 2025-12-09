@@ -102,7 +102,7 @@ const Checkout = () => {
           setPaymentStatus('success');
           setOrderId(order.id);
           setCurrentStep(4);
-          await updateProductStockAfterPayment(order.id);
+          // ✅ Stok sudah dikurangi saat order dibuat, tidak perlu dikurangi lagi
           
           // ✅ Simpan ringkasan order sebelum clear cart
           saveOrderSummary();
@@ -198,31 +198,6 @@ const Checkout = () => {
     }));
   };
 
-  const updateProductStockAfterPayment = async (orderId) => {
-    try {
-      const { data: orderItems } = await supabase
-        .from('order_items')
-        .select('product_id, quantity')
-        .eq('order_id', orderId);
-
-      for (const item of orderItems || []) {
-        const { data: product } = await supabase
-          .from('products')
-          .select('stok')
-          .eq('id', item.product_id)
-          .single();
-
-        if (product) {
-          await supabase
-            .from('products')
-            .update({ stok: product.stok - item.quantity })
-            .eq('id', item.product_id);
-        }
-      }
-    } catch (error) {
-      console.error('❌ Error updating stock:', error);
-    }
-  };
 
   const handlePlaceOrder = async () => {
     try {
@@ -358,6 +333,60 @@ const Checkout = () => {
       console.log('✅ Order items created successfully:', insertedItems.length, 'items');
       console.log('✅ Inserted order items:', insertedItems);
 
+      // ✅ KURANGI STOK PRODUK SAAT ORDER DIBUAT (BUKAN SETELAH PEMBAYARAN)
+      console.log('📦 Reducing product stock...');
+      for (const item of cartItems) {
+        try {
+          // Get current stock
+          const { data: productData, error: productError } = await supabase
+            .from('products')
+            .select('stok, nama_produk')
+            .eq('id', item.id)
+            .single();
+
+          if (productError) {
+            console.error(`❌ Error fetching product ${item.id}:`, productError);
+            continue;
+          }
+
+          if (!productData) {
+            console.warn(`⚠️ Product ${item.id} not found`);
+            continue;
+          }
+
+          // Validasi stok cukup
+          if (productData.stok < item.quantity) {
+            throw new Error(`Stok ${productData.nama_produk} tidak mencukupi. Tersedia: ${productData.stok}, Dibutuhkan: ${item.quantity}`);
+          }
+
+          // Update stock - kurangi stok (pastikan operator minus digunakan)
+          const currentStock = parseInt(productData.stok) || 0;
+          const quantityToReduce = parseInt(item.quantity) || 0;
+          const newStock = currentStock - quantityToReduce;
+          
+          // Validasi: stok baru tidak boleh negatif
+          if (newStock < 0) {
+            throw new Error(`Stok ${productData.nama_produk} tidak mencukupi. Tersedia: ${currentStock}, Dibutuhkan: ${quantityToReduce}`);
+          }
+          
+          const { error: stockUpdateError } = await supabase
+            .from('products')
+            .update({ stok: newStock })
+            .eq('id', item.id);
+
+          if (stockUpdateError) {
+            console.error(`❌ Error updating stock for product ${item.id}:`, stockUpdateError);
+            throw new Error(`Gagal mengurangi stok ${productData.nama_produk}`);
+          }
+
+          console.log(`✅ Stock updated for product ${productData.nama_produk}: ${productData.stok} → ${newStock}`);
+        } catch (stockError) {
+          console.error('❌ Error in stock reduction:', stockError);
+          throw stockError; // Throw error untuk rollback order
+        }
+      }
+      console.log('✅ All product stocks reduced successfully');
+
       // ✅ VERIFIKASI: Cek apakah data benar-benar ter-insert
       console.log('🔍 Verifying order and order items in database...');
       const { data: verifyOrder, error: verifyOrderError } = await supabase
@@ -491,7 +520,7 @@ const Checkout = () => {
           .update({ status_pembayaran: 'paid' })
           .eq('id', order.id);
         
-        await updateProductStockAfterPayment(order.id);
+        // ✅ Stok sudah dikurangi saat order dibuat, tidak perlu dikurangi lagi
         toast.success(t('Pembayaran berhasil!', 'Payment successful!'));
       }
 

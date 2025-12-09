@@ -1,4 +1,4 @@
-// src/pages/Orders.jsx - FIXED DARK MODE
+// src/pages/Orders.jsx - FIXED DARK MODE + CANCEL ORDER (1 DAY LIMIT)
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -6,26 +6,7 @@ import { formatCurrency } from '../utils/formatCurrency';
 import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useTheme } from '../context/ThemeContext';
-
-// Import supabase
-let supabase;
-try {
-  const supabaseModule = await import('../lib/supabase');
-  supabase = supabaseModule.supabase;
-  console.log('✅ Supabase loaded successfully');
-} catch (error) {
-  console.warn('⚠️ Supabase config not found, using fallback');
-  supabase = {
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          order: () => Promise.resolve({ data: [], error: null })
-        }),
-        single: () => Promise.resolve({ data: null, error: new Error('Supabase not configured') })
-      })
-    })
-  };
-}
+import { supabase } from '../lib/supabase';
 
 const Orders = () => {
   const { user, isAuthenticated } = useAuth();
@@ -271,6 +252,110 @@ const Orders = () => {
     return order.status_pengiriman || order.status_pembayaran || 'pending';
   };
 
+  // ✅ Fungsi untuk cek apakah pesanan masih bisa dibatalkan (dalam 1 hari)
+  const canCancelOrder = (order) => {
+    // Hanya bisa cancel jika status masih pending/unpaid
+    const status = order.status_pembayaran || order.status_pengiriman || 'pending';
+    if (status !== 'pending' && status !== 'unpaid') {
+      return false;
+    }
+
+    // Cek apakah sudah melebihi batas waktu (1 hari = 24 jam)
+    const orderDate = new Date(order.created_at);
+    const now = new Date();
+    const diffTime = now - orderDate;
+    const diffHours = diffTime / (1000 * 60 * 60); // Convert ke jam
+
+    // Bisa cancel jika belum melebihi 1 hari (24 jam)
+    return diffHours <= 24;
+  };
+
+  // ✅ Fungsi untuk mendapatkan sisa waktu cancel (dalam jam)
+  const getRemainingCancelTime = (order) => {
+    const orderDate = new Date(order.created_at);
+    const now = new Date();
+    const diffTime = (orderDate.getTime() + (24 * 60 * 60 * 1000)) - now.getTime(); // 1 hari dari order date
+    const diffHours = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60)));
+    return diffHours;
+  };
+
+  // ✅ Fungsi untuk batalkan pesanan
+  const handleCancelOrder = async (order) => {
+    // Validasi ulang sebelum cancel
+    if (!canCancelOrder(order)) {
+      toast.error(t('Pesanan tidak bisa dibatalkan. Batas waktu pembatalan adalah 1 hari (24 jam) sejak pesanan dibuat.', 'Order cannot be cancelled. Cancellation deadline is 1 day (24 hours) from order date.'));
+      return;
+    }
+
+    // Konfirmasi dari user
+    const confirmMessage = t(
+      'Apakah Anda yakin ingin membatalkan pesanan ini? Tindakan ini tidak dapat dibatalkan.',
+      'Are you sure you want to cancel this order? This action cannot be undone.'
+    );
+
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Update status pesanan menjadi dibatalkan
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({
+          status_pembayaran: 'dibatalkan',
+          status_pengiriman: 'dibatalkan',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id);
+
+      if (updateError) throw updateError;
+
+      // Kembalikan stok produk jika ada
+      if (order.order_items && order.order_items.length > 0) {
+        for (const item of order.order_items) {
+          try {
+            // Get current stock
+            const { data: productData, error: productError } = await supabase
+              .from('products')
+              .select('stok')
+              .eq('id', item.product_id)
+              .single();
+
+            if (!productError && productData) {
+              // Update stock - kembalikan stok yang sudah dikurangi
+              const newStock = (parseInt(productData.stok) || 0) + (parseInt(item.quantity) || 0);
+              await supabase
+                .from('products')
+                .update({ stok: newStock })
+                .eq('id', item.product_id);
+            }
+          } catch (stockError) {
+            console.warn('Error updating stock for product:', item.product_id, stockError);
+            // Continue dengan produk lain meskipun ada error
+          }
+        }
+      }
+
+      toast.success(t('Pesanan berhasil dibatalkan', 'Order cancelled successfully'));
+      
+      // Refresh orders list
+      await fetchOrders();
+      
+      // Close detail modal if open
+      if (selectedOrder?.id === order.id) {
+        setSelectedOrder(null);
+      }
+
+    } catch (error) {
+      console.error('Error cancelling order:', error);
+      toast.error(t('Gagal membatalkan pesanan: ', 'Failed to cancel order: ') + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleImageError = (e) => {
     e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik01MCAzM0M0MS4xNjM0IDMzIDM0IDQwLjE2MzQgMzQgNTBDMzQgNTkuODM2NiA0MS4xNjM0IDY3IDUwIDY3QzU4LjgzNjYgNjcgNjYgNTkuODM2NiA2NiA1MEM2NiA0MC4xNjM0IDU4LjgzNjYgMzMgNTAgMzNaIiBmaWxsPSIjMDlCOEI2Ii8+CjxwYXRoIGQ9Ik01MCA0MEM1NC40MTgzIDQwIDU4IDQzLjU4MTcgNTggNDhDNTggNTIuNDE4MyA1NC40MTgzIDU2IDUwIDU2QzQ1LjU4MTcgNTYgNDIgNTIuNDE4MyA0MiA0OEM0MiA0My41ODE3IDQ1LjU4MTcgNDAgNTAgNDBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K';
     e.target.onerror = null;
@@ -397,13 +482,21 @@ const Orders = () => {
                   >
                     {t('Lihat Detail', 'View Details')}
                   </button>
-                  {(order.status_pembayaran === 'pending' || displayStatus === 'pending') && (
-                    <button className={`px-4 py-3 border rounded-lg text-sm font-semibold transition-colors duration-300 ${
-                      isDarkMode 
-                        ? 'border-red-500 text-red-400 hover:bg-red-900/30 hover:border-red-400' 
-                        : 'border-red-500 text-red-500 hover:bg-red-50 hover:border-red-600'
-                    }`}>
-                      {t('Batalkan', 'Cancel')}
+                  {canCancelOrder(order) && (
+                    <button
+                      onClick={() => handleCancelOrder(order)}
+                      disabled={loading}
+                      className={`px-4 py-3 border rounded-lg text-sm font-semibold transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isDarkMode 
+                          ? 'border-red-500 text-red-400 hover:bg-red-900/30 hover:border-red-400' 
+                          : 'border-red-500 text-red-500 hover:bg-red-50 hover:border-red-600'
+                      }`}
+                      title={t(
+                        `Batas waktu pembatalan: ${getRemainingCancelTime(order)} jam lagi`,
+                        `Cancellation deadline: ${getRemainingCancelTime(order)} hours remaining`
+                      )}
+                    >
+                      {loading ? t('Membatalkan...', 'Cancelling...') : t('Batalkan', 'Cancel')}
                     </button>
                   )}
                 </div>
@@ -587,6 +680,40 @@ const Orders = () => {
                     </span>
                   </div>
                 </div>
+
+                {/* Cancel Button in Detail Modal */}
+                {canCancelOrder(selectedOrder) && (
+                  <div className={`border-t pt-4 transition-colors duration-300 ${
+                    isDarkMode ? 'border-gray-700' : 'border-gray-200'
+                  }`}>
+                    <div className={`mb-3 p-3 rounded-lg text-sm transition-colors duration-300 ${
+                      isDarkMode 
+                        ? 'bg-yellow-900/20 text-yellow-300 border border-yellow-700/50' 
+                        : 'bg-yellow-50 text-yellow-800 border border-yellow-200'
+                    }`}>
+                      <p className="font-semibold mb-1">
+                        {t('⏰ Batas Waktu Pembatalan', '⏰ Cancellation Deadline')}
+                      </p>
+                      <p>
+                        {t(
+                          `Anda dapat membatalkan pesanan ini dalam ${getRemainingCancelTime(selectedOrder)} jam lagi.`,
+                          `You can cancel this order within ${getRemainingCancelTime(selectedOrder)} more hours.`
+                        )}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleCancelOrder(selectedOrder)}
+                      disabled={loading}
+                      className={`w-full py-3 rounded-lg text-sm font-semibold transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isDarkMode
+                          ? 'bg-red-600 hover:bg-red-700 text-white'
+                          : 'bg-red-600 hover:bg-red-700 text-white'
+                      }`}
+                    >
+                      {loading ? t('Membatalkan...', 'Cancelling...') : t('Batalkan Pesanan', 'Cancel Order')}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

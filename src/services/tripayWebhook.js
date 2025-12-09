@@ -108,10 +108,8 @@ export const handleTripayWebhook = async (payload) => {
 
     console.log('✅ Order updated successfully');
 
-    // 5. Jika pembayaran sukses, update stok
-    if (status === 'PAID') {
-      await updateProductStockAfterPayment(order.id);
-    }
+    // 5. Stok sudah dikurangi saat order dibuat, tidak perlu dikurangi lagi saat pembayaran
+    // Fungsi updateProductStockAfterPayment dihapus untuk mencegah double reduction
 
     // 6. Log ke tabel webhook_logs untuk audit
     try {
@@ -149,57 +147,6 @@ export const handleTripayWebhook = async (payload) => {
   }
 };
 
-// Fungsi untuk update stok setelah pembayaran sukses
-const updateProductStockAfterPayment = async (orderId) => {
-  try {
-    console.log('📦 Updating product stock for order:', orderId);
-    
-    // Ambil semua item dari order
-    const { data: orderItems, error } = await supabase
-      .from('order_items')
-      .select('product_id, quantity')
-      .eq('order_id', orderId);
-
-    if (error) {
-      console.error('❌ Error fetching order items:', error);
-      return;
-    }
-
-    console.log(`🔄 Processing ${orderItems?.length || 0} items`);
-
-    // Update stok untuk setiap produk
-    for (const item of orderItems || []) {
-      // 1. Dapatkan stok saat ini
-      const { data: product, error: productError } = await supabase
-        .from('products')
-        .select('stok, nama_produk')
-        .eq('id', item.product_id)
-        .single();
-
-      if (productError || !product) {
-        console.error(`❌ Product not found: ${item.product_id}`);
-        continue;
-      }
-
-      // 2. Hitung stok baru
-      const newStock = Math.max(0, product.stok - item.quantity);
-
-      // 3. Update stok
-      const { error: updateError } = await supabase
-        .from('products')
-        .update({ stok: newStock })
-        .eq('id', item.product_id);
-
-      if (updateError) {
-        console.error(`❌ Error updating stock for product ${item.product_id}:`, updateError);
-      } else {
-        console.log(`✅ Stock updated: ${product.nama_produk} (${product.stok} → ${newStock})`);
-      }
-    }
-
-    console.log('✅ Product stock updated successfully');
-  } catch (error) {
-    console.error('❌ Error in updateProductStockAfterPayment:', error);
-    throw error;
-  }
-};
+// DEPRECATED: Fungsi untuk update stok setelah pembayaran sukses
+// Stok sekarang dikurangi saat order dibuat, bukan setelah pembayaran
+// Fungsi ini dihapus untuk mencegah double reduction
