@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { supabase, invokeFunction } from '../lib/supabase';
 import { accountService } from '../services/accountService';
+import { generateAndSendOTP, verifyOTPCode } from '../services/otpService';
 
 
 const AuthContext = createContext();
@@ -195,7 +196,22 @@ export const AuthProvider = ({ children }) => {
 
       const email = userData.email.trim().toLowerCase();
 
-      const { data, error } = await supabase.auth.signUp({
+      // ✅ Simpan data user di localStorage untuk digunakan setelah verifikasi
+      const pendingUserData = {
+        email: email,
+        password: userData.password,
+        username: userData.username,
+        nama_lengkap: userData.nama_lengkap || '',
+        no_telepon: userData.no_telepon || '',
+        alamat: userData.alamat || '',
+        kota: userData.kota || '',
+        provinsi: userData.provinsi || ''
+      };
+      localStorage.setItem('pendingUserData', JSON.stringify(pendingUserData));
+
+      // ✅ Gunakan signUp untuk membuat user, lalu kirim OTP terpisah
+      // SignUp akan membuat user tapi belum verified
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: email,
         password: userData.password,
         options: {
@@ -207,33 +223,171 @@ export const AuthProvider = ({ children }) => {
             city: userData.kota || '',
             province: userData.provinsi || '',
             role: 'customer'
-          }
+          },
+          emailRedirectTo: `${window.location.origin}/`
         }
       });
 
-      if (error) {
-        console.error('Register error:', error);
+      if (signUpError) {
+        console.error('SignUp error:', signUpError);
+        localStorage.removeItem('pendingUserData');
         
-        if (error.message.includes('already registered')) {
+        if (signUpError.message.includes('already registered') || signUpError.message.includes('already exists')) {
           toast.error('Email sudah terdaftar. Silakan gunakan email lain.');
           return { success: false, message: 'Email sudah terdaftar' };
         } else {
-          toast.error(error.message);
-          return { success: false, message: error.message };
+          toast.error(signUpError.message);
+          return { success: false, message: signUpError.message };
         }
       }
 
-      if (data.user && data.user.identities && data.user.identities.length === 0) {
+      if (signUpData.user && signUpData.user.identities && signUpData.user.identities.length === 0) {
+        localStorage.removeItem('pendingUserData');
         toast.error('Email sudah terdaftar');
         return { success: false, message: 'Email sudah terdaftar' };
       }
 
-      toast.success('Registrasi berhasil! Silakan cek email untuk verifikasi.');
-      return { success: true, user: data.user };
+      // ✅ Generate dan kirim OTP code custom
+      try {
+        const otpResult = await generateAndSendOTP(email);
+        
+        // Jika fallback (development), tampilkan OTP di console
+        if (otpResult.otpCode) {
+          console.log(`🔐 OTP Code untuk ${email}: ${otpResult.otpCode}`);
+          toast.info(`OTP Code: ${otpResult.otpCode} (cek console untuk development)`);
+        }
+
+        return { 
+          success: true,
+          needsVerification: true,
+          email: email,
+          message: 'Kode verifikasi telah dikirim ke email Anda'
+        };
+      } catch (otpError) {
+        console.error('OTP send error:', otpError);
+        // Tetap return success karena user sudah terdaftar
+        // User bisa request OTP ulang nanti
+        return { 
+          success: true,
+          needsVerification: true,
+          email: email,
+          message: 'Registrasi berhasil. Silakan cek email untuk kode verifikasi.'
+        };
+      }
 
     } catch (error) {
       console.error('Register exception:', error);
       toast.error('Terjadi kesalahan saat registrasi');
+      return { success: false, message: 'Terjadi kesalahan' };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ Fungsi untuk verifikasi OTP
+  const verifyOTP = async (email, token) => {
+    try {
+      setLoading(true);
+
+      // ✅ Verifikasi OTP code custom terlebih dahulu
+      const otpVerification = await verifyOTPCode(email, token);
+      
+      if (!otpVerification.success) {
+        toast.error(otpVerification.message || 'Kode verifikasi tidak valid');
+        return { success: false, message: otpVerification.message };
+      }
+
+      // ✅ Setelah OTP code valid, login user dengan password dari pendingUserData
+      const pendingUserData = JSON.parse(localStorage.getItem('pendingUserData') || '{}');
+      
+      if (!pendingUserData.password) {
+        toast.error('Data registrasi tidak ditemukan. Silakan registrasi ulang.');
+        return { success: false, message: 'Data registrasi tidak ditemukan' };
+      }
+
+      // Login user setelah verifikasi OTP
+      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: pendingUserData.password
+      });
+
+      if (loginError) {
+        // Jika login gagal karena email belum confirmed, coba update email confirmation
+        if (loginError.message.includes('Email not confirmed')) {
+          // User sudah dibuat tapi belum confirmed, kita sudah verifikasi OTP
+          // Jadi kita bisa langsung set user sebagai authenticated
+          const { data: { user } } = await supabase.auth.getUser();
+          
+          if (user) {
+            localStorage.removeItem('pendingUserData');
+
+            setUser(user);
+            setIsAuthenticated(true);
+            await checkAdminRole(user.id);
+            
+            // Set session manual
+            const { data: sessionData } = await supabase.auth.getSession();
+            if (sessionData.session) {
+              localStorage.setItem('token', sessionData.session.access_token);
+              localStorage.setItem('user', JSON.stringify(user));
+            }
+            
+            toast.success('Email berhasil diverifikasi!');
+            return { success: true, user: user };
+          }
+        }
+        
+        toast.error('Gagal login setelah verifikasi');
+        return { success: false, message: loginError.message };
+      }
+
+      if (loginData.user) {
+        localStorage.removeItem('pendingUserData');
+
+        setUser(loginData.user);
+        setIsAuthenticated(true);
+        await checkAdminRole(loginData.user.id);
+        
+        if (loginData.session) {
+          localStorage.setItem('token', loginData.session.access_token);
+          localStorage.setItem('user', JSON.stringify(loginData.user));
+        }
+        
+        toast.success('Email berhasil diverifikasi!');
+        return { success: true, user: loginData.user };
+      }
+
+      return { success: false, message: 'Verifikasi gagal' };
+
+    } catch (error) {
+      console.error('Verify OTP exception:', error);
+      toast.error('Terjadi kesalahan saat verifikasi');
+      return { success: false, message: 'Terjadi kesalahan' };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ Fungsi untuk resend OTP
+  const resendOTP = async (email) => {
+    try {
+      setLoading(true);
+
+      // ✅ Generate dan kirim ulang OTP code custom
+      const otpResult = await generateAndSendOTP(email);
+      
+      // Jika fallback (development), tampilkan OTP di console
+      if (otpResult.otpCode) {
+        console.log(`🔐 OTP Code untuk ${email}: ${otpResult.otpCode}`);
+        toast.info(`OTP Code: ${otpResult.otpCode} (cek console untuk development)`);
+      }
+
+      toast.success('Kode verifikasi telah dikirim ulang ke email Anda');
+      return { success: true };
+
+    } catch (error) {
+      console.error('Resend OTP exception:', error);
+      toast.error('Terjadi kesalahan saat mengirim ulang kode');
       return { success: false, message: 'Terjadi kesalahan' };
     } finally {
       setLoading(false);
@@ -381,7 +535,9 @@ export const AuthProvider = ({ children }) => {
     logout,
     deleteAccount,
     updateProfile,
-    loginWithGoogle
+    loginWithGoogle,
+    verifyOTP,
+    resendOTP
   };
 
   return (

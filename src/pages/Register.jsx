@@ -22,9 +22,14 @@ const Register = () => {
   const [emailAvailable, setEmailAvailable] = useState(null);
   const [emailMessage, setEmailMessage] = useState('');
   const [showCleanupOption, setShowCleanupOption] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [resending, setResending] = useState(false);
   
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { register, verifyOTP, resendOTP } = useAuth();
 
   const handleChange = (e) => {
     setFormData({
@@ -113,17 +118,24 @@ const Register = () => {
       
       const result = await register(registerData);
       
-      if (result.success && result.user) {
-        // ✅ BUAT PROFILE SETELAH REGISTER BERHASIL
-        try {
-          await createUserProfile(result.user.id, registerData);
-          toast.success('Registrasi berhasil! Profil telah dibuat. Silakan login.');
-        } catch (profileError) {
-          console.error('Profile creation failed:', profileError);
-          toast.warning('Registrasi berhasil tetapi gagal membuat profil. Silakan lengkapi profil nanti.');
+      if (result.success) {
+        if (result.needsVerification) {
+          // ✅ Tampilkan form verifikasi OTP
+          setNeedsVerification(true);
+          setVerificationEmail(result.email || formData.email);
+          toast.success(result.message || 'Kode verifikasi telah dikirim ke email Anda');
+        } else if (result.user) {
+          // ✅ BUAT PROFILE SETELAH REGISTER BERHASIL (jika tidak perlu verifikasi)
+          try {
+            await createUserProfile(result.user.id, registerData);
+            toast.success('Registrasi berhasil! Profil telah dibuat. Silakan login.');
+          } catch (profileError) {
+            console.error('Profile creation failed:', profileError);
+            toast.warning('Registrasi berhasil tetapi gagal membuat profil. Silakan lengkapi profil nanti.');
+          }
+          
+          navigate('/login');
         }
-        
-        navigate('/login');
       } else {
         toast.error(result.message || 'Registrasi gagal');
       }
@@ -134,6 +146,143 @@ const Register = () => {
       setLoading(false);
     }
   };
+
+  // ✅ Handle verifikasi OTP
+  const handleVerifyOTP = async (e) => {
+    e.preventDefault();
+
+    if (!otpCode || otpCode.length < 6) {
+      toast.error('Masukkan kode verifikasi 6 digit');
+      return;
+    }
+
+    setVerifying(true);
+
+    try {
+      const result = await verifyOTP(verificationEmail, otpCode);
+      
+      if (result.success && result.user) {
+        // ✅ BUAT PROFILE SETELAH VERIFIKASI BERHASIL
+        const { confirmPassword, ...registerData } = formData;
+        try {
+          await createUserProfile(result.user.id, registerData);
+          toast.success('Verifikasi berhasil! Profil telah dibuat.');
+        } catch (profileError) {
+          console.error('Profile creation failed:', profileError);
+          toast.warning('Verifikasi berhasil tetapi gagal membuat profil. Silakan lengkapi profil nanti.');
+        }
+        
+        // Redirect ke login setelah beberapa detik
+        setTimeout(() => {
+          navigate('/login');
+        }, 2000);
+      } else {
+        toast.error(result.message || 'Verifikasi gagal');
+      }
+    } catch (error) {
+      console.error('Verify OTP error:', error);
+      toast.error('Terjadi kesalahan saat verifikasi');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  // ✅ Handle resend OTP
+  const handleResendOTP = async () => {
+    setResending(true);
+    try {
+      const result = await resendOTP(verificationEmail);
+      if (result.success) {
+        toast.success('Kode verifikasi telah dikirim ulang');
+      }
+    } catch (error) {
+      console.error('Resend OTP error:', error);
+    } finally {
+      setResending(false);
+    }
+  };
+
+  // ✅ Jika perlu verifikasi, tampilkan form verifikasi
+  if (needsVerification) {
+    return (
+      <div className="min-h-screen mt-16 py-12 bg-gray-50">
+        <div className="max-w-md mx-auto px-4">
+          <div className="bg-white rounded-lg shadow-md p-8">
+            <div className="text-center mb-8">
+              <h1 className="text-3xl font-bold text-green-600 mb-2">Verifikasi Email</h1>
+              <p className="text-gray-600">
+                Masukkan kode verifikasi yang telah dikirim ke
+              </p>
+              <p className="text-gray-800 font-semibold mt-1">{verificationEmail}</p>
+            </div>
+
+            <form onSubmit={handleVerifyOTP} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Kode Verifikasi (6 digit)
+                </label>
+                <input
+                  type="text"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  required
+                  disabled={verifying}
+                  maxLength={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50 text-center text-2xl tracking-widest font-mono"
+                  placeholder="000000"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Masukkan 6 digit kode yang dikirim ke email Anda
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={verifying || otpCode.length !== 6}
+                className="w-full bg-green-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {verifying ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Memverifikasi...
+                  </span>
+                ) : (
+                  'Verifikasi'
+                )}
+              </button>
+
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={handleResendOTP}
+                  disabled={resending}
+                  className="text-green-600 hover:text-green-700 font-semibold text-sm disabled:opacity-50"
+                >
+                  {resending ? 'Mengirim...' : 'Kirim ulang kode'}
+                </button>
+              </div>
+
+              <div className="text-center pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNeedsVerification(false);
+                    setOtpCode('');
+                  }}
+                  className="text-gray-500 hover:text-gray-700 text-sm"
+                >
+                  ← Kembali ke form registrasi
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen mt-16 py-12 bg-gray-50">
