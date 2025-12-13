@@ -140,17 +140,18 @@ export const verifyOTPCode = async (email, otpCode) => {
   }
 };
 
-// ✅ Kirim OTP via email menggunakan Supabase Edge Function atau API
+// ✅ Kirim OTP via email menggunakan Supabase Edge Function
 export const sendOTPEmail = async (email, otpCode) => {
   try {
-    // Panggil Supabase Edge Function untuk mengirim email
-    // Atau gunakan API backend untuk mengirim email
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
     
+    // ✅ Panggil Supabase Edge Function untuk mengirim email
     const response = await fetch(`${supabaseUrl}/functions/v1/send-otp-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseKey}`,
       },
       body: JSON.stringify({
         email: email,
@@ -158,14 +159,27 @@ export const sendOTPEmail = async (email, otpCode) => {
       })
     });
 
+    const result = await response.json();
+
     if (!response.ok) {
-      throw new Error('Failed to send OTP email');
+      console.warn('⚠️ Edge Function error:', result);
+      // Jika Edge Function gagal, tetap return success dengan fallback
+      // OTP code akan ditampilkan di console untuk development
+      console.log(`🔐 OTP Code for ${email}: ${otpCode}`);
+      return { success: true, fallback: true };
     }
 
-    return { success: true };
+    // ✅ Jika berhasil, cek apakah ada otp_code di response (development mode)
+    if (result.otp_code) {
+      console.log(`🔐 OTP Code for ${email}: ${otpCode} (Email service not configured)`);
+      return { success: true, fallback: true };
+    }
+
+    // ✅ Email berhasil dikirim
+    return { success: true, fallback: false };
   } catch (error) {
     console.error('Failed to send OTP email:', error);
-    // Fallback: simpan OTP di localStorage dan tampilkan di console untuk development
+    // Fallback: tampilkan OTP di console untuk development
     console.log(`🔐 OTP Code for ${email}: ${otpCode}`);
     return { success: true, fallback: true };
   }

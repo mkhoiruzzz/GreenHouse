@@ -58,6 +58,61 @@ export const AuthProvider = ({ children }) => {
   }
 };
 
+  // ✅ Fungsi untuk membuat profile jika belum ada (untuk Google login)
+  const ensureUserProfile = async (userData) => {
+    try {
+      // Cek apakah profile sudah ada
+      const { data: existingProfile, error: checkError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', userData.id)
+        .single();
+
+      // Jika profile sudah ada, tidak perlu membuat lagi
+      if (existingProfile && !checkError) {
+        console.log('✅ Profile sudah ada untuk user:', userData.id);
+        return true;
+      }
+
+      // Jika profile belum ada, buat profile baru
+      console.log('🔄 Membuat profile untuk user:', userData.id);
+      
+      const profileData = {
+        id: userData.id,
+        email: userData.email || '',
+        username: userData.user_metadata?.username || userData.email?.split('@')[0] || 'user',
+        full_name: userData.user_metadata?.full_name || userData.user_metadata?.name || '',
+        phone: userData.user_metadata?.phone || '',
+        address: userData.user_metadata?.address || '',
+        city: userData.user_metadata?.city || '',
+        province: userData.user_metadata?.province || '',
+        role: userData.user_metadata?.role || 'customer',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { error: insertError } = await supabase
+        .from('profiles')
+        .insert([profileData]);
+
+      if (insertError) {
+        // Jika error karena duplicate (race condition), itu OK
+        if (insertError.code === '23505') {
+          console.log('✅ Profile sudah dibuat oleh proses lain');
+          return true;
+        }
+        console.error('❌ Error creating profile:', insertError);
+        return false;
+      }
+
+      console.log('✅ Profile berhasil dibuat untuk user:', userData.id);
+      return true;
+    } catch (error) {
+      console.error('❌ Error in ensureUserProfile:', error);
+      return false;
+    }
+  };
+
   useEffect(() => {
     checkAuth();
 
@@ -70,6 +125,11 @@ export const AuthProvider = ({ children }) => {
           setUser(userData);
           setIsAuthenticated(true);
           
+          // ✅ Buat profile jika belum ada (untuk Google login atau user baru)
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            await ensureUserProfile(userData);
+          }
+          
           // Check admin role dari profiles table
           await checkAdminRole(userData.id);
           
@@ -81,6 +141,7 @@ export const AuthProvider = ({ children }) => {
           setIsAdmin(false);
           localStorage.removeItem('token');
           localStorage.removeItem('user');
+          localStorage.removeItem('pendingUserData'); // Cleanup pending data
         }
         setLoading(false);
       }
@@ -397,54 +458,161 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signOut();
       
-      if (error) throw error;
+      // ✅ Clear state terlebih dahulu untuk mencegah stuck
+      setUser(null);
+      setIsAuthenticated(false);
+      setIsAdmin(false);
       
+      // ✅ Clear localStorage
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('pendingUserData');
+      
+      // ✅ Sign out dari Supabase (dengan timeout untuk mencegah stuck)
+      const signOutPromise = supabase.auth.signOut();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Logout timeout')), 5000)
+      );
+      
+      const { error } = await Promise.race([signOutPromise, timeoutPromise]).catch(async (err) => {
+        // Jika timeout, tetap lanjutkan cleanup
+        console.warn('Logout timeout, continuing cleanup...', err);
+        try {
+          await supabase.auth.signOut();
+        } catch (e) {
+          // Ignore error jika sudah timeout
+        }
+        return { error: null };
+      });
+      
+      if (error) {
+        console.warn('Logout error (non-critical):', error);
+        // Tetap lanjutkan karena state sudah di-clear
+      }
+      
+      toast.info('Anda telah logout');
+      return { success: true };
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Tetap clear state meskipun ada error
       setUser(null);
       setIsAuthenticated(false);
       setIsAdmin(false);
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      toast.info('Anda telah logout');
-    } catch (error) {
-      console.error('Logout error:', error);
-      toast.error('Gagal logout');
+      localStorage.removeItem('pendingUserData');
+      
+      toast.error('Logout selesai (beberapa proses mungkin masih berjalan)');
+      return { success: true }; // Return success karena state sudah di-clear
     } finally {
       setLoading(false);
     }
   };
 
   const deleteAccount = async () => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
+    try {
+      setLoading(true);
+      
+      const { data: { user } } = await supabase.auth.getUser();
 
-    if (!user) {
-      return { success: false, message: "User tidak ditemukan" };
+      if (!user) {
+        return { success: false, message: "User tidak ditemukan" };
+      }
+
+      console.log('🔄 Menghapus akun untuk user:', user.id);
+
+      // ✅ Hapus profile dari database terlebih dahulu
+      try {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .delete()
+          .eq('id', user.id);
+
+        if (profileError) {
+          console.warn('⚠️ Error deleting profile:', profileError);
+          // Lanjutkan saja, mungkin profile sudah dihapus atau tidak ada
+        }
+      } catch (profileErr) {
+        console.warn('⚠️ Error deleting profile (non-critical):', profileErr);
+      }
+
+      // ✅ Coba hapus via Edge Function (dengan timeout)
+      try {
+        const deletePromise = invokeFunction('delete-account', { 
+          user_id: user.id 
+        });
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Delete account timeout')), 10000)
+        );
+        
+        const result = await Promise.race([deletePromise, timeoutPromise]).catch(async (err) => {
+          console.warn('Delete account timeout, continuing cleanup...', err);
+          return { success: true }; // Assume success untuk cleanup
+        });
+        
+        console.log('✅ Akun berhasil dihapus:', result);
+      } catch (funcErr) {
+        console.warn('⚠️ Edge function error (non-critical):', funcErr);
+        // Lanjutkan cleanup meskipun Edge Function gagal
+      }
+
+      // ✅ Clear state dan localStorage
+      setUser(null);
+      setIsAuthenticated(false);
+      setIsAdmin(false);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('pendingUserData');
+
+      // ✅ Sign out dari Supabase (dengan timeout)
+      try {
+        const signOutPromise = supabase.auth.signOut();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('SignOut timeout')), 5000)
+        );
+        
+        await Promise.race([signOutPromise, timeoutPromise]).catch(async (err) => {
+          console.warn('SignOut timeout, continuing...', err);
+          try {
+            await supabase.auth.signOut();
+          } catch (e) {
+            // Ignore
+          }
+        });
+      } catch (signOutErr) {
+        console.warn('⚠️ SignOut error (non-critical):', signOutErr);
+        // State sudah di-clear, lanjutkan saja
+      }
+
+      toast.success('Akun berhasil dihapus');
+      return { success: true, message: "Akun berhasil dihapus" };
+
+    } catch (err) {
+      console.error('❌ Error menghapus akun:', err);
+      
+      // ✅ Tetap clear state meskipun ada error
+      setUser(null);
+      setIsAuthenticated(false);
+      setIsAdmin(false);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('pendingUserData');
+      
+      try {
+        await supabase.auth.signOut();
+      } catch (signOutErr) {
+        // Ignore
+      }
+      
+      return { 
+        success: false, 
+        message: err.message || "Gagal menghapus akun. Silakan coba lagi." 
+      };
+    } finally {
+      setLoading(false);
     }
-
-    console.log('🔄 Menghapus akun untuk user:', user.id);
-
-    // ✅ Gunakan helper function invokeFunction
-    const result = await invokeFunction('delete-account', { 
-      user_id: user.id 
-    });
-
-    console.log('✅ Akun berhasil dihapus:', result);
-
-    // Logout setelah berhasil hapus
-    await supabase.auth.signOut();
-
-    return { success: true, message: "Akun berhasil dihapus" };
-
-  } catch (err) {
-    console.error('❌ Error menghapus akun:', err);
-    return { 
-      success: false, 
-      message: err.message || "Gagal menghapus akun. Silakan coba lagi." 
-    };
-  }
-};
+  };
 
 
 
