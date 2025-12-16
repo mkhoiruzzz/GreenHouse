@@ -141,7 +141,8 @@ export const AuthProvider = ({ children }) => {
           setIsAdmin(false);
           localStorage.removeItem('token');
           localStorage.removeItem('user');
-          localStorage.removeItem('pendingUserData'); // Cleanup pending data
+          // ⚠️ Jangan hapus pendingUserData di sini
+          // pendingUserData masih dibutuhkan untuk proses verifikasi OTP
         }
         setLoading(false);
       }
