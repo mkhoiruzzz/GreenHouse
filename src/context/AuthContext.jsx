@@ -271,7 +271,8 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('pendingUserData', JSON.stringify(pendingUserData));
 
       // ✅ Gunakan signUp untuk membuat user, lalu kirim OTP terpisah
-      // SignUp akan membuat user tapi belum verified
+      // Catatan: dengan email confirmation dimatikan, Supabase bisa langsung membuat session (auto login).
+      // Kita akan langsung signOut lagi supaya user benar-benar harus lewat OTP dulu.
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: email,
         password: userData.password,
@@ -306,6 +307,18 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('pendingUserData');
         toast.error('Email sudah terdaftar');
         return { success: false, message: 'Email sudah terdaftar' };
+      }
+
+      // ✅ Pastikan user TIDAK otomatis login sebelum verifikasi OTP
+      try {
+        await supabase.auth.signOut();
+        setUser(null);
+        setIsAuthenticated(false);
+        setIsAdmin(false);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      } catch (logoutError) {
+        console.warn('Logout after signUp failed (can be ignored):', logoutError);
       }
 
       // ✅ Generate dan kirim OTP code custom
