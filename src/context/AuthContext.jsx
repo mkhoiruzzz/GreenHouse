@@ -62,9 +62,10 @@ export const AuthProvider = ({ children }) => {
   const ensureUserProfile = async (userData) => {
     try {
       // Cek apakah profile sudah ada dengan data lengkap
+      // ✅ Perbaiki format select untuk menghindari 406 error
       const { data: existingProfile, error: checkError } = await supabase
         .from('profiles')
-        .select('id, username, full_name, email')
+        .select('id,username,full_name,email')
         .eq('id', userData.id)
         .single();
 

@@ -33,16 +33,22 @@ const Profile = () => {
       try {
         console.log('🔄 Loading profile data for user:', user.id);
         console.log('📧 User email:', user.email);
+        console.log('🔑 User object:', user);
         
-        // Coba ambil dari table profiles
+        // ✅ Pastikan query benar-benar dijalankan
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', user.id)
           .single();
+        
+        console.log('📡 Query response - error:', error);
+        console.log('📡 Query response - data:', data);
 
         if (error) {
           console.log('❌ No profile data found in table:', error.message);
+          console.log('❌ Error code:', error.code);
+          console.log('❌ Error details:', error);
           console.log('📋 Falling back to user metadata');
           
           // Fallback ke user metadata
@@ -60,6 +66,39 @@ const Profile = () => {
           setProfileData(fallbackData);
         } else {
           console.log('✅ Profile data loaded from table:', data);
+          console.log('✅ Raw data type:', typeof data);
+          console.log('✅ Raw data keys:', data ? Object.keys(data) : 'null');
+          
+          // ✅ Pastikan data tidak null/undefined dan adalah object (bukan array)
+          if (!data || Array.isArray(data)) {
+            console.warn('⚠️ Data is null/undefined or array, using fallback');
+            console.warn('⚠️ Data value:', data);
+            setProfileData({
+              username: user.user_metadata?.username || '',
+              full_name: user.user_metadata?.full_name || '',
+              email: user.email || '',
+              phone: user.user_metadata?.phone || '',
+              address: user.user_metadata?.address || '',
+              city: user.user_metadata?.city || '',
+              province: user.user_metadata?.province || ''
+            });
+            return;
+          }
+          
+          // ✅ Pastikan data adalah object dengan property yang diharapkan
+          if (typeof data !== 'object') {
+            console.warn('⚠️ Data is not an object, using fallback');
+            setProfileData({
+              username: user.user_metadata?.username || '',
+              full_name: user.user_metadata?.full_name || '',
+              email: user.email || '',
+              phone: user.user_metadata?.phone || '',
+              address: user.user_metadata?.address || '',
+              city: user.user_metadata?.city || '',
+              province: user.user_metadata?.province || ''
+            });
+            return;
+          }
           
           // Data dari table profiles
           const profileData = {
@@ -72,8 +111,16 @@ const Profile = () => {
             province: data.province || ''
           };
           
-          console.log('✅ Setting profile data:', profileData);
+          console.log('✅ Processed profile data:', profileData);
+          console.log('✅ Setting profile data to state...');
+          
+          // ✅ Set state dengan data yang sudah diproses
           setProfileData(profileData);
+          
+          // ✅ Verifikasi state sudah ter-set
+          setTimeout(() => {
+            console.log('✅ State verification - profileData should be set now');
+          }, 100);
         }
       } catch (error) {
         console.error('❌ Error loading profile:', error);
