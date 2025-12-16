@@ -61,51 +61,51 @@ export const AuthProvider = ({ children }) => {
   // ✅ Fungsi untuk membuat profile jika belum ada (untuk Google login)
   const ensureUserProfile = async (userData) => {
     try {
-      // Cek apakah profile sudah ada
+      // Cek apakah profile sudah ada dengan data lengkap
       const { data: existingProfile, error: checkError } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, username, full_name, email')
         .eq('id', userData.id)
         .single();
 
-      // Jika profile sudah ada, tidak perlu membuat lagi
+      // Jika profile sudah ada dengan data lengkap, tidak perlu update
       if (existingProfile && !checkError) {
-        console.log('✅ Profile sudah ada untuk user:', userData.id);
-        return true;
+        // Cek apakah profil sudah punya data penting (username atau full_name)
+        if (existingProfile.username || existingProfile.full_name) {
+          console.log('✅ Profile sudah ada dengan data lengkap untuk user:', userData.id);
+          return true;
+        }
+        // Jika profil ada tapi kosong, kita akan update dengan metadata
+        console.log('⚠️ Profile ada tapi kosong, akan di-update dengan metadata');
       }
 
-      // Jika profile belum ada, buat profile baru
-      console.log('🔄 Membuat profile untuk user:', userData.id);
+      // Jika profile belum ada atau kosong, buat/update profile baru
+      console.log('🔄 Membuat/update profile untuk user:', userData.id);
       
       const profileData = {
         id: userData.id,
         email: userData.email || '',
-        username: userData.user_metadata?.username || userData.email?.split('@')[0] || 'user',
-        full_name: userData.user_metadata?.full_name || userData.user_metadata?.name || '',
-        phone: userData.user_metadata?.phone || '',
-        address: userData.user_metadata?.address || '',
-        city: userData.user_metadata?.city || '',
-        province: userData.user_metadata?.province || '',
-        role: userData.user_metadata?.role || 'customer',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        username: userData.user_metadata?.username || existingProfile?.username || userData.email?.split('@')[0] || 'user',
+        full_name: userData.user_metadata?.full_name || userData.user_metadata?.name || existingProfile?.full_name || '',
+        phone: userData.user_metadata?.phone || existingProfile?.phone || '',
+        address: userData.user_metadata?.address || existingProfile?.address || '',
+        city: userData.user_metadata?.city || existingProfile?.city || '',
+        province: userData.user_metadata?.province || existingProfile?.province || '',
+        role: userData.user_metadata?.role || existingProfile?.role || 'customer'
+        // Jangan set created_at/updated_at manual, biarkan database handle
       };
 
-      const { error: insertError } = await supabase
+      // ✅ Gunakan upsert supaya tidak error dan tidak override data yang sudah ada
+      const { error: upsertError } = await supabase
         .from('profiles')
-        .insert([profileData]);
+        .upsert(profileData, { onConflict: 'id' });
 
-      if (insertError) {
-        // Jika error karena duplicate (race condition), itu OK
-        if (insertError.code === '23505') {
-          console.log('✅ Profile sudah dibuat oleh proses lain');
-          return true;
-        }
-        console.error('❌ Error creating profile:', insertError);
+      if (upsertError) {
+        console.error('❌ Error creating/updating profile:', upsertError);
         return false;
       }
 
-      console.log('✅ Profile berhasil dibuat untuk user:', userData.id);
+      console.log('✅ Profile berhasil dibuat/di-update untuk user:', userData.id);
       return true;
     } catch (error) {
       console.error('❌ Error in ensureUserProfile:', error);

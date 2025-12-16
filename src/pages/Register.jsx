@@ -61,34 +61,52 @@ const Register = () => {
   // ✅ FUNGSI UNTUK CREATE PROFILE SETELAH REGISTER
   const createUserProfile = async (userId, userData) => {
     try {
+      console.log('🔄 Creating profile for user:', userId);
+      console.log('📝 Profile data:', userData);
+      
       const profileData = {
         id: userId,
         email: userData.email,
-        username: userData.username,
-        full_name: userData.nama_lengkap,
-        phone: userData.no_telepon,
-        address: userData.alamat,
-        city: userData.kota,
-        province: userData.provinsi,
-        role: 'customer',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        username: userData.username || '',
+        full_name: userData.nama_lengkap || '',
+        phone: userData.no_telepon || '',
+        address: userData.alamat || '',
+        city: userData.kota || '',
+        province: userData.provinsi || '',
+        role: 'customer'
+        // Jangan set created_at/updated_at manual, biarkan database handle
       };
 
       // ✅ Gunakan upsert supaya tidak error kalau profil dengan id yang sama sudah ada
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
-        .upsert(profileData, { onConflict: 'id' });
+        .upsert(profileData, { onConflict: 'id' })
+        .select();
 
       if (error) {
-        console.error('Error creating profile:', error);
+        console.error('❌ Error creating profile:', error);
+        console.error('❌ Error details:', JSON.stringify(error, null, 2));
         throw error;
       }
 
-      console.log('✅ Profile created successfully');
+      console.log('✅ Profile created/updated successfully:', data);
+      
+      // ✅ Verifikasi data benar-benar tersimpan
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (verifyError) {
+        console.warn('⚠️ Warning: Could not verify profile creation:', verifyError);
+      } else {
+        console.log('✅ Profile verified in database:', verifyData);
+      }
+
       return true;
     } catch (error) {
-      console.error('Failed to create profile:', error);
+      console.error('❌ Failed to create profile:', error);
       throw error;
     }
   };  

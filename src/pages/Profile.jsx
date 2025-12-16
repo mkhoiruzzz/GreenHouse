@@ -25,45 +25,68 @@ const Profile = () => {
   // ✅ LOAD DATA DARI TABLE PROFILES
   useEffect(() => {
     const loadProfileData = async () => {
-      if (user) {
-        try {
-          console.log('🔄 Loading profile data from profiles table...');
-          
-          // Coba ambil dari table profiles
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single();
+      if (!user || !user.id) {
+        console.log('⏳ Waiting for user...');
+        return;
+      }
 
-          if (error) {
-            console.log('❌ No profile data found, using user metadata');
-            // Fallback ke user metadata
-            setProfileData({
-              username: user.user_metadata?.username || '',
-              full_name: user.user_metadata?.full_name || '',
-              email: user.email || '',
-              phone: user.user_metadata?.phone || '',
-              address: user.user_metadata?.address || '',
-              city: user.user_metadata?.city || '',
-              province: user.user_metadata?.province || ''
-            });
-          } else {
-            console.log('✅ Profile data loaded from table:', data);
-            // Data dari table profiles
-            setProfileData({
-              username: data.username || '',
-              full_name: data.full_name || '',
-              email: data.email || user.email,
-              phone: data.phone || '',
-              address: data.address || '',
-              city: data.city || '',
-              province: data.province || ''
-            });
-          }
-        } catch (error) {
-          console.error('Error loading profile:', error);
+      try {
+        console.log('🔄 Loading profile data for user:', user.id);
+        console.log('📧 User email:', user.email);
+        
+        // Coba ambil dari table profiles
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.log('❌ No profile data found in table:', error.message);
+          console.log('📋 Falling back to user metadata');
+          
+          // Fallback ke user metadata
+          const fallbackData = {
+            username: user.user_metadata?.username || '',
+            full_name: user.user_metadata?.full_name || '',
+            email: user.email || '',
+            phone: user.user_metadata?.phone || '',
+            address: user.user_metadata?.address || '',
+            city: user.user_metadata?.city || '',
+            province: user.user_metadata?.province || ''
+          };
+          
+          console.log('📋 Fallback data:', fallbackData);
+          setProfileData(fallbackData);
+        } else {
+          console.log('✅ Profile data loaded from table:', data);
+          
+          // Data dari table profiles
+          const profileData = {
+            username: data.username || '',
+            full_name: data.full_name || '',
+            email: data.email || user.email || '',
+            phone: data.phone || '',
+            address: data.address || '',
+            city: data.city || '',
+            province: data.province || ''
+          };
+          
+          console.log('✅ Setting profile data:', profileData);
+          setProfileData(profileData);
         }
+      } catch (error) {
+        console.error('❌ Error loading profile:', error);
+        // Fallback ke user metadata jika error
+        setProfileData({
+          username: user.user_metadata?.username || '',
+          full_name: user.user_metadata?.full_name || '',
+          email: user.email || '',
+          phone: user.user_metadata?.phone || '',
+          address: user.user_metadata?.address || '',
+          city: user.user_metadata?.city || '',
+          province: user.user_metadata?.province || ''
+        });
       }
     };
 
@@ -82,6 +105,8 @@ const Profile = () => {
     setLoading(true);
 
     try {
+      console.log('💾 Saving profile data:', profileData);
+      
       const result = await updateProfile({
         username: profileData.username,
         full_name: profileData.full_name,
@@ -92,12 +117,39 @@ const Profile = () => {
       });
 
       if (result.success) {
+        console.log('✅ Profile updated successfully');
         toast.success('Profil berhasil diperbarui!');
+        
+        // ✅ Reload profile data setelah update
+        setTimeout(async () => {
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          if (currentUser) {
+            const { data } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', currentUser.id)
+              .single();
+            
+            if (data) {
+              console.log('🔄 Reloaded profile data:', data);
+              setProfileData({
+                username: data.username || '',
+                full_name: data.full_name || '',
+                email: data.email || currentUser.email || '',
+                phone: data.phone || '',
+                address: data.address || '',
+                city: data.city || '',
+                province: data.province || ''
+              });
+            }
+          }
+        }, 500);
       } else {
-        toast.error('Gagal memperbarui profil');
+        console.error('❌ Failed to update profile:', result.message);
+        toast.error(result.message || 'Gagal memperbarui profil');
       }
     } catch (error) {
-      console.error('Update profile error:', error);
+      console.error('❌ Update profile error:', error);
       toast.error('Gagal memperbarui profil');
     } finally {
       setLoading(false);
