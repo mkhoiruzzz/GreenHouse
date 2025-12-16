@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import emailjs from '@emailjs/browser';
 
 // ✅ Generate OTP code 6 digit
 const generateOTP = () => {
@@ -140,45 +141,29 @@ export const verifyOTPCode = async (email, otpCode) => {
   }
 };
 
-// ✅ Kirim OTP via email menggunakan Supabase Edge Function
+// ✅ Kirim OTP via email menggunakan EmailJS
 export const sendOTPEmail = async (email, otpCode) => {
   try {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    
-    // ✅ Panggil Supabase Edge Function untuk mengirim email
-    const response = await fetch(`${supabaseUrl}/functions/v1/send-otp-email`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseKey}`,
-      },
-      body: JSON.stringify({
-        email: email,
-        otp_code: otpCode
-      })
-    });
+    const EMAILJS_SERVICE_ID = 'service_t9g74el';
+    const EMAILJS_TEMPLATE_ID = 'template_oldo1ke';
+    const EMAILJS_PUBLIC_KEY = 'tAM6BbqC9NJgJnfc_';
 
-    const result = await response.json();
+    const templateParams = {
+      to_email: email,
+      otp_code: otpCode
+    };
 
-    if (!response.ok) {
-      console.warn('⚠️ Edge Function error:', result);
-      // Jika Edge Function gagal, tetap return success dengan fallback
-      // OTP code akan ditampilkan di console untuk development
-      console.log(`🔐 OTP Code for ${email}: ${otpCode}`);
-      return { success: true, fallback: true };
-    }
+    const result = await emailjs.send(
+      EMAILJS_SERVICE_ID,
+      EMAILJS_TEMPLATE_ID,
+      templateParams,
+      EMAILJS_PUBLIC_KEY
+    );
 
-    // ✅ Jika berhasil, cek apakah ada otp_code di response (development mode)
-    if (result.otp_code) {
-      console.log(`🔐 OTP Code for ${email}: ${otpCode} (Email service not configured)`);
-      return { success: true, fallback: true };
-    }
-
-    // ✅ Email berhasil dikirim
+    console.log('EmailJS OTP result:', result.status, result.text);
     return { success: true, fallback: false };
   } catch (error) {
-    console.error('Failed to send OTP email:', error);
+    console.error('Failed to send OTP email via EmailJS:', error);
     // Fallback: tampilkan OTP di console untuk development
     console.log(`🔐 OTP Code for ${email}: ${otpCode}`);
     return { success: true, fallback: true };
