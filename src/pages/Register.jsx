@@ -61,23 +61,24 @@ const Register = () => {
   // ✅ FUNGSI UNTUK CREATE PROFILE SETELAH REGISTER
   const createUserProfile = async (userId, userData) => {
     try {
+      const profileData = {
+        id: userId,
+        email: userData.email,
+        username: userData.username,
+        full_name: userData.nama_lengkap,
+        phone: userData.no_telepon,
+        address: userData.alamat,
+        city: userData.kota,
+        province: userData.provinsi,
+        role: 'customer',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      // ✅ Gunakan upsert supaya tidak error kalau profil dengan id yang sama sudah ada
       const { error } = await supabase
         .from('profiles')
-        .insert([
-          {
-            id: userId,
-            email: userData.email,
-            username: userData.username,
-            full_name: userData.nama_lengkap,
-            phone: userData.no_telepon,
-            address: userData.alamat,
-            city: userData.kota,
-            province: userData.provinsi,
-            role: 'customer',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }
-        ]);
+        .upsert(profileData, { onConflict: 'id' });
 
       if (error) {
         console.error('Error creating profile:', error);
