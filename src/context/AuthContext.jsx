@@ -535,40 +535,12 @@ export const AuthProvider = ({ children }) => {
       }
 
       console.log('🔄 Menghapus akun untuk user:', user.id);
-
-      // ✅ Hapus profile dari database terlebih dahulu
+      // ✅ Lakukan cleanup lengkap via accountService (tanpa Edge Function)
       try {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .delete()
-          .eq('id', user.id);
-
-        if (profileError) {
-          console.warn('⚠️ Error deleting profile:', profileError);
-          // Lanjutkan saja, mungkin profile sudah dihapus atau tidak ada
-        }
-      } catch (profileErr) {
-        console.warn('⚠️ Error deleting profile (non-critical):', profileErr);
-      }
-
-      // ✅ Coba hapus via Edge Function (dengan timeout)
-      try {
-        const deletePromise = invokeFunction('delete-account', { 
-          user_id: user.id 
-        });
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Delete account timeout')), 10000)
-        );
-        
-        const result = await Promise.race([deletePromise, timeoutPromise]).catch(async (err) => {
-          console.warn('Delete account timeout, continuing cleanup...', err);
-          return { success: true }; // Assume success untuk cleanup
-        });
-        
-        console.log('✅ Akun berhasil dihapus:', result);
-      } catch (funcErr) {
-        console.warn('⚠️ Edge function error (non-critical):', funcErr);
-        // Lanjutkan cleanup meskipun Edge Function gagal
+        const cleanupResult = await accountService.completeDataCleanup(user.id, user.email);
+        console.log('✅ Account cleanup result:', cleanupResult);
+      } catch (cleanupErr) {
+        console.warn('⚠️ Cleanup error (non-critical):', cleanupErr);
       }
 
       // ✅ Clear state dan localStorage
@@ -638,18 +610,22 @@ export const AuthProvider = ({ children }) => {
         return { success: false, message: 'User tidak ditemukan' };
       }
 
+      const now = new Date().toISOString();
+
+      // ✅ Gunakan upsert supaya kalau profile belum ada akan dibuat
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({
+        .upsert({
+          id: user.id,
+          email: user.email,
           username: profileData.username,
           full_name: profileData.full_name,
           phone: profileData.phone,
           address: profileData.address,
           city: profileData.city,
           province: profileData.province,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id);
+          updated_at: now
+        }, { onConflict: 'id' });
 
       if (profileError) {
         console.error('Error updating profile:', profileError);
