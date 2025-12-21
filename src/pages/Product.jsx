@@ -32,6 +32,8 @@ const Product = () => {
 
   const { cartItems } = useCart();
   const prevCartCountRef = useRef(0);
+  const categoryConvertedRef = useRef(false);
+  const hasInitialFetchRef = useRef(false);
 
   useEffect(() => {
     window.scrollTo({
@@ -48,6 +50,10 @@ const Product = () => {
     console.log('🔄 Product component mounted');
     console.log('📋 URL params - category:', categoryParam, 'search:', searchParam);
     
+    // Reset refs
+    categoryConvertedRef.current = false;
+    hasInitialFetchRef.current = false;
+    
     // Set initial filters dari URL
     const initialFilters = {
       category: categoryParam || '',
@@ -63,9 +69,9 @@ const Product = () => {
     prevCartCountRef.current = cartItems.length;
   }, []);
 
-  // ✅ Konversi category name ke ID setelah categories loaded
+  // ✅ Konversi category name ke ID setelah categories loaded (hanya sekali)
   useEffect(() => {
-    if (categories.length > 0 && filters.category && isNaN(Number(filters.category))) {
+    if (categories.length > 0 && filters.category && isNaN(Number(filters.category)) && !categoryConvertedRef.current) {
       // Jika category adalah string (nama kategori), cari ID-nya
       const foundCategory = categories.find(cat => 
         cat.name_kategori?.toLowerCase() === filters.category?.toLowerCase() ||
@@ -75,15 +81,24 @@ const Product = () => {
       if (foundCategory) {
         console.log('✅ Found category ID for:', filters.category, '->', foundCategory.id);
         setFilters(prev => ({ ...prev, category: String(foundCategory.id) }));
+        categoryConvertedRef.current = true;
       } else {
         console.warn('⚠️ Category not found:', filters.category);
         setFilters(prev => ({ ...prev, category: '' }));
+        categoryConvertedRef.current = true;
       }
     }
-  }, [categories]);
+  }, [categories, filters.category]);
 
+  // ✅ Fetch products saat filters berubah, tapi hindari infinite loop
   useEffect(() => {
-    console.log('🔄 Filters changed:', filters);
+    // Skip jika masih menunggu categories untuk konversi category name
+    if (filters.category && isNaN(Number(filters.category)) && categories.length === 0) {
+      console.log('⏳ Waiting for categories to convert category name...');
+      return;
+    }
+    
+    console.log('🔄 Filters changed, fetching products:', filters);
     fetchProducts();
   }, [filters]);
 
@@ -114,7 +129,20 @@ const Product = () => {
       setLoading(true);
       console.log('🔄 Starting to fetch products with filters:', filters);
       
-      let allProducts = await productsService.getAllProducts();
+      let allProducts = [];
+      try {
+        allProducts = await productsService.getAllProducts();
+        console.log('✅ Products fetched successfully:', allProducts?.length || 0, 'products');
+      } catch (fetchError) {
+        console.error('❌ Error fetching products from service:', fetchError);
+        throw fetchError;
+      }
+      
+      if (!Array.isArray(allProducts)) {
+        console.warn('⚠️ Products is not an array:', allProducts);
+        allProducts = [];
+      }
+      
       let filteredProducts = allProducts;
       
       if (filters.search) {
@@ -165,14 +193,21 @@ const Product = () => {
         filteredProducts.sort((a, b) => a.nama_produk.localeCompare(b.nama_produk));
       }
       
-      console.log('✅ Final filtered products:', filteredProducts);
-      setProducts(filteredProducts);
+      console.log('✅ Final filtered products:', filteredProducts?.length || 0);
+      setProducts(filteredProducts || []);
       
     } catch (error) {
       console.error('❌ Error fetching products:', error);
-      toast.error('Gagal memuat produk');
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        error: error
+      });
+      toast.error('Gagal memuat produk. Silakan refresh halaman.');
       setProducts([]);
     } finally {
+      // ✅ PASTIKAN loading selalu di-set ke false
+      console.log('✅ Setting loading to false');
       setLoading(false);
     }
   };
