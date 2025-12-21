@@ -267,6 +267,7 @@ const Register = () => {
                   required
                   disabled={verifying}
                   maxLength={6}
+                  autoComplete="one-time-code"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50 text-center text-2xl tracking-widest font-mono"
                   placeholder="000000"
                 />
@@ -386,6 +387,7 @@ const Register = () => {
                   onChange={handleChange}
                   required
                   disabled={loading}
+                  autoComplete="new-password"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50"
                   placeholder="min. 6 karakter"
                   minLength="6"
@@ -403,6 +405,7 @@ const Register = () => {
                   onChange={handleChange}
                   required
                   disabled={loading}
+                  autoComplete="new-passwprd"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50"
                   placeholder="ulangi password"
                   minLength="6"

@@ -22,20 +22,17 @@ const Profile = () => {
 
   const navigate = useNavigate();
 
-  // ✅ LOAD DATA DARI TABLE PROFILES
   useEffect(() => {
     const loadProfileData = async () => {
       if (!user || !user.id) {
         console.log('⏳ Waiting for user...');
         return;
       }
-
+  
       try {
         console.log('🔄 Loading profile data for user:', user.id);
         console.log('📧 User email:', user.email);
-        console.log('🔑 User object:', user);
         
-        // ✅ Pastikan query benar-benar dijalankan
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
@@ -44,12 +41,9 @@ const Profile = () => {
         
         console.log('📡 Query response - error:', error);
         console.log('📡 Query response - data:', data);
-
+  
         if (error) {
           console.log('❌ No profile data found in table:', error.message);
-          console.log('❌ Error code:', error.code);
-          console.log('❌ Error details:', error);
-          console.log('📋 Falling back to user metadata');
           
           // Fallback ke user metadata
           const fallbackData = {
@@ -66,13 +60,10 @@ const Profile = () => {
           setProfileData(fallbackData);
         } else {
           console.log('✅ Profile data loaded from table:', data);
-          console.log('✅ Raw data type:', typeof data);
-          console.log('✅ Raw data keys:', data ? Object.keys(data) : 'null');
           
-          // ✅ Pastikan data tidak null/undefined dan adalah object (bukan array)
+          // ✅ Pastikan data tidak null/undefined
           if (!data || Array.isArray(data)) {
             console.warn('⚠️ Data is null/undefined or array, using fallback');
-            console.warn('⚠️ Data value:', data);
             setProfileData({
               username: user.user_metadata?.username || '',
               full_name: user.user_metadata?.full_name || '',
@@ -85,23 +76,8 @@ const Profile = () => {
             return;
           }
           
-          // ✅ Pastikan data adalah object dengan property yang diharapkan
-          if (typeof data !== 'object') {
-            console.warn('⚠️ Data is not an object, using fallback');
-            setProfileData({
-              username: user.user_metadata?.username || '',
-              full_name: user.user_metadata?.full_name || '',
-              email: user.email || '',
-              phone: user.user_metadata?.phone || '',
-              address: user.user_metadata?.address || '',
-              city: user.user_metadata?.city || '',
-              province: user.user_metadata?.province || ''
-            });
-            return;
-          }
-          
-          // Data dari table profiles
-          const profileData = {
+          // ✅ FIX: Ganti nama variabel dari 'profileData' ke 'loadedData'
+          const loadedData = {
             username: data.username || '',
             full_name: data.full_name || '',
             email: data.email || user.email || '',
@@ -111,16 +87,11 @@ const Profile = () => {
             province: data.province || ''
           };
           
-          console.log('✅ Processed profile data:', profileData);
+          console.log('✅ Processed profile data:', loadedData);
           console.log('✅ Setting profile data to state...');
           
           // ✅ Set state dengan data yang sudah diproses
-          setProfileData(profileData);
-          
-          // ✅ Verifikasi state sudah ter-set
-          setTimeout(() => {
-            console.log('✅ State verification - profileData should be set now');
-          }, 100);
+          setProfileData(loadedData);
         }
       } catch (error) {
         console.error('❌ Error loading profile:', error);
@@ -136,7 +107,7 @@ const Profile = () => {
         });
       }
     };
-
+  
     loadProfileData();
   }, [user]);
 
