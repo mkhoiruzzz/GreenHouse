@@ -135,11 +135,17 @@ const Register = () => {
     try {
       const { confirmPassword, ...registerData } = formData;
       
+      console.log('🔄 Starting registration for:', registerData.email);
       const result = await register(registerData);
+      console.log('📋 Registration result:', result);
       
-      if (result.success) {
+      if (result && result.success) {
+        // ✅ Reset loading state terlebih dahulu sebelum beralih ke verification
+        setLoading(false);
+        
         if (result.needsVerification) {
           // ✅ Tampilkan form verifikasi OTP
+          console.log('✅ Registration successful, showing verification form');
           setNeedsVerification(true);
           setVerificationEmail(result.email || formData.email);
           toast.success(result.message || 'Kode verifikasi telah dikirim ke email Anda');
@@ -154,15 +160,29 @@ const Register = () => {
           }
           
           navigate('/login');
+        } else {
+          // Fallback: jika tidak ada needsVerification atau user, tetap tampilkan form verifikasi
+          console.warn('⚠️ No needsVerification flag, defaulting to verification form');
+          setNeedsVerification(true);
+          setVerificationEmail(formData.email);
+          toast.info('Silakan verifikasi email Anda');
         }
       } else {
-        toast.error(result.message || 'Registrasi gagal');
+        console.error('❌ Registration failed:', result);
+        toast.error(result?.message || 'Registrasi gagal');
       }
     } catch (error) {
-      console.error('Register component error:', error);
-      toast.error('Terjadi kesalahan sistem');
+      console.error('❌ Register component error:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        error: error
+      });
+      toast.error(error.message || 'Terjadi kesalahan sistem');
     } finally {
+      // ✅ PASTIKAN loading selalu di-set ke false
       setLoading(false);
+      console.log('✅ Registration process completed, loading set to false');
     }
   };
 

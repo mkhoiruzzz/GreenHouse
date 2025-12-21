@@ -321,14 +321,17 @@ export const AuthProvider = ({ children }) => {
 
       // ✅ Generate dan kirim OTP code custom
       try {
+        console.log('📧 Generating and sending OTP for:', email);
         const otpResult = await generateAndSendOTP(email);
+        console.log('✅ OTP sent result:', otpResult);
         
         // Jika fallback (development), tampilkan OTP di console
-        if (otpResult.otpCode) {
+        if (otpResult && otpResult.otpCode) {
           console.log(`🔐 OTP Code untuk ${email}: ${otpResult.otpCode}`);
           toast.info(`OTP Code: ${otpResult.otpCode} (cek console untuk development)`);
         }
 
+        console.log('✅ Returning success with needsVerification: true');
         return { 
           success: true,
           needsVerification: true,
@@ -336,14 +339,20 @@ export const AuthProvider = ({ children }) => {
           message: 'Kode verifikasi telah dikirim ke email Anda'
         };
       } catch (otpError) {
-        console.error('OTP send error:', otpError);
+        console.error('❌ OTP send error:', otpError);
+        console.error('❌ OTP error details:', {
+          message: otpError.message,
+          stack: otpError.stack,
+          error: otpError
+        });
         // Tetap return success karena user sudah terdaftar
         // User bisa request OTP ulang nanti
+        console.log('⚠️ Returning success despite OTP error (user can resend)');
         return { 
           success: true,
           needsVerification: true,
           email: email,
-          message: 'Registrasi berhasil. Silakan cek email untuk kode verifikasi.'
+          message: 'Registrasi berhasil. Silakan cek email untuk kode verifikasi atau klik "Kirim ulang kode".'
         };
       }
 
