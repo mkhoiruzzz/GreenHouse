@@ -210,8 +210,18 @@ const handleDeleteAccount = async () => {
     const result = await deleteAccount();
     
     if (result.success) {
-      toast.success(result.message);
-      navigate('/');
+      toast.success(result.message || 'Akun berhasil dihapus');
+      
+      // ✅ Langsung redirect tanpa delay untuk memastikan logout
+      // Clear semua state dan redirect
+      setTimeout(() => {
+        // Clear semua storage
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Redirect ke home dengan force reload
+        window.location.href = '/';
+      }, 500);
     } else {
       toast.error(
         <div>
@@ -226,6 +236,13 @@ const handleDeleteAccount = async () => {
   } catch (error) {
     console.error('Delete account error:', error);
     toast.error('Terjadi kesalahan tak terduga saat menghapus akun');
+    
+    // ✅ Tetap redirect meskipun ada error (karena state sudah di-clear)
+    setTimeout(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.href = '/';
+    }, 1000);
   } finally {
     setDeleteLoading(false);
     setShowDeleteConfirm(false);

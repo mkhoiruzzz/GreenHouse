@@ -524,15 +524,48 @@ export const AuthProvider = ({ children }) => {
   const deleteAccount = async () => {
     try {
       setLoading(true);
+      console.log('🗑️ Starting account deletion process...');
       
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: getUserError } = await supabase.auth.getUser();
 
-      if (!user) {
+      if (getUserError || !user) {
+        console.error('❌ Error getting user:', getUserError);
         return { success: false, message: "User tidak ditemukan" };
       }
 
-      console.log('🔄 Menghapus akun untuk user:', user.id);
-      // ✅ Lakukan cleanup lengkap via accountService (tanpa Edge Function)
+      console.log('🔄 Menghapus akun untuk user:', user.id, user.email);
+
+      // ✅ STEP 1: Hapus user dari Supabase Auth menggunakan Edge Function
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          throw new Error('No active session');
+        }
+
+        console.log('📞 Calling delete-account Edge Function...');
+        const { data: functionData, error: functionError } = await supabase.functions.invoke(
+          'delete-account',
+          {
+            body: { user_id: user.id },
+            headers: {
+              Authorization: `Bearer ${session.access_token}`
+            }
+          }
+        );
+
+        if (functionError) {
+          console.error('❌ Edge Function error:', functionError);
+          throw new Error(functionError.message || 'Failed to delete user from Auth');
+        }
+
+        console.log('✅ User deleted from Auth:', functionData);
+      } catch (edgeFunctionError) {
+        console.error('❌ Error calling Edge Function:', edgeFunctionError);
+        // Jika Edge Function gagal, coba cleanup data saja
+        console.warn('⚠️ Falling back to data cleanup only');
+      }
+
+      // ✅ STEP 2: Lakukan cleanup data (profiles, dll)
       try {
         const cleanupResult = await accountService.completeDataCleanup(user.id, user.email);
         console.log('✅ Account cleanup result:', cleanupResult);
@@ -540,29 +573,19 @@ export const AuthProvider = ({ children }) => {
         console.warn('⚠️ Cleanup error (non-critical):', cleanupErr);
       }
 
-      // ✅ Clear state dan localStorage
+      // ✅ STEP 3: Clear state dan localStorage
       setUser(null);
       setIsAuthenticated(false);
       setIsAdmin(false);
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       localStorage.removeItem('pendingUserData');
+      sessionStorage.clear();
 
-      // ✅ Sign out dari Supabase (dengan timeout)
+      // ✅ STEP 4: Sign out dari Supabase
       try {
-        const signOutPromise = supabase.auth.signOut();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('SignOut timeout')), 5000)
-        );
-        
-        await Promise.race([signOutPromise, timeoutPromise]).catch(async (err) => {
-          console.warn('SignOut timeout, continuing...', err);
-          try {
-            await supabase.auth.signOut();
-          } catch (e) {
-            // Ignore
-          }
-        });
+        await supabase.auth.signOut();
+        console.log('✅ Signed out from Supabase');
       } catch (signOutErr) {
         console.warn('⚠️ SignOut error (non-critical):', signOutErr);
         // State sudah di-clear, lanjutkan saja
@@ -581,6 +604,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       localStorage.removeItem('pendingUserData');
+      sessionStorage.clear();
       
       try {
         await supabase.auth.signOut();
