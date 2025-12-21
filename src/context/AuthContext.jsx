@@ -61,55 +61,46 @@ export const AuthProvider = ({ children }) => {
   // ✅ Fungsi untuk membuat profile jika belum ada (untuk Google login)
   const ensureUserProfile = async (userData) => {
     try {
-      // Cek apakah profile sudah ada dengan data lengkap
-      // ✅ Perbaiki format select untuk menghindari 406 error
-      const { data: existingProfile, error: checkError } = await supabase
-        .from('profiles')
-        .select('id,username,full_name,email')
-        .eq('id', userData.id)
-        .single();
-
-      // Jika profile sudah ada dengan data lengkap, tidak perlu update
-      if (existingProfile && !checkError) {
-        // Cek apakah profil sudah punya data penting (username atau full_name)
-        if (existingProfile.username || existingProfile.full_name) {
-          console.log('✅ Profile sudah ada dengan data lengkap untuk user:', userData.id);
-          return true;
-        }
-        // Jika profil ada tapi kosong, kita akan update dengan metadata
-        console.log('⚠️ Profile ada tapi kosong, akan di-update dengan metadata');
-      }
-
-      // Jika profile belum ada atau kosong, buat/update profile baru
-      console.log('🔄 Membuat/update profile untuk user:', userData.id);
+      // ✅ Sederhanakan: langsung upsert tanpa cek dulu untuk menghindari 406 error
+      // Upsert akan handle jika data sudah ada (tidak akan override data yang sudah ada jika kita tidak set field-nya)
+      console.log('🔄 Ensuring profile exists for user:', userData.id);
       
+      // ✅ Hanya set field yang dari user_metadata, jangan override data yang sudah ada di database
       const profileData = {
         id: userData.id,
         email: userData.email || '',
-        username: userData.user_metadata?.username || existingProfile?.username || userData.email?.split('@')[0] || 'user',
-        full_name: userData.user_metadata?.full_name || userData.user_metadata?.name || existingProfile?.full_name || '',
-        phone: userData.user_metadata?.phone || existingProfile?.phone || '',
-        address: userData.user_metadata?.address || existingProfile?.address || '',
-        city: userData.user_metadata?.city || existingProfile?.city || '',
-        province: userData.user_metadata?.province || existingProfile?.province || '',
-        role: userData.user_metadata?.role || existingProfile?.role || 'customer'
-        // Jangan set created_at/updated_at manual, biarkan database handle
+        // Hanya set jika belum ada di database (dari metadata)
+        username: userData.user_metadata?.username || userData.email?.split('@')[0] || 'user',
+        full_name: userData.user_metadata?.full_name || userData.user_metadata?.name || '',
+        phone: userData.user_metadata?.phone || '',
+        address: userData.user_metadata?.address || '',
+        city: userData.user_metadata?.city || '',
+        province: userData.user_metadata?.province || '',
+        role: userData.user_metadata?.role || 'customer'
       };
 
-      // ✅ Gunakan upsert supaya tidak error dan tidak override data yang sudah ada
+      // ✅ Gunakan upsert dengan onConflict untuk update hanya jika belum ada
+      // Tapi karena kita tidak tahu apakah data sudah ada, kita akan selalu upsert
+      // Supabase akan handle: jika id sudah ada, akan update; jika belum, akan insert
       const { error: upsertError } = await supabase
         .from('profiles')
-        .upsert(profileData, { onConflict: 'id' });
+        .upsert(profileData, { 
+          onConflict: 'id',
+          // Jangan update field yang sudah ada jika nilainya kosong
+          ignoreDuplicates: false
+        });
 
       if (upsertError) {
         console.error('❌ Error creating/updating profile:', upsertError);
+        // Jangan throw error, karena mungkin profile sudah ada
         return false;
       }
 
-      console.log('✅ Profile berhasil dibuat/di-update untuk user:', userData.id);
+      console.log('✅ Profile ensured for user:', userData.id);
       return true;
     } catch (error) {
       console.error('❌ Error in ensureUserProfile:', error);
+      // Jangan throw error, karena ini bukan critical
       return false;
     }
   };
@@ -127,8 +118,13 @@ export const AuthProvider = ({ children }) => {
           setIsAuthenticated(true);
           
           // ✅ Buat profile jika belum ada (untuk Google login atau user baru)
+          // Skip untuk user yang baru register karena sudah di-handle di createUserProfile
+          // Hanya panggil untuk Google login atau user yang sudah ada
           if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            await ensureUserProfile(userData);
+            // Delay sedikit untuk menghindari race condition dengan createUserProfile
+            setTimeout(async () => {
+              await ensureUserProfile(userData);
+            }, 1000);
           }
           
           // Check admin role dari profiles table

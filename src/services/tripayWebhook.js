@@ -108,8 +108,22 @@ export const handleTripayWebhook = async (payload) => {
 
     console.log('✅ Order updated successfully');
 
-    // 5. Stok sudah dikurangi saat order dibuat, tidak perlu dikurangi lagi saat pembayaran
-    // Fungsi updateProductStockAfterPayment dihapus untuk mencegah double reduction
+    // 5. ✅ Kurangi stok produk SETELAH pembayaran berhasil (PAID)
+    // Hanya kurangi stok jika status berubah dari unpaid/expired/failed ke paid
+    if (status === 'PAID' && order.status_pembayaran !== 'paid') {
+      console.log('📦 Reducing product stock after successful payment...');
+      console.log(`📊 Order status changed from "${order.status_pembayaran}" to "paid"`);
+      try {
+        await updateProductStockAfterPayment(order.id);
+        console.log('✅ Stock reduction completed');
+      } catch (stockError) {
+        console.error('❌ Error reducing stock:', stockError);
+        // Jangan throw error, karena order sudah di-update
+        // Log error untuk debugging
+      }
+    } else if (status === 'PAID' && order.status_pembayaran === 'paid') {
+      console.log('ℹ️ Order already paid, skipping stock reduction (already processed)');
+    }
 
     // 6. Log ke tabel webhook_logs untuk audit
     try {
@@ -147,6 +161,67 @@ export const handleTripayWebhook = async (payload) => {
   }
 };
 
-// DEPRECATED: Fungsi untuk update stok setelah pembayaran sukses
-// Stok sekarang dikurangi saat order dibuat, bukan setelah pembayaran
-// Fungsi ini dihapus untuk mencegah double reduction
+// ✅ Fungsi untuk update stok setelah pembayaran sukses
+const updateProductStockAfterPayment = async (orderId) => {
+  try {
+    console.log('🔄 Updating product stock for order:', orderId);
+    
+    // 1. Ambil semua order items
+    const { data: orderItems, error: itemsError } = await supabase
+      .from('order_items')
+      .select('product_id, quantity')
+      .eq('order_id', orderId);
+
+    if (itemsError) {
+      console.error('❌ Error fetching order items:', itemsError);
+      throw itemsError;
+    }
+
+    if (!orderItems || orderItems.length === 0) {
+      console.warn('⚠️ No order items found for order:', orderId);
+      return;
+    }
+
+    console.log(`📦 Found ${orderItems.length} items to update stock`);
+
+    // 2. Kurangi stok untuk setiap produk
+    for (const item of orderItems) {
+      // Ambil stok saat ini
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .select('stok, nama_produk')
+        .eq('id', item.product_id)
+        .single();
+
+      if (productError) {
+        console.error(`❌ Error fetching product ${item.product_id}:`, productError);
+        continue;
+      }
+
+      if (!product) {
+        console.warn(`⚠️ Product ${item.product_id} not found`);
+        continue;
+      }
+
+      // Pastikan stok tidak negatif
+      const newStock = Math.max(0, product.stok - item.quantity);
+
+      // Update stok
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({ stok: newStock })
+        .eq('id', item.product_id);
+
+      if (updateError) {
+        console.error(`❌ Error updating stock for product ${item.product_id}:`, updateError);
+      } else {
+        console.log(`✅ Stock updated for ${product.nama_produk}: ${product.stok} -> ${newStock} (reduced by ${item.quantity})`);
+      }
+    }
+
+    console.log('✅ Product stock updated successfully');
+  } catch (error) {
+    console.error('❌ Error updating product stock:', error);
+    throw error;
+  }
+};

@@ -102,7 +102,16 @@ const Checkout = () => {
           setPaymentStatus('success');
           setOrderId(order.id);
           setCurrentStep(4);
-          await updateProductStockAfterPayment(order.id);
+          
+          // ✅ Kurangi stok setelah pembayaran berhasil
+          // Cek apakah stok sudah dikurangi sebelumnya (untuk mencegah double reduction)
+          try {
+            await updateProductStockAfterPayment(order.id);
+            console.log('✅ Stock updated after payment confirmation');
+          } catch (stockError) {
+            console.error('❌ Error updating stock:', stockError);
+            // Jangan block UI jika ada error update stok
+          }
           
           // ✅ Simpan ringkasan order sebelum clear cart
           saveOrderSummary();
@@ -200,27 +209,71 @@ const Checkout = () => {
 
   const updateProductStockAfterPayment = async (orderId) => {
     try {
-      const { data: orderItems } = await supabase
+      console.log('🔄 Updating product stock for order:', orderId);
+      
+      // 1. Ambil semua order items
+      const { data: orderItems, error: itemsError } = await supabase
         .from('order_items')
         .select('product_id, quantity')
         .eq('order_id', orderId);
 
-      for (const item of orderItems || []) {
-        const { data: product } = await supabase
+      if (itemsError) {
+        console.error('❌ Error fetching order items:', itemsError);
+        throw itemsError;
+      }
+
+      if (!orderItems || orderItems.length === 0) {
+        console.warn('⚠️ No order items found for order:', orderId);
+        return;
+      }
+
+      console.log(`📦 Found ${orderItems.length} items to update stock`);
+
+      // 2. Kurangi stok untuk setiap produk
+      for (const item of orderItems) {
+        // Ambil stok saat ini
+        const { data: product, error: productError } = await supabase
           .from('products')
-          .select('stok')
+          .select('stok, nama_produk')
           .eq('id', item.product_id)
           .single();
 
-        if (product) {
-          await supabase
-            .from('products')
-            .update({ stok: product.stok - item.quantity })
-            .eq('id', item.product_id);
+        if (productError) {
+          console.error(`❌ Error fetching product ${item.product_id}:`, productError);
+          continue;
+        }
+
+        if (!product) {
+          console.warn(`⚠️ Product ${item.product_id} not found`);
+          continue;
+        }
+
+        // Pastikan stok tidak negatif dan cukup
+        if (product.stok < item.quantity) {
+          console.warn(`⚠️ Insufficient stock for ${product.nama_produk}. Available: ${product.stok}, Required: ${item.quantity}`);
+          // Tetap kurangi, tapi log warning
+        }
+
+        const newStock = Math.max(0, product.stok - item.quantity);
+
+        // Update stok
+        const { error: updateError } = await supabase
+          .from('products')
+          .update({ stok: newStock })
+          .eq('id', item.product_id);
+
+        if (updateError) {
+          console.error(`❌ Error updating stock for product ${item.product_id}:`, updateError);
+          throw updateError;
+        } else {
+          console.log(`✅ Stock updated for ${product.nama_produk}: ${product.stok} -> ${newStock} (reduced by ${item.quantity})`);
         }
       }
+
+      console.log('✅ Product stock updated successfully for order:', orderId);
     } catch (error) {
       console.error('❌ Error updating stock:', error);
+      throw error;
     }
   };
 

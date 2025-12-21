@@ -19,6 +19,7 @@ const ProductDetail = () => {
   const [loading, setLoading] = useState(true);
   const [loadingRelated, setLoadingRelated] = useState(false);
   const [quantity, setQuantity] = useState(1);
+  const [quantityInput, setQuantityInput] = useState('1'); // State untuk input value saat user mengetik
   
   const [openSections, setOpenSections] = useState({
     deskripsi: true,
@@ -35,6 +36,9 @@ const ProductDetail = () => {
   useEffect(() => {
     if (id) {
       fetchProductDetail();
+      // Reset quantity saat produk berubah
+      setQuantity(1);
+      setQuantityInput('1');
     }
   }, [id]);
 
@@ -53,6 +57,8 @@ const ProductDetail = () => {
       console.log('💧 Cara perawatan exists:', !!productData.cara_perawatan);
       
       setProduct(productData);
+      setQuantity(1);
+      setQuantityInput('1');
       await fetchRelatedProducts(productData);
       
     } catch (error) {
@@ -112,24 +118,92 @@ const handleAddToCart = async () => {
       return;
     }
     
-    if (quantity < 1) {
+    // Validasi quantity dari input atau state
+    const finalQuantity = parseInt(quantityInput, 10) || quantity;
+    
+    if (finalQuantity < 1 || isNaN(finalQuantity)) {
       toast.error('Quantity harus minimal 1');
+      setQuantity(1);
+      setQuantityInput('1');
       return;
     }
     
-    if (quantity > product.stok) {
+    if (finalQuantity > product.stok) {
       toast.error(`Stok tidak mencukupi. Stok tersedia: ${product.stok}`);
+      setQuantity(product.stok);
+      setQuantityInput(String(product.stok));
       return;
     }
     
-    await addToCart(product, quantity);
+    // Update quantity state jika berbeda
+    if (finalQuantity !== quantity) {
+      setQuantity(finalQuantity);
+      setQuantityInput(String(finalQuantity));
+    }
+    
+    await addToCart(product, finalQuantity);
     toast.success(`${product.nama_produk} berhasil ditambahkan ke keranjang!`);
     
     setQuantity(1);
+    setQuantityInput('1');
     
   } catch (error) {
     console.error('❌ Error adding to cart:', error);
     toast.error(error.message || 'Gagal menambahkan ke keranjang');
+  }
+};
+
+const handleBuyNow = async () => {
+  try {
+    // ✅ Cek apakah user sudah login
+    if (!isAuthenticated) {
+      toast.info('Silakan login terlebih dahulu untuk membeli produk');
+      navigate('/login', { 
+        state: { 
+          from: location,
+          message: 'Silakan login untuk melanjutkan pembelian' 
+        } 
+      });
+      return;
+    }
+    
+    if (!product) {
+      toast.error('Produk tidak tersedia');
+      return;
+    }
+    
+    // Validasi quantity dari input atau state
+    const finalQuantity = parseInt(quantityInput, 10) || quantity;
+    
+    if (finalQuantity < 1 || isNaN(finalQuantity)) {
+      toast.error('Quantity harus minimal 1');
+      setQuantity(1);
+      setQuantityInput('1');
+      return;
+    }
+    
+    if (finalQuantity > product.stok) {
+      toast.error(`Stok tidak mencukupi. Stok tersedia: ${product.stok}`);
+      setQuantity(product.stok);
+      setQuantityInput(String(product.stok));
+      return;
+    }
+    
+    // Update quantity state jika berbeda
+    if (finalQuantity !== quantity) {
+      setQuantity(finalQuantity);
+      setQuantityInput(String(finalQuantity));
+    }
+    
+    // Tambahkan produk ke cart dengan quantity yang dipilih
+    await addToCart(product, finalQuantity);
+    
+    // Redirect langsung ke checkout
+    navigate('/checkout');
+    
+  } catch (error) {
+    console.error('❌ Error in buy now:', error);
+    toast.error(error.message || 'Gagal memproses pembelian');
   }
 };
 
@@ -222,7 +296,7 @@ const handleAddToCart = async () => {
                   )}
                 </div>
                 
-                {/* Add to Cart */}
+                {/* Add to Cart & Buy Now */}
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4 md:pt-6 mt-4 transition-colors duration-300">
                   <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4">
                     <label className="text-gray-700 dark:text-gray-300 font-medium text-sm md:text-base transition-colors duration-300">Jumlah:</label>
@@ -231,30 +305,93 @@ const handleAddToCart = async () => {
                         type="number" 
                         min="1"
                         max={product.stok}
-                        value={quantity}
+                        value={quantityInput}
                         onChange={(e) => {
-                          const value = parseInt(e.target.value) || 1;
-                          setQuantity(Math.max(1, Math.min(value, product.stok)));
+                          const inputValue = e.target.value;
+                          
+                          // Biarkan user mengetik dengan bebas (termasuk kosong sementara)
+                          setQuantityInput(inputValue);
+                          
+                          // Parse dan validasi untuk update quantity state
+                          const numValue = parseInt(inputValue, 10);
+                          
+                          if (inputValue === '' || isNaN(numValue)) {
+                            // Biarkan input kosong atau invalid sementara, tidak update quantity
+                            return;
+                          }
+                          
+                          // Validasi dan update quantity
+                          if (numValue < 1) {
+                            setQuantity(1);
+                          } else if (numValue > product.stok) {
+                            // Tampilkan notifikasi jika melebihi stok
+                            toast.error(`Stok tidak mencukupi. Stok tersedia: ${product.stok}`);
+                            // Set ke stok maksimal
+                            setQuantity(product.stok);
+                            setQuantityInput(String(product.stok));
+                          } else {
+                            setQuantity(numValue);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          // Saat kehilangan fokus, validasi dan normalisasi nilai
+                          const inputValue = e.target.value.trim();
+                          const numValue = parseInt(inputValue, 10);
+                          
+                          if (inputValue === '' || isNaN(numValue) || numValue < 1) {
+                            setQuantity(1);
+                            setQuantityInput('1');
+                          } else if (numValue > product.stok) {
+                            setQuantity(product.stok);
+                            setQuantityInput(String(product.stok));
+                            toast.error(`Stok tidak mencukupi. Stok tersedia: ${product.stok}`);
+                          } else {
+                            setQuantity(numValue);
+                            setQuantityInput(String(numValue));
+                          }
                         }}
                         className="w-20 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm md:text-base transition-colors duration-300"
                       />
                       <span className="text-xs md:text-sm text-gray-600 dark:text-gray-400 transition-colors duration-300">
-                        Maks: {product.stok}
+                        Stok: {product.stok}
                       </span>
                     </div>
                   </div>
 
-                <button 
-                  onClick={handleAddToCart}
-                  disabled={product.stok === 0}
-                  className={`w-full py-3 px-6 rounded-lg font-semibold transition-all duration-300 text-sm md:text-base ${
-                    product.stok === 0 
-                      ? 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed text-gray-200 dark:text-gray-400' 
-                      : 'bg-emerald-600 dark:bg-emerald-700 hover:bg-emerald-700 dark:hover:bg-emerald-600 text-white'
-                  }`}
-                >
-                  {product.stok === 0 ? 'Stok Habis' : !isAuthenticated ? 'Tambah ke keranjang' : 'Tambah ke Keranjang'}
-                </button>
+                  {/* Button Group - Responsive Layout */}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {/* Buy Now Button - Primary Action */}
+                    <button 
+                      onClick={handleBuyNow}
+                      disabled={product.stok === 0}
+                      className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-all duration-300 text-sm md:text-base flex items-center justify-center gap-2 ${
+                        product.stok === 0 
+                          ? 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed text-gray-200 dark:text-gray-400' 
+                          : 'bg-orange-600 dark:bg-orange-700 hover:bg-orange-700 dark:hover:bg-orange-600 text-white shadow-md hover:shadow-lg transform hover:scale-[1.02]'
+                      }`}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      {product.stok === 0 ? 'Stok Habis' : 'Beli Sekarang'}
+                    </button>
+
+                    {/* Add to Cart Button - Secondary Action */}
+                    <button 
+                      onClick={handleAddToCart}
+                      disabled={product.stok === 0}
+                      className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-all duration-300 text-sm md:text-base flex items-center justify-center gap-2 border-2 ${
+                        product.stok === 0 
+                          ? 'bg-gray-400 dark:bg-gray-700 cursor-not-allowed text-gray-200 dark:text-gray-400 border-gray-400 dark:border-gray-700' 
+                          : 'bg-emerald-600 dark:bg-emerald-700 hover:bg-emerald-700 dark:hover:bg-emerald-600 text-white border-emerald-600 dark:border-emerald-700 hover:border-emerald-700 dark:hover:border-emerald-600'
+                      }`}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      {product.stok === 0 ? 'Stok Habis' : !isAuthenticated ? 'Tambah ke Keranjang' : 'Tambah ke Keranjang'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

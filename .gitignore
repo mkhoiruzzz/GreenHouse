@@ -5,8 +5,10 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
-# Environment variables - JANGAN COMMIT!
+# Environment variables - JANGAN COMMIT FILE INI!
 .env
 .env.local
 .env.development.local
@@ -18,6 +20,8 @@ package-lock.json
 # Build outputs
 dist/
 build/
+.next/
+out/
 .vercel
 .netlify
 
@@ -33,6 +37,10 @@ Thumbs.db
 # Logs
 logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
 
 # OS files
 .DS_Store
@@ -42,10 +50,12 @@ logs/
 .Trashes
 ehthumbs.db
 Thumbs.db
+Desktop.ini
 
 # Testing
 coverage/
 .nyc_output/
+*.test.js.snap
 
 # Temporary files
 *.tmp
@@ -53,5 +63,41 @@ coverage/
 .cache/
 .parcel-cache/
 
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# Supabase
+.supabase/
+
 # Vercel
 .vercel
+
+# Backend specific
+backend/node_modules/
+backend/.env
+backend/uploads/
+backend/temp/
+
+# Frontend specific
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+frontend/.env.development
+
+# API Keys and Secrets
+**/config/secrets.js
+**/config/keys.js
+*.pem
+*.key
+*.cert
+
+# Sensitive data
+secrets/
+credentials/
+config.json
+config.local.json
+

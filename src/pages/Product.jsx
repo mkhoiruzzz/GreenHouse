@@ -1,5 +1,6 @@
 // src/pages/Product.jsx - TOKOPEDIA STYLE REDESIGN
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { productsService } from '../services/productsService';
 import ProductCard from '../components/ProductCard';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -8,6 +9,7 @@ import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
 
 const Product = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,12 +40,47 @@ const Product = () => {
     });
   }, []);
 
+  // ✅ Baca URL parameters saat component mount
   useEffect(() => {
+    const categoryParam = searchParams.get('category');
+    const searchParam = searchParams.get('search');
+    
     console.log('🔄 Product component mounted');
+    console.log('📋 URL params - category:', categoryParam, 'search:', searchParam);
+    
+    // Set initial filters dari URL
+    const initialFilters = {
+      category: categoryParam || '',
+      search: searchParam || '',
+      durability: '',
+      sort: 'newest',
+      productType: 'all',
+      priceRange: 'all'
+    };
+    setFilters(initialFilters);
+    
     fetchCategories();
-    fetchProducts();
     prevCartCountRef.current = cartItems.length;
   }, []);
+
+  // ✅ Konversi category name ke ID setelah categories loaded
+  useEffect(() => {
+    if (categories.length > 0 && filters.category && isNaN(Number(filters.category))) {
+      // Jika category adalah string (nama kategori), cari ID-nya
+      const foundCategory = categories.find(cat => 
+        cat.name_kategori?.toLowerCase() === filters.category?.toLowerCase() ||
+        cat.nama_kategori?.toLowerCase() === filters.category?.toLowerCase()
+      );
+      
+      if (foundCategory) {
+        console.log('✅ Found category ID for:', filters.category, '->', foundCategory.id);
+        setFilters(prev => ({ ...prev, category: String(foundCategory.id) }));
+      } else {
+        console.warn('⚠️ Category not found:', filters.category);
+        setFilters(prev => ({ ...prev, category: '' }));
+      }
+    }
+  }, [categories]);
 
   useEffect(() => {
     console.log('🔄 Filters changed:', filters);
