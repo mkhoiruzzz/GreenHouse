@@ -24,15 +24,16 @@ const Profile = () => {
 
   useEffect(() => {
     const loadProfileData = async () => {
-      if (!user || !user.id) {
+      if (!user?.id) {
         console.log('⏳ Waiting for user...');
         return;
       }
   
+      console.log('🔄 Loading profile data for user:', user.id);
+      console.log('📧 User email:', user.email);
+      
       try {
-        console.log('🔄 Loading profile data for user:', user.id);
-        console.log('📧 User email:', user.email);
-        
+        // ✅ Pastikan query benar-benar dijalankan
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
@@ -43,60 +44,35 @@ const Profile = () => {
         console.log('📡 Query response - data:', data);
   
         if (error) {
-          console.log('❌ No profile data found in table:', error.message);
-          
-          // Fallback ke user metadata
-          const fallbackData = {
-            username: user.user_metadata?.username || '',
-            full_name: user.user_metadata?.full_name || '',
-            email: user.email || '',
-            phone: user.user_metadata?.phone || '',
-            address: user.user_metadata?.address || '',
-            city: user.user_metadata?.city || '',
-            province: user.user_metadata?.province || ''
-          };
-          
-          console.log('📋 Fallback data:', fallbackData);
-          setProfileData(fallbackData);
-        } else {
-          console.log('✅ Profile data loaded from table:', data);
-          
-          // ✅ Pastikan data tidak null/undefined
-          if (!data || Array.isArray(data)) {
-            console.warn('⚠️ Data is null/undefined or array, using fallback');
-            setProfileData({
-              username: user.user_metadata?.username || '',
-              full_name: user.user_metadata?.full_name || '',
-              email: user.email || '',
-              phone: user.user_metadata?.phone || '',
-              address: user.user_metadata?.address || '',
-              city: user.user_metadata?.city || '',
-              province: user.user_metadata?.province || ''
-            });
-            return;
-          }
-          
-          // ✅ FIX: Ganti nama variabel dari 'profileData' ke 'loadedData'
-          const loadedData = {
-            username: data.username || '',
-            full_name: data.full_name || '',
-            email: data.email || user.email || '',
-            phone: data.phone || '',
-            address: data.address || '',
-            city: data.city || '',
-            province: data.province || ''
-          };
-          
-          console.log('✅ Processed profile data:', loadedData);
-          console.log('✅ Setting profile data to state...');
-          
-          // ✅ Set state dengan data yang sudah diproses
-          setProfileData(loadedData);
+          console.error('❌ Error fetching profile:', error);
+          throw error;
         }
+  
+        if (!data) {
+          console.warn('⚠️ No data returned from query');
+          return;
+        }
+  
+        // ✅ CRITICAL FIX: Ganti nama variabel
+        const loadedData = {
+          username: data.username || '',
+          full_name: data.full_name || '',
+          email: data.email || user.email || '',
+          phone: data.phone || '',
+          address: data.address || '',
+          city: data.city || '',
+          province: data.province || ''
+        };
+        
+        console.log('✅ Loaded data:', loadedData);
+        setProfileData(loadedData);
+        console.log('✅ State updated successfully');
+        
       } catch (error) {
         console.error('❌ Error loading profile:', error);
-        // Fallback ke user metadata jika error
-        setProfileData({
+        
+        // Fallback ke user metadata
+        const fallbackData = {
           username: user.user_metadata?.username || '',
           full_name: user.user_metadata?.full_name || '',
           email: user.email || '',
@@ -104,12 +80,18 @@ const Profile = () => {
           address: user.user_metadata?.address || '',
           city: user.user_metadata?.city || '',
           province: user.user_metadata?.province || ''
-        });
+        };
+        
+        console.log('📋 Using fallback data:', fallbackData);
+        setProfileData(fallbackData);
       }
     };
   
-    loadProfileData();
-  }, [user]);
+    // ✅ Pastikan user.id ada sebelum load
+    if (user?.id) {
+      loadProfileData();
+    }
+  }, [user?.id]);
 
   const handleChange = (e) => {
     setProfileData({
@@ -225,6 +207,60 @@ const handleDeleteAccount = async () => {
       <div className="max-w-2xl mx-auto px-4">
         <div className="bg-white rounded-lg shadow-md p-6">
           <h1 className="text-2xl font-bold text-green-600 mb-6">Profil Saya</h1>
+
+          <button
+  onClick={async () => {
+    console.log('🔄 Manual reload triggered');
+    
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      console.log('👤 Current user:', currentUser);
+      
+      if (!currentUser?.id) {
+        console.error('❌ No user found');
+        toast.error('User tidak ditemukan');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', currentUser.id)
+        .single();
+      
+      console.log('📡 Manual query - data:', data);
+      console.log('📡 Manual query - error:', error);
+      
+      if (error) {
+        console.error('❌ Query error:', error);
+        toast.error('Gagal load profile: ' + error.message);
+        return;
+      }
+      
+      if (data) {
+        const newData = {
+          username: data.username || '',
+          full_name: data.full_name || '',
+          email: data.email || currentUser.email || '',
+          phone: data.phone || '',
+          address: data.address || '',
+          city: data.city || '',
+          province: data.province || ''
+        };
+        
+        console.log('✅ Setting new data:', newData);
+        setProfileData(newData);
+        toast.success('Profile reloaded!');
+      }
+    } catch (err) {
+      console.error('❌ Manual reload error:', err);
+      toast.error('Error: ' + err.message);
+    }
+  }}
+  className="mb-4 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+>
+  🔄 Reload Profile Data
+</button>
           
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
