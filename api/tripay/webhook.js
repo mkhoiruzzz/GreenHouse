@@ -188,26 +188,30 @@ async function processWebhook(payload) {
       try {
         console.log('📱 Sending WhatsApp notification...');
         
-        // Ambil data customer
-        const { data: customer } = await supabase
-          .from('users')
-          .select('nama_lengkap, no_hp')
-          .eq('id', order.user_id)
+        // Ambil data customer dari profiles
+        const { data: customer, error: customerError } = await supabase
+          .from('profiles')
+          .select('full_name, phone')
+          .eq('uuid', order.user_id)
           .single();
         
-        if (customer && customer.no_hp) {
+        console.log('👤 Customer data:', customer);
+        console.log('Customer error:', customerError);
+        
+        if (customer && customer.phone) {
           // Format nomor HP (pastikan format 62xxx)
-          let phoneNumber = customer.no_hp.replace(/^0/, '62');
+          let phoneNumber = customer.phone.replace(/^0/, '62');
           phoneNumber = phoneNumber.replace(/[^0-9]/g, '');
           
           console.log('📞 Sending to:', phoneNumber);
           
-          const message = formatPaymentSuccessMessage(order, customer.nama_lengkap);
+          const message = formatPaymentSuccessMessage(order, customer.full_name || 'Customer');
           
-          await sendWhatsAppMessage(phoneNumber, message);
-          console.log('✅ WhatsApp notification sent');
+          const waResult = await sendWhatsAppMessage(phoneNumber, message);
+          console.log('✅ WhatsApp notification sent:', waResult);
         } else {
           console.warn('⚠️ Customer phone number not found');
+          console.log('Order user_id:', order.user_id);
         }
       } catch (waError) {
         console.error('❌ WhatsApp notification failed:', waError);
