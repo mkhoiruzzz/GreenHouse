@@ -28,12 +28,6 @@ function verifyTripaySignature(req, body) {
   return hmac === signature;
 }
 
-function formatPhone(phone) {
-  return phone
-    .replace(/\D/g, "")
-    .replace(/^0/, "62");
-}
-
 /* ================= HANDLER ================= */
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -60,18 +54,18 @@ export default async function handler(req, res) {
 
   try {
     /* ==== GET ORDER ==== */
-    const { data: order, error: orderError } = await supabase
+    const { data: order, error } = await supabase
       .from("orders")
       .select("*")
       .eq("tripay_reference", reference)
       .single();
 
-    if (orderError || !order) {
-      console.error("❌ Order not found", orderError);
+    if (error || !order) {
+      console.error("❌ Order not found", error);
       return res.status(404).json({ message: "Order not found" });
     }
 
-    /* ==== UPDATE ORDER STATUS ==== */
+    /* ==== UPDATE ORDER ==== */
     if (status === "PAID") {
       await supabase
         .from("orders")
@@ -84,9 +78,16 @@ export default async function handler(req, res) {
       console.log("✅ Order updated to PAID");
     }
 
-    /* ==== SEND WHATSAPP ==== */
+    /* ==== SEND WHATSAPP (FIX FINAL) ==== */
     if (status === "PAID" && order.customer_phone) {
-      const phone = formatPhone(order.customer_phone);
+      // 🔥 FORMAT PALING AMAN UNTUK FONNTE
+      const phone = order.customer_phone
+        .replace(/\D/g, "")
+        .replace(/^62/, "")
+        .replace(/^0/, "");
+
+      console.log("📱 FINAL PHONE:", phone);
+
       const customerName = order.customer_name || "Customer";
 
       const message = `
@@ -103,7 +104,7 @@ Pesananmu sedang kami proses 🌿
 Terima kasih 🙏
       `.trim();
 
-      await fetch("https://api.fonnte.com/send", {
+      const waRes = await fetch("https://api.fonnte.com/send", {
         method: "POST",
         headers: {
           Authorization: FONNTE_TOKEN,
@@ -111,14 +112,16 @@ Terima kasih 🙏
         },
         body: JSON.stringify({
           target: phone,
-          message,
+          countryCode: "62",
+          message: message,
         }),
       });
 
-      console.log("📱 WA sent to:", phone);
+      const waText = await waRes.text();
+      console.log("📨 FONNTE RESPONSE:", waText);
     }
 
-    return res.json({ success: true, message: "Webhook processed" });
+    return res.json({ success: true });
   } catch (err) {
     console.error("🔥 Webhook Error:", err);
     return res.status(500).json({ message: "Internal server error" });
