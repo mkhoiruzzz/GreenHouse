@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 const TRIPAY_CALLBACK_KEY = process.env.TRIPAY_CALLBACK_KEY || process.env.TRIPAY_PRIVATE_KEY;
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+const FONNTE_TOKEN = process.env.FONNTE_TOKEN;
 
 // Initialize Supabase
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -182,6 +183,35 @@ async function processWebhook(payload) {
     if (status === 'PAID' && order.status_pembayaran !== 'paid') {
       console.log('📦 Reducing stock...');
       await reduceProductStock(order.id);
+      
+      // ✅ KIRIM NOTIFIKASI WHATSAPP
+      try {
+        console.log('📱 Sending WhatsApp notification...');
+        
+        // Ambil data customer
+        const { data: customer } = await supabase
+          .from('users')
+          .select('nama_lengkap, no_hp')
+          .eq('id', order.user_id)
+          .single();
+        
+        if (customer && customer.no_hp) {
+          // Format nomor HP (pastikan format 62xxx)
+          let phoneNumber = customer.no_hp.replace(/^0/, '62');
+          phoneNumber = phoneNumber.replace(/[^0-9]/g, '');
+          
+          console.log('📞 Sending to:', phoneNumber);
+          
+          const message = formatPaymentSuccessMessage(order, customer.nama_lengkap);
+          
+          await sendWhatsAppMessage(phoneNumber, message);
+          console.log('✅ WhatsApp notification sent');
+        } else {
+          console.warn('⚠️ Customer phone number not found');
+        }
+      } catch (waError) {
+        console.error('❌ WhatsApp notification failed:', waError);
+      }
     }
 
     // 5. Log webhook
@@ -219,7 +249,6 @@ async function processWebhook(payload) {
 // ✅ Reduce stock function
 async function reduceProductStock(orderId) {
   try {
-    // Get order items
     const { data: items, error } = await supabase
       .from('order_items')
       .select('product_id, quantity')
@@ -232,7 +261,6 @@ async function reduceProductStock(orderId) {
 
     console.log(`📦 Updating ${items.length} products`);
 
-    // Update each product stock
     for (const item of items) {
       const { data: product } = await supabase
         .from('products')
@@ -257,3 +285,57 @@ async function reduceProductStock(orderId) {
     throw error;
   }
 }
+
+// ✅ WhatsApp functions
+async function sendWhatsAppMessage(target, message) {
+  try {
+    const response = await fetch('https://api.fonnte.com/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': FONNTE_TOKEN,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        target: target,
+        message: message,
+        countryCode: '62'
+      })
+    });
+
+    const result = await response.json();
+    console.log('📱 Fonnte response:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ WhatsApp error:', error);
+    throw error;
+  }
+}
+
+function formatPaymentSuccessMessage(order, customerName) {
+  return `🎉 *Pembayaran Berhasil!*
+
+Halo *${customerName}*,
+
+Pembayaran Anda telah kami terima!
+
+📋 *Detail Pesanan:*
+- No. Order: ${order.id}
+- Total: Rp ${order.total_harga?.toLocaleString('id-ID')}
+- Status: ✅ Lunas
+
+📦 *Pesanan Anda sedang diproses*
+Kami akan segera mengirimkan produk Anda.
+
+Terima kasih sudah berbelanja di GreenHouse! 🌱
+
+_Pesan otomatis - Jangan balas pesan ini_`;
+}
+```
+
+## 3. Tambahkan Environment Variable di Vercel
+
+**Vercel Dashboard → Settings → Environment Variables**
+
+Tambahkan:
+```
+FONNTE_TOKEN=K1YaN2z8LzXZKyb7M5mTL385LAquRDFzTBj3
