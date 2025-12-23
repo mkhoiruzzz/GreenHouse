@@ -8,29 +8,52 @@ const ProductCard = ({ product, viewMode }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [currentImageUrl, setCurrentImageUrl] = useState('');
+  const [isLoading, setIsLoading] = useState(true);  // ✅ NEW: Separate loading state
+  
   const imgRef = useRef(null);
+  const loadingTimeoutRef = useRef(null);  // ✅ NEW: Timeout reference
   
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const { t } = useTheme();
 
-  // ✅ FIX UTAMA: Reset state setiap kali product atau gambar URL berubah
+  // Reset state when product changes
   useEffect(() => {
     const newImageUrl = product?.gambar_url || product?.gambar || '';
     
-    // Hanya reset jika URL benar-benar berubah
     if (newImageUrl !== currentImageUrl) {
-      console.log('🔄 Image URL changed for product:', product?.id, 'Old:', currentImageUrl, 'New:', newImageUrl);
+      console.log('🔄 Image URL changed for product:', product?.id, 'URL:', newImageUrl);
       setImageLoaded(false);
       setImageError(false);
+      setIsLoading(true);  // ✅ Set loading true
       setCurrentImageUrl(newImageUrl);
+      
+      // ✅ NEW: Set timeout to hide skeleton after 5 seconds
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+      }
+      
+      loadingTimeoutRef.current = setTimeout(() => {
+        console.warn('⏱️ Image loading timeout for product:', product?.id);
+        setIsLoading(false);  // ✅ Hide skeleton after timeout
+        if (!imageLoaded && !imageError) {
+          setImageLoaded(true);  // ✅ Force show image even if onLoad not triggered
+        }
+      }, 5000); // 5 seconds timeout
       
       // Force re-render image element
       if (imgRef.current) {
         imgRef.current.src = newImageUrl || 'https://placehold.co/400x300/4ade80/white?text=Gambar+Tidak+Tersedia';
       }
     }
-  }, [product?.id, product?.gambar_url, product?.gambar]);
+    
+    // ✅ Cleanup timeout on unmount
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+      }
+    };
+  }, [product?.id, product?.gambar_url, product?.gambar, currentImageUrl]);
 
   if (!product) {
     console.error('❌ ProductCard: Product data is null or undefined');
@@ -112,12 +135,24 @@ const ProductCard = ({ product, viewMode }) => {
     console.log('✅ Image loaded successfully for product:', product.id);
     setImageLoaded(true);
     setImageError(false);
+    setIsLoading(false);  // ✅ Hide skeleton
+    
+    // Clear timeout since image loaded successfully
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+    }
   };
 
   const handleImageError = (e) => {
     console.error('❌ Image failed to load for product:', product.id, 'URL:', currentImageUrl);
     setImageError(true);
     setImageLoaded(false);
+    setIsLoading(false);  // ✅ Hide skeleton
+    
+    // Clear timeout
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+    }
   };
 
   const renderImage = () => {
@@ -133,17 +168,23 @@ const ProductCard = ({ product, viewMode }) => {
 
     return (
       <div className="relative w-full h-full">
-        {/* Skeleton loader saat loading */}
-        {!imageLoaded && (
-          <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse rounded-lg"></div>
+        {/* ✅ SKELETON: Hanya tampil jika isLoading = true */}
+        {isLoading && !imageLoaded && !imageError && (
+          <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse rounded-lg flex items-center justify-center z-10">
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-xs text-gray-500 dark:text-gray-400">Loading...</span>
+            </div>
+          </div>
         )}
         
+        {/* ✅ IMAGE: Selalu render, tapi atur opacity */}
         <img
           ref={imgRef}
           src={imageUrl}
           alt={product.nama_produk || t('Gambar produk', 'Product image')}
-          className={`w-full h-full object-cover rounded-lg transition-all duration-300 ${
-            imageLoaded ? 'opacity-100' : 'opacity-0'
+          className={`w-full h-full object-cover rounded-lg transition-all duration-500 ${
+            imageLoaded || !isLoading ? 'opacity-100' : 'opacity-0'
           } hover:scale-105`}
           onLoad={handleImageLoad}
           onError={handleImageError}
@@ -153,6 +194,8 @@ const ProductCard = ({ product, viewMode }) => {
     );
   };
 
+  // ... (sisa kode sama seperti sebelumnya - List View dan Grid View)
+  
   // List View
   if (viewMode === 'list') {
     return (
