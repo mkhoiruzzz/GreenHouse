@@ -976,7 +976,7 @@ const Checkout = () => {
                     onClick={() => {
                       // Clear session storage
                       sessionStorage.removeItem('lastOrderSummary');
-                      navigate('/products');
+                      window.location.href = '/orders';
                     }}
                     className="border border-green-600 text-green-600 dark:text-green-400 dark:border-green-500 px-6 py-3 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/10 font-semibold transition-colors"
                   >

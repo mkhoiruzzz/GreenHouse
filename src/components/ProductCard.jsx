@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
@@ -7,9 +7,30 @@ import { toast } from 'react-toastify';
 const ProductCard = ({ product, viewMode }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [currentImageUrl, setCurrentImageUrl] = useState('');
+  const imgRef = useRef(null);
+  
   const navigate = useNavigate();
   const { addToCart } = useCart();
-  const { t } = useTheme(); // Tambahkan useTheme untuk translation
+  const { t } = useTheme();
+
+  // ✅ FIX UTAMA: Reset state setiap kali product atau gambar URL berubah
+  useEffect(() => {
+    const newImageUrl = product?.gambar_url || product?.gambar || '';
+    
+    // Hanya reset jika URL benar-benar berubah
+    if (newImageUrl !== currentImageUrl) {
+      console.log('🔄 Image URL changed for product:', product?.id, 'Old:', currentImageUrl, 'New:', newImageUrl);
+      setImageLoaded(false);
+      setImageError(false);
+      setCurrentImageUrl(newImageUrl);
+      
+      // Force re-render image element
+      if (imgRef.current) {
+        imgRef.current.src = newImageUrl || 'https://placehold.co/400x300/4ade80/white?text=Gambar+Tidak+Tersedia';
+      }
+    }
+  }, [product?.id, product?.gambar_url, product?.gambar]);
 
   if (!product) {
     console.error('❌ ProductCard: Product data is null or undefined');
@@ -87,6 +108,18 @@ const ProductCard = ({ product, viewMode }) => {
     }
   };
 
+  const handleImageLoad = () => {
+    console.log('✅ Image loaded successfully for product:', product.id);
+    setImageLoaded(true);
+    setImageError(false);
+  };
+
+  const handleImageError = (e) => {
+    console.error('❌ Image failed to load for product:', product.id, 'URL:', currentImageUrl);
+    setImageError(true);
+    setImageLoaded(false);
+  };
+
   const renderImage = () => {
     if (imageError) {
       return (
@@ -96,24 +129,27 @@ const ProductCard = ({ product, viewMode }) => {
       );
     }
 
-    const imageUrl = product.gambar_url || product.gambar || '/api/placeholder/300/300';
-    console.log('🖼️ Rendering image for product:', product.id, 'URL:', imageUrl);
+    const imageUrl = currentImageUrl || 'https://placehold.co/400x300/4ade80/white?text=Gambar+Tidak+Tersedia';
 
     return (
-      <img
-        src={imageUrl}
-        alt={product.nama_produk || t('Gambar produk', 'Product image')}
-        className="w-full h-full object-cover rounded-lg transition-all duration-300 hover:scale-105"
-        onLoad={() => {
-          console.log('✅ Image loaded successfully for product:', product.id);
-          setImageLoaded(true);
-        }}
-        onError={(e) => {
-          console.error('❌ Image failed to load for product:', product.id, 'URL:', imageUrl);
-          setImageError(true);
-        }}
-        loading="lazy"
-      />
+      <div className="relative w-full h-full">
+        {/* Skeleton loader saat loading */}
+        {!imageLoaded && (
+          <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse rounded-lg"></div>
+        )}
+        
+        <img
+          ref={imgRef}
+          src={imageUrl}
+          alt={product.nama_produk || t('Gambar produk', 'Product image')}
+          className={`w-full h-full object-cover rounded-lg transition-all duration-300 ${
+            imageLoaded ? 'opacity-100' : 'opacity-0'
+          } hover:scale-105`}
+          onLoad={handleImageLoad}
+          onError={handleImageError}
+          loading="eager"
+        />
+      </div>
     );
   };
 
