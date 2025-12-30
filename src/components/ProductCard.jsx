@@ -9,36 +9,45 @@ const ProductCard = ({ product, viewMode = 'grid' }) => {
   const imgRef = useRef(null);
   const navigate = useNavigate();
   const { t } = useTheme();
-  const prevProductIdRef = useRef(null);
+  const prevImgUrlRef = useRef('');
 
-  // ✅ FIX: Gunakan useMemo untuk URL yang stable, hanya update jika product.id berubah
+  // ✅ FIX: Gunakan useMemo untuk URL yang stable, update jika product.id atau gambar_url berubah
   const imgUrl = useMemo(() => {
     if (!product?.gambar_url) {
       return 'https://placehold.co/400x300/4ade80/white?text=No+Image';
     }
     // ✅ Gunakan URL asli tanpa cache buster yang berubah-ubah
     return product.gambar_url;
-  }, [product?.id]); // ✅ Hanya depend pada product.id untuk menghindari re-render berlebihan
+  }, [product?.id, product?.gambar_url]);
 
-  // ✅ Reset loading state hanya saat product.id benar-benar berubah
+  // ✅ Reset loading state hanya saat URL gambar benar-benar berubah
   useEffect(() => {
-    // Hanya reset jika product.id benar-benar berubah
-    if (prevProductIdRef.current !== product?.id) {
-      prevProductIdRef.current = product?.id;
+    const currentUrl = imgUrl;
+    // Hanya reset jika URL benar-benar berubah (setelah login/refresh)
+    if (prevImgUrlRef.current !== currentUrl) {
+      prevImgUrlRef.current = currentUrl;
       setLoaded(false);
       setError(false);
     }
-  }, [product?.id]);
+  }, [imgUrl]);
+
+  // ✅ Check if image is already cached after URL changes
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img && img.complete && img.naturalHeight !== 0 && !loaded) {
+      setLoaded(true);
+      setError(false);
+    }
+  }, [imgUrl, loaded]);
 
   const handleImageLoad = () => {
-    // ✅ Set loaded state - dengan key prop, React sudah handle race condition
+    // ✅ Set loaded state
     setLoaded(true);
     setError(false);
   };
 
   const handleImageError = () => {
     // ✅ Set error state - error indicator akan ditampilkan
-    // Tidak perlu mengubah imgUrl karena error indicator sudah cukup
     setError(true);
     setLoaded(true);
   };
