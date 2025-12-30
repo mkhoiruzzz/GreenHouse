@@ -11,39 +11,42 @@ const ProductCard = ({ product, viewMode = 'grid' }) => {
   const navigate = useNavigate();
   const { t } = useTheme();
 
-  // ✅ SOLUSI: Generate URL sekali saja saat component mount
+  // ✅ FIX: Generate URL yang stable - tidak menggunakan cache buster yang berubah
   useEffect(() => {
-    if (!product?.gambar_url) {
-      setImgUrl('https://placehold.co/400x300/4ade80/white?text=No+Image');
-      setLoaded(true);
-      return;
-    }
-
-    // Reset state
+    // Reset state saat product berubah
     setLoaded(false);
     setError(false);
 
-    // ✅ Buat URL dengan timestamp untuk bypass cache di incognito
-    const cacheBuster = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    const finalUrl = `${product.gambar_url}?cb=${cacheBuster}`;
-    
-    // ✅ Set URL langsung tanpa delay
+    if (!product?.gambar_url) {
+      const placeholderUrl = 'https://placehold.co/400x300/4ade80/white?text=No+Image';
+      setImgUrl(placeholderUrl);
+      setLoaded(true);
+      setError(false);
+      return;
+    }
+
+    // ✅ Gunakan URL asli tanpa cache buster yang berubah-ubah
+    // Cache buster yang berbeda setiap render menyebabkan gambar hilang saat refresh
+    const finalUrl = product.gambar_url;
     setImgUrl(finalUrl);
+
+    // ✅ Reset loaded state untuk gambar baru
+    setLoaded(false);
+    setError(false);
 
   }, [product?.gambar_url, product?.id]);
 
-  const handleImageLoad = (e) => {
-    console.log('✅ Image loaded successfully:', product?.nama_produk);
+  const handleImageLoad = () => {
+    // ✅ Set loaded state - dengan key prop, React sudah handle race condition
     setLoaded(true);
     setError(false);
   };
 
-  const handleImageError = (e) => {
-    console.error('❌ Image load error:', product?.nama_produk, e);
+  const handleImageError = () => {
+    // ✅ Set error state - error indicator akan ditampilkan
+    // Tidak perlu mengubah imgUrl karena error indicator sudah cukup
     setError(true);
     setLoaded(true);
-    // Fallback ke placeholder
-    setImgUrl('https://placehold.co/400x300/4ade80/white?text=No+Image');
   };
 
   const goDetail = () => {
@@ -67,19 +70,22 @@ const ProductCard = ({ product, viewMode = 'grid' }) => {
           {/* Image element - selalu render untuk memicu onLoad */}
           {imgUrl && (
             <img
+              key={`${product?.id}-${product?.gambar_url}`}
               ref={imgRef}
               src={imgUrl}
               alt={product?.nama_produk || 'Product'}
               onLoad={handleImageLoad}
               onError={handleImageError}
-              className={`w-full h-full object-cover rounded-lg transition-opacity duration-500 ${
-                loaded ? 'opacity-100' : 'opacity-0'
+              className={`w-full h-full object-cover rounded-lg transition-opacity duration-300 ${
+                loaded && !error ? 'opacity-100' : 'opacity-0'
               }`}
               style={{
-                display: 'block', // ✅ Force display
+                display: 'block',
                 width: '100%',
                 height: '100%'
               }}
+              loading="lazy"
+              decoding="async"
             />
           )}
 
