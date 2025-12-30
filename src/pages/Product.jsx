@@ -133,6 +133,7 @@ const Product = () => {
       try {
         allProducts = await productsService.getAllProducts();
         console.log('✅ Products fetched successfully:', allProducts?.length || 0, 'products');
+        console.log('📦 First product:', allProducts[0]);
       } catch (fetchError) {
         console.error('❌ Error fetching products from service:', fetchError);
         throw fetchError;
@@ -518,13 +519,13 @@ const Product = () => {
                   ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
                   : "space-y-4"
               }>
-                {products.map((product) => (
-                  <ProductCard 
-                    key={product.id} 
-                    product={product} 
-                    viewMode={viewMode}
-                  />
-                ))}
+              {products.map((product) => (
+  <ProductCard 
+    key={`${product.id}-${product.gambar_url}`}  // ✅ YANG BARU
+    product={product} 
+    viewMode={viewMode}
+  />
+))}
               </div>
             ) : (
               <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
