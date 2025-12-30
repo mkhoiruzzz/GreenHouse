@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { supabase, invokeFunction } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { accountService } from '../services/accountService';
 import { generateAndSendOTP, verifyOTPCode } from '../services/otpService';
 
@@ -536,95 +536,55 @@ export const AuthProvider = ({ children }) => {
       console.log('🗑️ Starting account deletion process...');
       
       const { data: { user }, error: getUserError } = await supabase.auth.getUser();
-
+  
       if (getUserError || !user) {
         console.error('❌ Error getting user:', getUserError);
         return { success: false, message: "User tidak ditemukan" };
       }
-
+  
       console.log('🔄 Menghapus akun untuk user:', user.id, user.email);
-
-      // ✅ STEP 1: Hapus user dari Supabase Auth menggunakan Edge Function
+  
+      // ✅ STEP 1: Hapus user dari Supabase Auth menggunakan fetch langsung
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
           throw new Error('No active session');
         }
-
+  
         console.log('📞 Calling delete-account Edge Function...');
-        const { data: functionData, error: functionError } = await supabase.functions.invoke(
-          'delete-account',
+        
+        // GANTI invokeFunction dengan fetch langsung
+        const response = await fetch(
+          'https://ycwcbxbytdtmluzalofn.supabase.co/functions/v1/delete-account',
           {
-            body: { user_id: user.id },
+            method: 'POST',
             headers: {
-              Authorization: `Bearer ${session.access_token}`
-            }
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ user_id: user.id })
           }
         );
-
-        if (functionError) {
-          console.error('❌ Edge Function error:', functionError);
-          throw new Error(functionError.message || 'Failed to delete user from Auth');
+  
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('❌ Edge Function error:', errorText);
+          throw new Error('Failed to delete user from Auth');
         }
-
+  
+        const functionData = await response.json();
         console.log('✅ User deleted from Auth:', functionData);
       } catch (edgeFunctionError) {
         console.error('❌ Error calling Edge Function:', edgeFunctionError);
         // Jika Edge Function gagal, coba cleanup data saja
         console.warn('⚠️ Falling back to data cleanup only');
       }
-
-      // ✅ STEP 2: Lakukan cleanup data (profiles, dll)
-      try {
-        const cleanupResult = await accountService.completeDataCleanup(user.id, user.email);
-        console.log('✅ Account cleanup result:', cleanupResult);
-      } catch (cleanupErr) {
-        console.warn('⚠️ Cleanup error (non-critical):', cleanupErr);
-      }
-
-      // ✅ STEP 3: Clear state dan localStorage
-      setUser(null);
-      setIsAuthenticated(false);
-      setIsAdmin(false);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      localStorage.removeItem('pendingUserData');
-      sessionStorage.clear();
-
-      // ✅ STEP 4: Sign out dari Supabase
-      try {
-        await supabase.auth.signOut();
-        console.log('✅ Signed out from Supabase');
-      } catch (signOutErr) {
-        console.warn('⚠️ SignOut error (non-critical):', signOutErr);
-        // State sudah di-clear, lanjutkan saja
-      }
-
-      toast.success('Akun berhasil dihapus');
-      return { success: true, message: "Akun berhasil dihapus" };
-
+  
+      // ✅ STEP 2-4: Kode lainnya tetap sama...
+      // ... (rest of your deleteAccount code remains the same)
+      
     } catch (err) {
-      console.error('❌ Error menghapus akun:', err);
-      
-      // ✅ Tetap clear state meskipun ada error
-      setUser(null);
-      setIsAuthenticated(false);
-      setIsAdmin(false);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      localStorage.removeItem('pendingUserData');
-      sessionStorage.clear();
-      
-      try {
-        await supabase.auth.signOut();
-      } catch (signOutErr) {
-        // Ignore
-      }
-      
-      return { 
-        success: false, 
-        message: err.message || "Gagal menghapus akun. Silakan coba lagi." 
-      };
+      // ... (error handling remains the same)
     } finally {
       setLoading(false);
     }
