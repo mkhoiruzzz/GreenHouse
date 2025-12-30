@@ -1,56 +1,69 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 
 const ProductCard = ({ product, viewMode = 'grid' }) => {
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(false);
-
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const [displaySrc, setDisplaySrc] = useState('');
+  
   const imgRef = useRef(null);
+  const isMountedRef = useRef(true);
   const navigate = useNavigate();
   const { t } = useTheme();
-  const prevImgUrlRef = useRef('');
 
-  // ✅ FIX: Gunakan useMemo untuk URL yang stable, update jika product.id atau gambar_url berubah
-  const imgUrl = useMemo(() => {
+  const PLACEHOLDER = 'https://placehold.co/400x300/4ade80/white?text=No+Image';
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // ✅ SOLUSI: Preload image dengan proper error handling
+  useEffect(() => {
+    // Reset states
+    setIsLoading(true);
+    setHasError(false);
+
+    // Jika tidak ada gambar, gunakan placeholder
     if (!product?.gambar_url) {
-      return 'https://placehold.co/400x300/4ade80/white?text=No+Image';
+      setDisplaySrc(PLACEHOLDER);
+      setIsLoading(false);
+      return;
     }
-    // ✅ Gunakan URL asli tanpa cache buster yang berubah-ubah
-    return product.gambar_url;
-  }, [product?.id, product?.gambar_url]);
 
-  // ✅ Reset loading state hanya saat URL gambar benar-benar berubah
-  useEffect(() => {
-    const currentUrl = imgUrl;
-    // Hanya reset jika URL benar-benar berubah (setelah login/refresh)
-    if (prevImgUrlRef.current !== currentUrl) {
-      prevImgUrlRef.current = currentUrl;
-      setLoaded(false);
-      setError(false);
-    }
-  }, [imgUrl]);
+    // Preload image
+    const img = new Image();
+    const imageUrl = product.gambar_url;
 
-  // ✅ Check if image is already cached after URL changes
-  useEffect(() => {
-    const img = imgRef.current;
-    if (img && img.complete && img.naturalHeight !== 0 && !loaded) {
-      setLoaded(true);
-      setError(false);
-    }
-  }, [imgUrl, loaded]);
+    img.onload = () => {
+      if (isMountedRef.current) {
+        setDisplaySrc(imageUrl);
+        setIsLoading(false);
+        setHasError(false);
+      }
+    };
 
-  const handleImageLoad = () => {
-    // ✅ Set loaded state
-    setLoaded(true);
-    setError(false);
-  };
+    img.onerror = () => {
+      if (isMountedRef.current) {
+        console.warn('Failed to load image:', product.nama_produk);
+        setDisplaySrc(PLACEHOLDER);
+        setIsLoading(false);
+        setHasError(true);
+      }
+    };
 
-  const handleImageError = () => {
-    // ✅ Set error state - error indicator akan ditampilkan
-    setError(true);
-    setLoaded(true);
-  };
+    // Trigger load
+    img.src = imageUrl;
+
+    // Cleanup
+    return () => {
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [product?.gambar_url, product?.nama_produk]);
 
   const goDetail = () => {
     navigate(`/product/${product.id}`);
@@ -62,51 +75,52 @@ const ProductCard = ({ product, viewMode = 'grid' }) => {
       className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300"
     >
       <div className="p-4">
-        {/* Image container */}
-        <div className="relative h-48 border-4 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-700 flex items-center justify-center mb-4 overflow-hidden">
+        {/* Image Container */}
+        <div className="relative h-48 border-4 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-700 overflow-hidden mb-4">
           
-          {/* Loading skeleton - tampil saat image belum loaded */}
-          {!loaded && !error && (
-            <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse rounded-lg z-10" />
+          {/* Loading Skeleton */}
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-full h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-600 dark:via-gray-500 dark:to-gray-600 animate-pulse" />
+              <div className="absolute">
+                <svg className="animate-spin h-10 w-10 text-emerald-600 dark:text-emerald-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              </div>
+            </div>
           )}
 
-          {/* Image element - selalu render untuk memicu onLoad */}
-          <img
-            key={product?.id}
-            ref={imgRef}
-            src={imgUrl}
-            alt={product?.nama_produk || 'Product'}
-            onLoad={handleImageLoad}
-            onError={handleImageError}
-            className={`w-full h-full object-cover rounded-lg transition-opacity duration-300 ${
-              loaded && !error ? 'opacity-100' : 'opacity-0'
-            }`}
-            style={{
-              display: 'block',
-              width: '100%',
-              height: '100%'
-            }}
-            loading="lazy"
-            decoding="async"
-          />
+          {/* Actual Image - Only render when ready */}
+          {!isLoading && displaySrc && (
+            <img
+              ref={imgRef}
+              src={displaySrc}
+              alt={product?.nama_produk || 'Product'}
+              className="w-full h-full object-cover"
+              style={{ 
+                opacity: 1,
+                transition: 'opacity 0.3s ease-in-out'
+              }}
+            />
+          )}
 
-          {/* Error indicator */}
-          {error && loaded && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-lg">
-              <span className="text-gray-400 text-xs mb-1">⚠️</span>
-              <span className="text-gray-400 text-xs">Gambar tidak tersedia</span>
+          {/* Error Indicator */}
+          {hasError && !isLoading && (
+            <div className="absolute top-2 right-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs px-2 py-1 rounded-full">
+              ⚠️
             </div>
           )}
         </div>
 
-        {/* Category badge */}
+        {/* Category Badge */}
         {product?.categories && (
           <span className="inline-block bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs px-3 py-1 rounded-full mb-2">
             {product.categories.nama_kategori || product.categories.name_kategori || 'Tanaman'}
           </span>
         )}
 
-        {/* Product name */}
+        {/* Product Name */}
         <h3 className="font-bold text-gray-900 dark:text-white text-sm line-clamp-2 mb-1">
           {product?.nama_produk || 'Nama Produk'}
         </h3>
