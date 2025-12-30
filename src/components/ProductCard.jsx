@@ -17,44 +17,33 @@ const ProductCard = ({ product, viewMode }) => {
   const { addToCart } = useCart();
   const { t } = useTheme();
 
-  // Reset state when product changes
   useEffect(() => {
     const newImageUrl = product?.gambar_url || product?.gambar || '';
-    
-    if (newImageUrl !== currentImageUrl) {
-      console.log('🔄 Image URL changed for product:', product?.id, 'URL:', newImageUrl);
-      setImageLoaded(false);
-      setImageError(false);
-      setIsLoading(true);  // ✅ Set loading true
-      setCurrentImageUrl(newImageUrl);
-      
-      // ✅ NEW: Set timeout to hide skeleton after 5 seconds
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
-      }
-      
-      loadingTimeoutRef.current = setTimeout(() => {
-        console.warn('⏱️ Image loading timeout for product:', product?.id);
-        setIsLoading(false);  // ✅ Hide skeleton after timeout
-        if (!imageLoaded && !imageError) {
-          setImageLoaded(true);  // ✅ Force show image even if onLoad not triggered
-        }
-      }, 5000); // 5 seconds timeout
-      
-      // Force re-render image element
-      if (imgRef.current) {
-        imgRef.current.src = newImageUrl || 'https://placehold.co/400x300/4ade80/white?text=Gambar+Tidak+Tersedia';
-      }
+  
+    console.log('🖼️ Set image URL:', newImageUrl);
+  
+    setImageLoaded(false);
+    setImageError(false);
+    setIsLoading(true);
+    setCurrentImageUrl(newImageUrl);
+  
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
     }
-    
-    // ✅ Cleanup timeout on unmount
+  
+    loadingTimeoutRef.current = setTimeout(() => {
+      console.warn('⏱️ Image loading timeout:', product?.id);
+      setIsLoading(false);
+      setImageLoaded(true);
+    }, 5000);
+  
     return () => {
       if (loadingTimeoutRef.current) {
         clearTimeout(loadingTimeoutRef.current);
       }
     };
-  }, [product?.id, product?.gambar_url, product?.gambar, currentImageUrl]);
-
+  }, [product?.id, product?.gambar_url, product?.gambar]);
+  
   if (!product) {
     console.error('❌ ProductCard: Product data is null or undefined');
     return (
