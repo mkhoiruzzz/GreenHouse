@@ -7,30 +7,88 @@ const ProductCard = ({ product, viewMode = 'grid' }) => {
   const [imgSrc, setImgSrc] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
+  const [isInView, setIsInView] = useState(false);
 
   const imgRef = useRef(null);
+  const cardRef = useRef(null);
   const navigate = useNavigate();
   const { t } = useTheme();
 
   /* =========================
-     IMAGE INITIALIZER (FINAL)
+     INTERSECTION OBSERVER (untuk lazy loading)
      ========================= */
   useEffect(() => {
+    if (!cardRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setIsInView(true);
+            observer.disconnect(); // Stop observing setelah terlihat
+          }
+        });
+      },
+      {
+        rootMargin: '50px', // Load sedikit sebelum masuk viewport
+        threshold: 0.01
+      }
+    );
+
+    observer.observe(cardRef.current);
+
+    return () => observer.disconnect();
+  }, []);
+
+  /* =========================
+     IMAGE INITIALIZER
+     ========================= */
+  useEffect(() => {
+    // Tunggu sampai card terlihat atau langsung load jika tidak ada observer support
+    if (!isInView && 'IntersectionObserver' in window) return;
+
     if (!product?.gambar_url) {
       setImgSrc('https://placehold.co/400x300/4ade80/white?text=No+Image');
+      setLoaded(true);
       return;
     }
 
-    // ✅ Cache-buster fix (Supabase + Incognito safe)
-    const safeUrl = `${product.gambar_url}?v=${product.updated_at || product.id}`;
+    // ✅ PERBAIKAN: Tambahkan timestamp untuk force reload di incognito
+    const timestamp = Date.now();
+    const cacheKey = product.updated_at || product.id || timestamp;
+    
+    // ✅ Gunakan kombinasi cache-buster yang lebih kuat
+    const safeUrl = `${product.gambar_url}?v=${cacheKey}&t=${timestamp}`;
 
     setLoaded(false);
     setError(false);
     setImgSrc(safeUrl);
-  }, [product?.gambar_url, product?.updated_at, product?.id]);
 
-  const handleImageLoad = () => setLoaded(true);
+    // ✅ PERBAIKAN: Preload image untuk memastikan loading
+    const img = new Image();
+    img.src = safeUrl;
+    
+    img.onload = () => {
+      setLoaded(true);
+    };
+    
+    img.onerror = () => {
+      handleImageError();
+    };
+
+    return () => {
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [product?.gambar_url, product?.updated_at, product?.id, isInView]);
+
+  const handleImageLoad = () => {
+    setLoaded(true);
+    setError(false);
+  };
+
   const handleImageError = () => {
+    console.error('Image failed to load:', imgSrc);
     setError(true);
     setLoaded(true);
     setImgSrc('https://placehold.co/400x300/4ade80/white?text=No+Image');
@@ -39,25 +97,41 @@ const ProductCard = ({ product, viewMode = 'grid' }) => {
   const goDetail = () => navigate(`/product/${product.id}`);
 
   /* =========================
-     IMAGE RENDER (FINAL)
+     IMAGE RENDER
      ========================= */
   const ImageBox = (
     <div className="relative w-full h-full">
+      {/* Loading skeleton */}
       {!loaded && (
         <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse rounded-lg" />
       )}
 
-      <img
-        ref={imgRef}
-        src={imgSrc}
-        alt={product.nama_produk}
-        loading="lazy"
-        onLoad={handleImageLoad}
-        onError={handleImageError}
-        className={`w-full h-full object-cover rounded-lg transition-opacity duration-300 ${
-          loaded ? 'opacity-100' : 'opacity-0'
-        }`}
-      />
+      {/* Actual image - hanya render jika sudah ada src */}
+      {imgSrc && (
+        <img
+          ref={imgRef}
+          src={imgSrc}
+          alt={product.nama_produk}
+          loading="lazy"
+          onLoad={handleImageLoad}
+          onError={handleImageError}
+          crossOrigin="anonymous"
+          className={`w-full h-full object-cover rounded-lg transition-opacity duration-300 ${
+            loaded ? 'opacity-100' : 'opacity-0'
+          }`}
+          style={{
+            // ✅ Force browser to always fetch fresh image
+            imageRendering: 'auto'
+          }}
+        />
+      )}
+
+      {/* Error state indicator */}
+      {error && loaded && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-lg">
+          <span className="text-gray-400 text-xs">⚠️ Gambar gagal dimuat</span>
+        </div>
+      )}
     </div>
   );
 
@@ -66,11 +140,13 @@ const ProductCard = ({ product, viewMode = 'grid' }) => {
      ========================= */
   return (
     <div
+      ref={cardRef}
       onClick={goDetail}
       className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300"
     >
       <div className="p-4">
-        <div className="h-48 border-4 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-700 flex items-center justify-center mb-4">
+        {/* Image container with fixed aspect ratio */}
+        <div className="h-48 border-4 border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-700 flex items-center justify-center mb-4 overflow-hidden">
           {ImageBox}
         </div>
 
