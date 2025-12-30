@@ -22,6 +22,7 @@ import AdminDashboard from './components/AdminDashboard'
 import ErrorBoundary from './components/ErrorBoundary'
 import { ThemeProvider } from './context/ThemeContext'
 import ProductForm from './components/ProductForm'
+import DebugPage from './pages/DebugPage'
 
 function App() {
   return (
@@ -51,6 +52,7 @@ function App() {
                       <Route path="/images/*" element={null} />
                       <Route path="/admin" element={<AdminDashboard />} />
                       <Route path="/admin/add-product" element={<ProductForm />} />
+                      <Route path="/debug" element={<DebugPage />} />
                     </Routes>
                   </ErrorBoundary>
                 </main>
