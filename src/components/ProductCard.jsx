@@ -1,40 +1,34 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 
 const ProductCard = ({ product, viewMode = 'grid' }) => {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
-  const [imgUrl, setImgUrl] = useState('');
 
   const imgRef = useRef(null);
   const navigate = useNavigate();
   const { t } = useTheme();
+  const prevProductIdRef = useRef(null);
 
-  // ✅ FIX: Generate URL yang stable - tidak menggunakan cache buster yang berubah
-  useEffect(() => {
-    // Reset state saat product berubah
-    setLoaded(false);
-    setError(false);
-
+  // ✅ FIX: Gunakan useMemo untuk URL yang stable, hanya update jika product.id berubah
+  const imgUrl = useMemo(() => {
     if (!product?.gambar_url) {
-      const placeholderUrl = 'https://placehold.co/400x300/4ade80/white?text=No+Image';
-      setImgUrl(placeholderUrl);
-      setLoaded(true);
-      setError(false);
-      return;
+      return 'https://placehold.co/400x300/4ade80/white?text=No+Image';
     }
-
     // ✅ Gunakan URL asli tanpa cache buster yang berubah-ubah
-    // Cache buster yang berbeda setiap render menyebabkan gambar hilang saat refresh
-    const finalUrl = product.gambar_url;
-    setImgUrl(finalUrl);
+    return product.gambar_url;
+  }, [product?.id]); // ✅ Hanya depend pada product.id untuk menghindari re-render berlebihan
 
-    // ✅ Reset loaded state untuk gambar baru
-    setLoaded(false);
-    setError(false);
-
-  }, [product?.gambar_url, product?.id]);
+  // ✅ Reset loading state hanya saat product.id benar-benar berubah
+  useEffect(() => {
+    // Hanya reset jika product.id benar-benar berubah
+    if (prevProductIdRef.current !== product?.id) {
+      prevProductIdRef.current = product?.id;
+      setLoaded(false);
+      setError(false);
+    }
+  }, [product?.id]);
 
   const handleImageLoad = () => {
     // ✅ Set loaded state - dengan key prop, React sudah handle race condition
@@ -68,26 +62,24 @@ const ProductCard = ({ product, viewMode = 'grid' }) => {
           )}
 
           {/* Image element - selalu render untuk memicu onLoad */}
-          {imgUrl && (
-            <img
-              key={`${product?.id}-${product?.gambar_url}`}
-              ref={imgRef}
-              src={imgUrl}
-              alt={product?.nama_produk || 'Product'}
-              onLoad={handleImageLoad}
-              onError={handleImageError}
-              className={`w-full h-full object-cover rounded-lg transition-opacity duration-300 ${
-                loaded && !error ? 'opacity-100' : 'opacity-0'
-              }`}
-              style={{
-                display: 'block',
-                width: '100%',
-                height: '100%'
-              }}
-              loading="lazy"
-              decoding="async"
-            />
-          )}
+          <img
+            key={product?.id}
+            ref={imgRef}
+            src={imgUrl}
+            alt={product?.nama_produk || 'Product'}
+            onLoad={handleImageLoad}
+            onError={handleImageError}
+            className={`w-full h-full object-cover rounded-lg transition-opacity duration-300 ${
+              loaded && !error ? 'opacity-100' : 'opacity-0'
+            }`}
+            style={{
+              display: 'block',
+              width: '100%',
+              height: '100%'
+            }}
+            loading="lazy"
+            decoding="async"
+          />
 
           {/* Error indicator */}
           {error && loaded && (

@@ -520,12 +520,12 @@ const Product = () => {
                   : "space-y-4"
               }>
               {products.map((product) => (
-  <ProductCard 
-    key={`${product.id}-${product.gambar_url}`}  // ✅ YANG BARU
-    product={product} 
-    viewMode={viewMode}
-  />
-))}
+                <ProductCard 
+                  key={product.id}
+                  product={product} 
+                  viewMode={viewMode}
+                />
+              ))}
               </div>
             ) : (
               <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
