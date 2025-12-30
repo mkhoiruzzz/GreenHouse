@@ -1,9 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ycwcbxbytdtmluzalofn.supabase.co'
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljd2NieGJ5dGR0bWx1emFsb2ZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2MzQ5MjYsImV4cCI6MjA0NjU0MTk5NX0.vUIl0MH5J42gQhjQTXPYF5XCkgofoQJJNNr_jHayrOM'
-
-console.log('✅ Supabase client initialized')
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
@@ -13,5 +11,31 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
   }
 })
 
-// ✅ HAPUS invokeFunction dari eksport
-// Hanya eksport supabase saja
+// ✅ Helper function untuk invoke Edge Function dengan Authorization
+export const invokeFunction = async (functionName, body) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (!session) {
+    throw new Error('No active session');
+  }
+
+  const response = await fetch(
+    `${supabaseUrl}/functions/v1/${functionName}`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body)
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.error || result.message || 'Function invocation failed');
+  }
+
+  return result;
+}
