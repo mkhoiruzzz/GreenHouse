@@ -154,6 +154,8 @@ const Product = () => {
       }
       
       if (filters.category) {
+        console.log(`🔍 Filtering by category: ${filters.category}`);
+        console.log('📊 Product sample before filter:', filteredProducts[0]?.kategori_id, typeof filteredProducts[0]?.kategori_id);
         filteredProducts = filteredProducts.filter(product =>
           product.kategori_id == filters.category
         );
