@@ -18,31 +18,26 @@ const ProductCard = ({ product, viewMode }) => {
   const { t } = useTheme();
 
   useEffect(() => {
-    const newImageUrl = product?.gambar_url || product?.gambar || '';
+    if (!product?.gambar_url) return;
   
-    console.log('🖼️ Set image URL:', newImageUrl);
+    const bustedUrl = `${product.gambar_url}?v=${product.updated_at || product.id}`;
   
     setImageLoaded(false);
     setImageError(false);
     setIsLoading(true);
-    setCurrentImageUrl(newImageUrl);
+    setCurrentImageUrl(bustedUrl);
   
     if (loadingTimeoutRef.current) {
       clearTimeout(loadingTimeoutRef.current);
     }
   
     loadingTimeoutRef.current = setTimeout(() => {
-      console.warn('⏱️ Image loading timeout:', product?.id);
       setIsLoading(false);
       setImageLoaded(true);
     }, 5000);
   
-    return () => {
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
-      }
-    };
-  }, [product?.id, product?.gambar_url, product?.gambar]);
+    return () => clearTimeout(loadingTimeoutRef.current);
+  }, [product?.id, product?.gambar_url, product?.updated_at]);
   
   if (!product) {
     console.error('❌ ProductCard: Product data is null or undefined');
@@ -153,8 +148,11 @@ const ProductCard = ({ product, viewMode }) => {
       );
     }
 
-    const imageUrl = currentImageUrl || 'https://placehold.co/400x300/4ade80/white?text=Gambar+Tidak+Tersedia';
-
+    const imageUrl =
+    product.gambar_url
+      ? `${product.gambar_url}?v=${product.updated_at || product.id}`
+      : 'https://placehold.co/400x300/4ade80/white?text=No+Image';
+  
     return (
       <div className="relative w-full h-full">
         {/* ✅ SKELETON: Hanya tampil jika isLoading = true */}
@@ -170,14 +168,14 @@ const ProductCard = ({ product, viewMode }) => {
         {/* ✅ IMAGE: Selalu render, tapi atur opacity */}
         <img
           ref={imgRef}
-          src={imageUrl}
-          alt={product.nama_produk || t('Gambar produk', 'Product image')}
+          src={currentimageUrl}
+          alt={product.nama_produk || 'Product image'}
           className={`w-full h-full object-cover rounded-lg transition-all duration-500 ${
             imageLoaded || !isLoading ? 'opacity-100' : 'opacity-0'
           } hover:scale-105`}
           onLoad={handleImageLoad}
           onError={handleImageError}
-          loading="eager"
+          loading="lazy"
         />
       </div>
     );
