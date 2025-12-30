@@ -1,41 +1,37 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+// ✅ SINGLETON PATTERN: Pastikan hanya ada 1 instance
+let supabaseInstance = null;
 
-export const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
-  }
-})
-
-// ✅ Helper function untuk invoke Edge Function dengan Authorization
-export const invokeFunction = async (functionName, body) => {
-  const { data: { session } } = await supabase.auth.getSession();
-  
-  if (!session) {
-    throw new Error('No active session');
-  }
-
-  const response = await fetch(
-    `${supabaseUrl}/functions/v1/${functionName}`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
+export const getSupabaseClient = () => {
+  if (!supabaseInstance) {
+    console.log('🔄 Creating SINGLE Supabase client instance...');
+    
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ycwcbxbytdtmluzalofn.supabase.co';
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljd2NieGJ5dGR0bWx1emFsb2ZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2MzQ5MjYsImV4cCI6MjA3NzIxMDkyNn0.vUIl0MH5J42gQhjQTXPYF5XCkgofoQJJNNr_jHayrOM';
+    
+    supabaseInstance = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+        storage: window.localStorage,
+        // ✅ UNIQUE STORAGE KEY untuk menghindari konflik
+        storageKey: 'greenhouse-supabase-auth'
       },
-      body: JSON.stringify(body)
-    }
-  );
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(result.error || result.message || 'Function invocation failed');
+      // ✅ Global options
+      global: {
+        headers: {
+          'x-application-name': 'greenhouse-app'
+        }
+      }
+    });
+    
+    console.log('✅ Supabase client created (singleton)');
   }
+  
+  return supabaseInstance;
+};
 
-  return result;
-}
+// ✅ Export singleton instance
+export const supabase = getSupabaseClient();
