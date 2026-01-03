@@ -1,9 +1,8 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { supabase, invokeFunction } from '../lib/supabase';
+import { supabase } from '../lib/supabase'; // ✅ REMOVE invokeFunction
 import { accountService } from '../services/accountService';
 import { generateAndSendOTP, verifyOTPCode } from '../services/otpService';
-
 
 const AuthContext = createContext();
 
@@ -17,59 +16,76 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const checkAdminRole = async (userId) => {
-  try {
-    console.log('🔍 Checking admin role for user:', userId);
-    
-    // 🚨 TEMPORARY SOLUTION - Skip database check completely
-    const { data: userData } = await supabase.auth.getUser();
-    const userEmail = userData.user?.email;
-    
-    console.log('📧 User email:', userEmail);
-    
-    // FORCE ADMIN untuk admin@example.com - NO DATABASE CHECK
-    if (userEmail === 'admin@example.com') {
-      console.log('🎯 TEMPORARY: FORCE ADMIN for admin@example.com');
-      setIsAdmin(true);
-      return true;
-    }
-    
-    // Untuk user lain, return false
-    console.log('❌ User is NOT admin');
-    setIsAdmin(false);
-    return false;
-    
-  } catch (error) {
-    console.error('💥 Error in checkAdminRole:', error);
-    
-    // Fallback: jika ada error, tetap cek email
-    const { data: userData } = await supabase.auth.getUser();
-    if (userData.user?.email === 'admin@example.com') {
-      setIsAdmin(true);
-      return true;
-    }
-    
-    setIsAdmin(false);
-    return false;
-  }
-};
+  // ✅ Fungsi untuk fetch profile dari database
+  const fetchProfile = async (userId) => {
+    try {
+      console.log('📡 Fetching profile for user:', userId);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-  // ✅ Fungsi untuk membuat profile jika belum ada (untuk Google login)
+      if (error) {
+        console.error('❌ Error fetching profile:', error);
+        return null;
+      }
+
+      console.log('✅ Profile fetched:', data);
+      setProfile(data);
+      return data;
+    } catch (error) {
+      console.error('❌ Exception fetching profile:', error);
+      return null;
+    }
+  };
+
+  const checkAdminRole = async (userId) => {
+    try {
+      console.log('🔍 Checking admin role for user:', userId);
+      
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email;
+      
+      console.log('📧 User email:', userEmail);
+      
+      if (userEmail === 'admin@example.com') {
+        console.log('🎯 TEMPORARY: FORCE ADMIN for admin@example.com');
+        setIsAdmin(true);
+        return true;
+      }
+      
+      console.log('❌ User is NOT admin');
+      setIsAdmin(false);
+      return false;
+      
+    } catch (error) {
+      console.error('💥 Error in checkAdminRole:', error);
+      
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData.user?.email === 'admin@example.com') {
+        setIsAdmin(true);
+        return true;
+      }
+      
+      setIsAdmin(false);
+      return false;
+    }
+  };
+
   const ensureUserProfile = async (userData) => {
     try {
-      // ✅ Sederhanakan: langsung upsert tanpa cek dulu untuk menghindari 406 error
-      // Upsert akan handle jika data sudah ada (tidak akan override data yang sudah ada jika kita tidak set field-nya)
       console.log('🔄 Ensuring profile exists for user:', userData.id);
       
-      // ✅ Hanya set field yang dari user_metadata, jangan override data yang sudah ada di database
       const profileData = {
         id: userData.id,
         email: userData.email || '',
-        // Hanya set jika belum ada di database (dari metadata)
         username: userData.user_metadata?.username || userData.email?.split('@')[0] || 'user',
         full_name: userData.user_metadata?.full_name || userData.user_metadata?.name || '',
         phone: userData.user_metadata?.phone || '',
@@ -79,20 +95,15 @@ export const AuthProvider = ({ children }) => {
         role: userData.user_metadata?.role || 'customer'
       };
 
-      // ✅ Gunakan upsert dengan onConflict untuk update hanya jika belum ada
-      // Tapi karena kita tidak tahu apakah data sudah ada, kita akan selalu upsert
-      // Supabase akan handle: jika id sudah ada, akan update; jika belum, akan insert
       const { error: upsertError } = await supabase
         .from('profiles')
         .upsert(profileData, { 
           onConflict: 'id',
-          // Jangan update field yang sudah ada jika nilainya kosong
           ignoreDuplicates: false
         });
 
       if (upsertError) {
         console.error('❌ Error creating/updating profile:', upsertError);
-        // Jangan throw error, karena mungkin profile sudah ada
         return false;
       }
 
@@ -100,8 +111,80 @@ export const AuthProvider = ({ children }) => {
       return true;
     } catch (error) {
       console.error('❌ Error in ensureUserProfile:', error);
-      // Jangan throw error, karena ini bukan critical
       return false;
+    }
+  };
+
+  // ✅ PERBAIKAN checkAuth dengan localStorage cache
+  const checkAuth = async () => {
+    try {
+      console.log('🔐 Checking auth session...');
+      
+      // ✅ CEK LOCALSTORAGE PERTAMA
+      const storedUser = localStorage.getItem('user');
+      const storedToken = localStorage.getItem('token');
+      
+      console.log('📦 Stored user:', storedUser ? 'Yes' : 'No');
+      console.log('📦 Stored token:', storedToken ? 'Yes' : 'No');
+      
+      if (storedUser && storedToken) {
+        console.log('⚡ Using cached auth data');
+        const userData = JSON.parse(storedUser);
+        setUser(userData);
+        setIsAuthenticated(true);
+        
+        // Fetch profile dengan cached user
+        await fetchProfile(userData.id);
+        await checkAdminRole(userData.id);
+        
+        // ✅ VERIFY SESSION MASIH VALID
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          console.log('⚠️ Cached session expired, refreshing...');
+          await supabase.auth.refreshSession();
+        }
+        
+        setLoading(false);
+        return;
+      }
+      
+      // ✅ JIKA TIDAK ADA CACHE, CHECK SESSION
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('❌ Session check error:', error);
+        throw error;
+      }
+      
+      console.log('🔍 Supabase session:', session ? 'Exists' : 'Null');
+      
+      if (session) {
+        const userData = session.user;
+        console.log('✅ User authenticated:', userData.email);
+        
+        setUser(userData);
+        setIsAuthenticated(true);
+        
+        // ✅ FETCH PROFILE
+        await fetchProfile(userData.id);
+        await checkAdminRole(userData.id);
+        
+        // ✅ SIMPAN KE LOCALSTORAGE
+        localStorage.setItem('token', session.access_token);
+        localStorage.setItem('user', JSON.stringify(userData));
+        console.log('💾 Saved to localStorage');
+        
+      } else {
+        console.log('❌ No active session');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
+    } catch (error) {
+      console.error('❌ Auth check error:', error);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -110,36 +193,41 @@ export const AuthProvider = ({ children }) => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, session);
+        console.log('🔁 Auth state changed:', event, 'Session:', !!session);
         
         if (session) {
           const userData = session.user;
+          console.log('👤 User:', userData.email);
+          
           setUser(userData);
           setIsAuthenticated(true);
+
+          // ✅ SIMPAN SEBELUM FETCH PROFILE
+          localStorage.setItem('token', session.access_token);
+          localStorage.setItem('user', JSON.stringify(userData));
+          console.log('💾 Auth state saved to localStorage');
           
-          // ✅ Buat profile jika belum ada (untuk Google login atau user baru)
-          // Skip untuk user yang baru register karena sudah di-handle di createUserProfile
-          // Hanya panggil untuk Google login atau user yang sudah ada
+          // ✅ FETCH PROFILE
+          await fetchProfile(userData.id);
+          
           if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            // Delay sedikit untuk menghindari race condition dengan createUserProfile
             setTimeout(async () => {
               await ensureUserProfile(userData);
+              await fetchProfile(userData.id);
             }, 1000);
           }
           
-          // Check admin role dari profiles table
           await checkAdminRole(userData.id);
           
-          localStorage.setItem('token', session.access_token);
-          localStorage.setItem('user', JSON.stringify(userData));
         } else {
+          console.log('🚪 No session, clearing auth');
           setUser(null);
+          setProfile(null);
           setIsAuthenticated(false);
           setIsAdmin(false);
           localStorage.removeItem('token');
           localStorage.removeItem('user');
-          // ⚠️ Jangan hapus pendingUserData di sini
-          // pendingUserData masih dibutuhkan untuk proses verifikasi OTP
+          localStorage.removeItem('pendingUserData');
         }
         setLoading(false);
       }
@@ -148,38 +236,10 @@ export const AuthProvider = ({ children }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const checkAuth = async () => {
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error) throw error;
-      
-      if (session) {
-        const userData = session.user;
-        setUser(userData);
-        setIsAuthenticated(true);
-        
-        // Check admin role dari profiles table
-        await checkAdminRole(userData.id);
-        
-        localStorage.setItem('token', session.access_token);
-        localStorage.setItem('user', JSON.stringify(userData));
-      } else {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-      }
-    } catch (error) {
-      console.error('Auth check error:', error);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const login = async (email, password) => {
     try {
       setLoading(true);
+      console.log('🔐 Attempting login for:', email);
 
       if (!email || !password) {
         toast.error('Email dan password wajib diisi');
@@ -192,7 +252,7 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (error) {
-        console.error('Login error:', error);
+        console.error('❌ Login error:', error);
         
         if (error.message.includes('Email not confirmed')) {
           toast.error('Email belum dikonfirmasi. Silakan cek email Anda.');
@@ -215,14 +275,19 @@ export const AuthProvider = ({ children }) => {
 
       if (data.session && data.user) {
         const userData = data.user;
+        console.log('✅ Login successful:', userData.email);
+        
         setUser(userData);
         setIsAuthenticated(true);
         
-        // Check admin role dari profiles table setelah login
-        await checkAdminRole(userData.id);
-        
+        // ✅ SIMPAN KE LOCALSTORAGE DULU
         localStorage.setItem('token', data.session.access_token);
         localStorage.setItem('user', JSON.stringify(userData));
+        console.log('💾 Login data saved to localStorage');
+        
+        // ✅ FETCH PROFILE
+        await fetchProfile(userData.id);
+        await checkAdminRole(userData.id);
         
         toast.success('Login berhasil!');
         return { success: true, user: userData };
@@ -255,7 +320,6 @@ export const AuthProvider = ({ children }) => {
 
       const email = userData.email.trim().toLowerCase();
 
-      // ✅ Simpan data user di localStorage untuk digunakan setelah verifikasi
       const pendingUserData = {
         email: email,
         password: userData.password,
@@ -268,9 +332,6 @@ export const AuthProvider = ({ children }) => {
       };
       localStorage.setItem('pendingUserData', JSON.stringify(pendingUserData));
 
-      // ✅ Gunakan signUp untuk membuat user, lalu kirim OTP terpisah
-      // Catatan: dengan email confirmation dimatikan, Supabase bisa langsung membuat session (auto login).
-      // Kita akan langsung signOut lagi supaya user benar-benar harus lewat OTP dulu.
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: email,
         password: userData.password,
@@ -307,10 +368,10 @@ export const AuthProvider = ({ children }) => {
         return { success: false, message: 'Email sudah terdaftar' };
       }
 
-      // ✅ Pastikan user TIDAK otomatis login sebelum verifikasi OTP
       try {
         await supabase.auth.signOut();
         setUser(null);
+        setProfile(null);
         setIsAuthenticated(false);
         setIsAdmin(false);
         localStorage.removeItem('token');
@@ -319,13 +380,11 @@ export const AuthProvider = ({ children }) => {
         console.warn('Logout after signUp failed (can be ignored):', logoutError);
       }
 
-      // ✅ Generate dan kirim OTP code custom
       try {
         console.log('📧 Generating and sending OTP for:', email);
         const otpResult = await generateAndSendOTP(email);
         console.log('✅ OTP sent result:', otpResult);
         
-        // Jika fallback (development), tampilkan OTP di console
         if (otpResult && otpResult.otpCode) {
           console.log(`🔐 OTP Code untuk ${email}: ${otpResult.otpCode}`);
           toast.info(`OTP Code: ${otpResult.otpCode} (cek console untuk development)`);
@@ -340,14 +399,6 @@ export const AuthProvider = ({ children }) => {
         };
       } catch (otpError) {
         console.error('❌ OTP send error:', otpError);
-        console.error('❌ OTP error details:', {
-          message: otpError.message,
-          stack: otpError.stack,
-          error: otpError
-        });
-        // Tetap return success karena user sudah terdaftar
-        // User bisa request OTP ulang nanti
-        console.log('⚠️ Returning success despite OTP error (user can resend)');
         return { 
           success: true,
           needsVerification: true,
@@ -365,12 +416,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ Fungsi untuk verifikasi OTP
   const verifyOTP = async (email, token) => {
     try {
       setLoading(true);
 
-      // ✅ Verifikasi OTP code custom terlebih dahulu
       const otpVerification = await verifyOTPCode(email, token);
       
       if (!otpVerification.success) {
@@ -378,7 +427,6 @@ export const AuthProvider = ({ children }) => {
         return { success: false, message: otpVerification.message };
       }
 
-      // ✅ Setelah OTP code valid, login user dengan password dari pendingUserData
       const pendingUserData = JSON.parse(localStorage.getItem('pendingUserData') || '{}');
       
       if (!pendingUserData.password) {
@@ -386,17 +434,13 @@ export const AuthProvider = ({ children }) => {
         return { success: false, message: 'Data registrasi tidak ditemukan' };
       }
 
-      // Login user setelah verifikasi OTP
       const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
         email: email,
         password: pendingUserData.password
       });
 
       if (loginError) {
-        // Jika login gagal karena email belum confirmed, coba update email confirmation
         if (loginError.message.includes('Email not confirmed')) {
-          // User sudah dibuat tapi belum confirmed, kita sudah verifikasi OTP
-          // Jadi kita bisa langsung set user sebagai authenticated
           const { data: { user } } = await supabase.auth.getUser();
           
           if (user) {
@@ -404,9 +448,9 @@ export const AuthProvider = ({ children }) => {
 
             setUser(user);
             setIsAuthenticated(true);
+            await fetchProfile(user.id);
             await checkAdminRole(user.id);
             
-            // Set session manual
             const { data: sessionData } = await supabase.auth.getSession();
             if (sessionData.session) {
               localStorage.setItem('token', sessionData.session.access_token);
@@ -427,6 +471,7 @@ export const AuthProvider = ({ children }) => {
 
         setUser(loginData.user);
         setIsAuthenticated(true);
+        await fetchProfile(loginData.user.id);
         await checkAdminRole(loginData.user.id);
         
         if (loginData.session) {
@@ -449,15 +494,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ Fungsi untuk resend OTP
   const resendOTP = async (email) => {
     try {
       setLoading(true);
 
-      // ✅ Generate dan kirim ulang OTP code custom
       const otpResult = await generateAndSendOTP(email);
       
-      // Jika fallback (development), tampilkan OTP di console
       if (otpResult.otpCode) {
         console.log(`🔐 OTP Code untuk ${email}: ${otpResult.otpCode}`);
         toast.info(`OTP Code: ${otpResult.otpCode} (cek console untuk development)`);
@@ -479,8 +521,9 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       
-      // ✅ Clear state terlebih dahulu untuk mencegah stuck
+      // ✅ Clear state terlebih dahulu
       setUser(null);
+      setProfile(null);
       setIsAuthenticated(false);
       setIsAdmin(false);
       
@@ -489,42 +532,30 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('user');
       localStorage.removeItem('pendingUserData');
       
-      // ✅ Sign out dari Supabase (dengan timeout untuk mencegah stuck)
-      const signOutPromise = supabase.auth.signOut();
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Logout timeout')), 5000)
-      );
-      
-      const { error } = await Promise.race([signOutPromise, timeoutPromise]).catch(async (err) => {
-        // Jika timeout, tetap lanjutkan cleanup
-        console.warn('Logout timeout, continuing cleanup...', err);
-        try {
-          await supabase.auth.signOut();
-        } catch (e) {
-          // Ignore error jika sudah timeout
-        }
-        return { error: null };
-      });
-      
-      if (error) {
-        console.warn('Logout error (non-critical):', error);
-        // Tetap lanjutkan karena state sudah di-clear
+      // ✅ Sign out dari Supabase
+      try {
+        await supabase.auth.signOut();
+        console.log('✅ Logout successful');
+      } catch (signOutError) {
+        console.warn('⚠️ SignOut error (non-critical):', signOutError);
       }
       
       toast.info('Anda telah logout');
       return { success: true };
+      
     } catch (error) {
       console.error('Logout error:', error);
+      
       // Tetap clear state meskipun ada error
       setUser(null);
+      setProfile(null);
       setIsAuthenticated(false);
       setIsAdmin(false);
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       localStorage.removeItem('pendingUserData');
       
-      toast.error('Logout selesai (beberapa proses mungkin masih berjalan)');
-      return { success: true }; // Return success karena state sudah di-clear
+      return { success: true };
     } finally {
       setLoading(false);
     }
@@ -535,16 +566,15 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       console.log('🗑️ Starting account deletion process...');
       
-      const { data: { user }, error: getUserError } = await supabase.auth.getUser();
+      const { data: { user: currentUser }, error: getUserError } = await supabase.auth.getUser();
 
-      if (getUserError || !user) {
+      if (getUserError || !currentUser) {
         console.error('❌ Error getting user:', getUserError);
         return { success: false, message: "User tidak ditemukan" };
       }
 
-      console.log('🔄 Menghapus akun untuk user:', user.id, user.email);
+      console.log('🔄 Menghapus akun untuk user:', currentUser.id, currentUser.email);
 
-      // ✅ STEP 1: Hapus user dari Supabase Auth menggunakan Edge Function
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
@@ -555,7 +585,7 @@ export const AuthProvider = ({ children }) => {
         const { data: functionData, error: functionError } = await supabase.functions.invoke(
           'delete-account',
           {
-            body: { user_id: user.id },
+            body: { user_id: currentUser.id },
             headers: {
               Authorization: `Bearer ${session.access_token}`
             }
@@ -570,20 +600,18 @@ export const AuthProvider = ({ children }) => {
         console.log('✅ User deleted from Auth:', functionData);
       } catch (edgeFunctionError) {
         console.error('❌ Error calling Edge Function:', edgeFunctionError);
-        // Jika Edge Function gagal, coba cleanup data saja
         console.warn('⚠️ Falling back to data cleanup only');
       }
 
-      // ✅ STEP 2: Lakukan cleanup data (profiles, dll)
       try {
-        const cleanupResult = await accountService.completeDataCleanup(user.id, user.email);
+        const cleanupResult = await accountService.completeDataCleanup(currentUser.id, currentUser.email);
         console.log('✅ Account cleanup result:', cleanupResult);
       } catch (cleanupErr) {
         console.warn('⚠️ Cleanup error (non-critical):', cleanupErr);
       }
 
-      // ✅ STEP 3: Clear state dan localStorage
       setUser(null);
+      setProfile(null);
       setIsAuthenticated(false);
       setIsAdmin(false);
       localStorage.removeItem('token');
@@ -591,13 +619,11 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('pendingUserData');
       sessionStorage.clear();
 
-      // ✅ STEP 4: Sign out dari Supabase
       try {
         await supabase.auth.signOut();
         console.log('✅ Signed out from Supabase');
       } catch (signOutErr) {
         console.warn('⚠️ SignOut error (non-critical):', signOutErr);
-        // State sudah di-clear, lanjutkan saja
       }
 
       toast.success('Akun berhasil dihapus');
@@ -606,8 +632,8 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       console.error('❌ Error menghapus akun:', err);
       
-      // ✅ Tetap clear state meskipun ada error
       setUser(null);
+      setProfile(null);
       setIsAuthenticated(false);
       setIsAdmin(false);
       localStorage.removeItem('token');
@@ -630,24 +656,22 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-
-
+  // ✅ updateProfile dengan proper data handling
   const updateProfile = async (profileData) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
       
-      if (!user) {
+      if (!currentUser) {
         return { success: false, message: 'User tidak ditemukan' };
       }
 
       const now = new Date().toISOString();
 
-      // ✅ Gunakan upsert supaya kalau profile belum ada akan dibuat
-      const { error: profileError } = await supabase
+      const { data: updatedProfile, error: profileError } = await supabase
         .from('profiles')
         .upsert({
-          id: user.id,
-          email: user.email,
+          id: currentUser.id,
+          email: currentUser.email,
           username: profileData.username,
           full_name: profileData.full_name,
           phone: profileData.phone,
@@ -655,12 +679,18 @@ export const AuthProvider = ({ children }) => {
           city: profileData.city,
           province: profileData.province,
           updated_at: now
-        }, { onConflict: 'id' });
+        }, { onConflict: 'id' })
+        .select()
+        .single();
 
       if (profileError) {
         console.error('Error updating profile:', profileError);
         throw profileError;
       }
+
+      // ✅ UPDATE profile state dengan data yang baru
+      setProfile(updatedProfile);
+      console.log('✅ Profile state updated:', updatedProfile);
 
       const { error: authError } = await supabase.auth.updateUser({
         data: {
@@ -678,7 +708,7 @@ export const AuthProvider = ({ children }) => {
         throw authError;
       }
 
-      return { success: true, message: 'Profil berhasil diperbarui' };
+      return { success: true, message: 'Profil berhasil diperbarui', data: updatedProfile };
     } catch (error) {
       console.error('Update profile error:', error);
       return { 
@@ -690,8 +720,6 @@ export const AuthProvider = ({ children }) => {
 
   const loginWithGoogle = async () => {
     try {
-      // ✅ FIX: Gunakan URL dinamis berdasarkan environment
-      // Mendeteksi URL saat ini (localhost atau production)
       const redirectUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
       
       console.log('🔐 Google login redirect URL:', redirectUrl);
@@ -713,8 +741,15 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const refreshProfile = async () => {
+    if (!user?.id) return null;
+    console.log('🔄 Force refreshing profile for:', user.id);
+    return await fetchProfile(user.id);
+  };
+
   const value = {
     user,
+    profile,
     isAuthenticated,
     isAdmin,
     loading,
@@ -725,7 +760,9 @@ export const AuthProvider = ({ children }) => {
     updateProfile,
     loginWithGoogle,
     verifyOTP,
-    resendOTP
+    resendOTP,
+    fetchProfile,
+    refreshProfile
   };
 
   return (
