@@ -92,7 +92,7 @@ const DebugPage = () => {
             <div className="text-gray-900 dark:text-white mb-4">
               Status: {results.supabaseConnected || '⏳ Testing...'}
             </div>
-            
+
             {results.error && (
               <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-4">
                 <div className="text-red-600 dark:text-red-400 font-semibold mb-2">Error Details:</div>
@@ -128,13 +128,13 @@ const DebugPage = () => {
                         {product.gambar_url || '❌ NO URL'}
                       </span>
                     </div>
-                    
+
                     {/* Image Test */}
                     {product.gambar_url && (
                       <div className="mt-4">
                         <div className="text-gray-600 dark:text-gray-400 mb-2">Image Preview:</div>
-                        <img 
-                          src={product.gambar_url} 
+                        <img
+                          src={product.gambar_url}
                           alt={product.nama_produk}
                           className="w-48 h-48 object-cover rounded border-2 border-gray-300 dark:border-gray-600"
                           onLoad={() => console.log('✅ Image loaded:', product.nama_produk)}
@@ -162,9 +162,9 @@ const DebugPage = () => {
               </div>
               <div className="flex items-start">
                 <span className="text-gray-600 dark:text-gray-400 w-32">URL:</span>
-                <a 
-                  href={results.imageTest.url} 
-                  target="_blank" 
+                <a
+                  href={results.imageTest.url}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 dark:text-blue-400 hover:underline break-all text-xs"
                 >

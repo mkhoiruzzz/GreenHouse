@@ -2,17 +2,17 @@
 // Fixed: Delete function with proper image cleanup
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom"; // ✅ Import useNavigate
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { toast } from "react-toastify";
 import ProductForm from "../components/ProductForm";
 import AdminOrders from "./AdminOrders";
 import AdminUsers from "./AdminUsers";
-import { useTheme } from "../context/ThemeContext";
 
 const AdminDashboard = () => {
-  const { user, logout, isAdmin } = useAuth();
-  const { t } = useTheme();
+  const { user, logout, isAdmin, loading: authLoading } = useAuth(); // ✅ Get loading state
+  const navigate = useNavigate(); // ✅ Use useNavigate
 
   const [activeTab, setActiveTab] = useState("products");
   const [products, setProducts] = useState([]);
@@ -45,30 +45,31 @@ const AdminDashboard = () => {
   const [editProduct, setEditProduct] = useState(null);
 
   useEffect(() => {
-    if (!isAdmin) {
+    // ✅ ONLY redirect if NOT loading AND NOT admin
+    if (!authLoading && !isAdmin) {
       toast.error("Akses ditolak.");
-      window.location.href = "/";
+      navigate("/", { replace: true }); // ✅ Use navigate instead of window.location
     }
-  }, [isAdmin]);
+  }, [isAdmin, authLoading, navigate]);
 
-const fetchProducts = useCallback(async () => {
-  try {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("products")
-      .select("*, categories(name_kategori)")
-      .or("is_deleted.is.null,is_deleted.eq.false") // ✅ Filter produk yang tidak dihapus
-      .order("created_at", { ascending: false });
+  const fetchProducts = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("products")
+        .select("*, categories(name_kategori)")
+        .or("is_deleted.is.null,is_deleted.eq.false") // ✅ Filter produk yang tidak dihapus
+        .order("created_at", { ascending: false });
 
-    if (error) throw error;
-    setProducts(data || []);
-  } catch (error) {
-    console.error("Error fetching products:", error);
-    toast.error("Gagal memuat produk");
-  } finally {
-    setLoading(false);
-  }
-}, []);
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (error) {
+      console.error("Error fetching products:", error);
+      toast.error("Gagal memuat produk");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const fetchCategories = useCallback(async () => {
     const { data } = await supabase.from("categories").select("*");
@@ -76,9 +77,26 @@ const fetchProducts = useCallback(async () => {
   }, []);
 
   useEffect(() => {
-    fetchProducts();
-    fetchCategories();
-  }, [fetchProducts, fetchCategories]);
+    if (isAdmin && !authLoading) {
+      fetchProducts();
+      fetchCategories();
+    }
+  }, [fetchProducts, fetchCategories, isAdmin, authLoading]);
+
+  // ✅ Show loading state while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mb-4"></div>
+          <p className="text-gray-600 font-medium">Memeriksa akses admin...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Double check protection (render nothing if not admin to prevent flash)
+  if (!isAdmin) return null;
 
   const handleImageUpload = async (event, isEdit) => {
     try {
@@ -133,10 +151,10 @@ const fetchProducts = useCallback(async () => {
 
   const handleAddProduct = async (e) => {
     e.preventDefault();
-    
+
     // Validasi data wajib
-    if (!newProduct.nama_produk || !newProduct.harga || !newProduct.stok || 
-        !newProduct.kategori_id || !newProduct.gambar_url || !newProduct.deskripsi) {
+    if (!newProduct.nama_produk || !newProduct.harga || !newProduct.stok ||
+      !newProduct.kategori_id || !newProduct.gambar_url || !newProduct.deskripsi) {
       toast.error("Harap isi semua field yang wajib diisi");
       return;
     }
@@ -175,7 +193,7 @@ const fetchProducts = useCallback(async () => {
       setShowAddProduct(false);
       setImagePreview(null);
       setNewProduct(emptyProduct);
-      
+
     } catch (error) {
       console.error("Full error:", error);
       toast.error(`Gagal menambahkan produk: ${error.message}`);
@@ -205,14 +223,47 @@ const fetchProducts = useCallback(async () => {
 
       console.log("Update payload:", payload);
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("products")
         .update(payload)
-        .eq("id", editProduct.id);
+        .eq("id", editProduct.id)
+        .select(); // ✅ Add select() to verify update
 
       if (error) throw error;
 
-      toast.success("Produk berhasil diperbarui");
+      if (!data || data.length === 0) {
+        throw new Error("Update gagal - Data tidak berubah (Periksa ID atau Koneksi)");
+      }
+
+      const updatedProduct = data[0];
+
+      // ✅ CHECK FOR STOCK MISMATCH (Trigger detected)
+      if (updatedProduct.stok !== payload.stok) {
+        const diff = payload.stok - updatedProduct.stok;
+
+        // Cek apakah ada order pending yang menyebabkan pengurangan stok
+        const { data: pendingItems } = await supabase
+          .from('order_items')
+          .select(`
+                quantity,
+                orders!inner (
+                    status_pembayaran
+                )
+            `)
+          .eq('product_id', editProduct.id)
+          .in('orders.status_pembayaran', ['pending', 'unpaid']);
+
+        const pendingCount = pendingItems?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+
+        if (diff === pendingCount) {
+          toast.info(`Info: Stok tersimpan ${updatedProduct.stok}. (Dikurangi ${pendingCount} item dari pesanan pending)`);
+        } else {
+          toast.warning(`Perhatian: Stok tersimpan ${updatedProduct.stok} (Input: ${payload.stok}). Mungkin ada pesanan aktif.`);
+        }
+      } else {
+        toast.success("Produk berhasil diperbarui");
+      }
+
       await fetchProducts();
 
       setShowEditProduct(false);
@@ -226,135 +277,135 @@ const fetchProducts = useCallback(async () => {
     }
   };
 
-const handleDeleteProduct = async (id, productData) => {
-  if (!window.confirm(`Apakah Anda yakin ingin menghapus produk "${productData.nama_produk}"?`)) {
-    return;
-  }
-
-  try {
-    setLoading(true);
-    console.log("🗑️ Memulai proses hapus produk ID:", id);
-
-    // ✅ SELALU GUNAKAN SOFT DELETE
-    // Cek dulu apakah produk pernah dipesan
-    const { data: orderItems, error: checkError } = await supabase
-      .from('order_items')
-      .select('id')
-      .eq('product_id', id)
-      .limit(1);
-
-    if (checkError && checkError.code !== 'PGRST116') {
-      console.error("❌ Error checking order items:", checkError);
-      throw new Error("Gagal mengecek riwayat pesanan");
+  const handleDeleteProduct = async (id, productData) => {
+    if (!window.confirm(`Apakah Anda yakin ingin menghapus produk "${productData.nama_produk}"?`)) {
+      return;
     }
 
-    const hasOrders = orderItems && orderItems.length > 0;
+    try {
+      setLoading(true);
+      console.log("🗑️ Memulai proses hapus produk ID:", id);
 
-    if (hasOrders) {
-      console.log("⚠️ Produk pernah dipesan, melakukan SOFT DELETE...");
-      
-      // SOFT DELETE - Tandai sebagai dihapus
-      const { error: softDeleteError } = await supabase
-        .from("products")
-        .update({ 
-          is_deleted: true,
-          stok: 0
-        })
-        .eq("id", id);
+      // ✅ SELALU GUNAKAN SOFT DELETE
+      // Cek dulu apakah produk pernah dipesan
+      const { data: orderItems, error: checkError } = await supabase
+        .from('order_items')
+        .select('id')
+        .eq('product_id', id)
+        .limit(1);
 
-      if (softDeleteError) {
-        console.error("❌ Error soft delete:", softDeleteError);
-        throw softDeleteError;
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error("❌ Error checking order items:", checkError);
+        throw new Error("Gagal mengecek riwayat pesanan");
       }
 
-      toast.success(`✅ Produk "${productData.nama_produk}" berhasil dihapus dari katalog!`);
-      console.log("✅ Soft delete berhasil - produk disembunyikan dari katalog");
+      const hasOrders = orderItems && orderItems.length > 0;
 
-    } else {
-      console.log("ℹ️ Produk belum pernah dipesan, tetap gunakan SOFT DELETE untuk konsistensi");
-      
-      // TETAP SOFT DELETE untuk konsistensi
-      const { error: softDeleteError } = await supabase
-        .from("products")
-        .update({ 
-          is_deleted: true,
-          stok: 0
-        })
-        .eq("id", id);
+      if (hasOrders) {
+        console.log("⚠️ Produk pernah dipesan, melakukan SOFT DELETE...");
 
-      if (softDeleteError) {
-        console.error("❌ Error soft delete:", softDeleteError);
-        throw softDeleteError;
-      }
+        // SOFT DELETE - Tandai sebagai dihapus
+        const { error: softDeleteError } = await supabase
+          .from("products")
+          .update({
+            is_deleted: true,
+            stok: 0
+          })
+          .eq("id", id);
 
-      // Opsional: Hapus gambar jika ingin menghemat storage
-      if (productData?.gambar_url) {
-        try {
-          const urlParts = productData.gambar_url.split('/');
-          const fileName = urlParts[urlParts.length - 1];
-          
-          console.log("🖼️ Menghapus gambar:", fileName);
-          
-          const { error: storageError } = await supabase.storage
-            .from('products')
-            .remove([fileName]);
-          
-          if (storageError) {
-            console.warn("⚠️ Gagal menghapus gambar, tapi produk sudah dihapus:", storageError.message);
-          } else {
-            console.log("✅ Gambar berhasil dihapus dari storage");
-          }
-        } catch (storageErr) {
-          console.warn("⚠️ Error saat hapus gambar:", storageErr.message);
+        if (softDeleteError) {
+          console.error("❌ Error soft delete:", softDeleteError);
+          throw softDeleteError;
         }
+
+        toast.success(`✅ Produk "${productData.nama_produk}" berhasil dihapus dari katalog!`);
+        console.log("✅ Soft delete berhasil - produk disembunyikan dari katalog");
+
+      } else {
+        console.log("ℹ️ Produk belum pernah dipesan, tetap gunakan SOFT DELETE untuk konsistensi");
+
+        // TETAP SOFT DELETE untuk konsistensi
+        const { error: softDeleteError } = await supabase
+          .from("products")
+          .update({
+            is_deleted: true,
+            stok: 0
+          })
+          .eq("id", id);
+
+        if (softDeleteError) {
+          console.error("❌ Error soft delete:", softDeleteError);
+          throw softDeleteError;
+        }
+
+        // Opsional: Hapus gambar jika ingin menghemat storage
+        if (productData?.gambar_url) {
+          try {
+            const urlParts = productData.gambar_url.split('/');
+            const fileName = urlParts[urlParts.length - 1];
+
+            console.log("🖼️ Menghapus gambar:", fileName);
+
+            const { error: storageError } = await supabase.storage
+              .from('products')
+              .remove([fileName]);
+
+            if (storageError) {
+              console.warn("⚠️ Gagal menghapus gambar, tapi produk sudah dihapus:", storageError.message);
+            } else {
+              console.log("✅ Gambar berhasil dihapus dari storage");
+            }
+          } catch (storageErr) {
+            console.warn("⚠️ Error saat hapus gambar:", storageErr.message);
+          }
+        }
+
+        toast.success(`✅ Produk "${productData.nama_produk}" berhasil dihapus!`);
+        console.log("✅ Soft delete berhasil");
       }
 
-      toast.success(`✅ Produk "${productData.nama_produk}" berhasil dihapus!`);
-      console.log("✅ Soft delete berhasil");
+      // Refresh list produk
+      await fetchProducts();
+
+    } catch (error) {
+      console.error("❌ Error menghapus produk:", error);
+      toast.error(`Gagal menghapus produk: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================
+  // OPSIONAL: Tambah fitur RESTORE produk
+  // ============================================
+  const handleRestoreProduct = async (id, productData) => {
+    if (!window.confirm(`Restore produk "${productData.nama_produk}" kembali ke katalog?`)) {
+      return;
     }
 
-    // Refresh list produk
-    await fetchProducts();
-    
-  } catch (error) {
-    console.error("❌ Error menghapus produk:", error);
-    toast.error(`Gagal menghapus produk: ${error.message}`);
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      setLoading(true);
 
-// ============================================
-// OPSIONAL: Tambah fitur RESTORE produk
-// ============================================
-const handleRestoreProduct = async (id, productData) => {
-  if (!window.confirm(`Restore produk "${productData.nama_produk}" kembali ke katalog?`)) {
-    return;
-  }
+      const { error } = await supabase
+        .from("products")
+        .update({
+          is_deleted: false,
+          stok: 1 // Restore dengan stok minimal
+        })
+        .eq("id", id);
 
-  try {
-    setLoading(true);
-    
-    const { error } = await supabase
-      .from("products")
-      .update({ 
-        is_deleted: false,
-        stok: 1 // Restore dengan stok minimal
-      })
-      .eq("id", id);
+      if (error) throw error;
 
-    if (error) throw error;
+      toast.success(`Produk "${productData.nama_produk}" berhasil di-restore!`);
+      await fetchProducts();
 
-    toast.success(`Produk "${productData.nama_produk}" berhasil di-restore!`);
-    await fetchProducts();
-    
-  } catch (error) {
-    console.error("Error restore produk:", error);
-    toast.error(`Gagal restore produk: ${error.message}`);
-  } finally {
-    setLoading(false);
-  }
-};
+    } catch (error) {
+      console.error("Error restore produk:", error);
+      toast.error(`Gagal restore produk: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
 
   const filteredProducts = products.filter((p) => {
@@ -365,395 +416,323 @@ const handleRestoreProduct = async (id, productData) => {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 dark:from-gray-900 dark:to-gray-800 p-4 transition-colors duration-300">
-      <div className="max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-800 dark:text-white mb-2 transition-colors duration-300">
-          {t('Admin Dashboard', 'Admin Dashboard')}
-        </h1>
-        <p className="text-gray-600 dark:text-gray-300 transition-colors duration-300">
-          {t('Kelola produk, pesanan, dan pengguna', 'Manage products, orders, and users')}
-        </p>
-      </div>
+    <div className="min-h-screen bg-gray-50 flex font-sans">
+      {/* SIDEBAR NAVIGATION */}
+      <aside className="w-64 bg-white shadow-xl flex flex-col z-10 transition-all duration-300">
+        <div className="p-6 border-b border-gray-100 flex items-center justify-center">
+          <h1 className="text-2xl font-bold text-green-700 tracking-tight flex items-center gap-2">
+            🌿 GreenHouse
+          </h1>
+        </div>
 
-      {/* Tab Navigation */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md mb-6 border border-gray-100 dark:border-gray-700">
-        <div className="flex border-b border-gray-200 dark:border-gray-700">
+        <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
           <button
             onClick={() => setActiveTab("products")}
-            className={`flex-1 px-6 py-4 font-semibold transition-colors duration-300 ${
-              activeTab === "products"
-                ? "text-green-600 dark:text-green-400 border-b-2 border-green-600 dark:border-green-400 bg-green-50 dark:bg-green-900/20"
-                : "text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-gray-50 dark:hover:bg-gray-700"
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "products"
+              ? "bg-green-50 text-green-700 shadow-sm translate-x-1"
+              : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+              }`}
           >
-            📦 {t('Produk', 'Products')}
+            <span className="text-xl">📦</span>
+            Produk
           </button>
+
+          <button
+            onClick={() => setActiveTab("categories")} // Placeholder if category management is added later, or logic for category tab
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "categories"
+              ? "bg-green-50 text-green-700 shadow-sm translate-x-1"
+              : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+              }`}
+          >
+            <span className="text-xl">🏷️</span>
+            Kategori
+          </button>
+
           <button
             onClick={() => setActiveTab("orders")}
-            className={`flex-1 px-6 py-4 font-semibold transition-colors duration-300 ${
-              activeTab === "orders"
-                ? "text-green-600 dark:text-green-400 border-b-2 border-green-600 dark:border-green-400 bg-green-50 dark:bg-green-900/20"
-                : "text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-gray-50 dark:hover:bg-gray-700"
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "orders"
+              ? "bg-green-50 text-green-700 shadow-sm translate-x-1"
+              : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+              }`}
           >
-            📋 {t('Pesanan', 'Orders')}
+            <span className="text-xl">📋</span>
+            Pesanan
           </button>
+
           <button
             onClick={() => setActiveTab("users")}
-            className={`flex-1 px-6 py-4 font-semibold transition-colors duration-300 ${
-              activeTab === "users"
-                ? "text-green-600 dark:text-green-400 border-b-2 border-green-600 dark:border-green-400 bg-green-50 dark:bg-green-900/20"
-                : "text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-gray-50 dark:hover:bg-gray-700"
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "users"
+              ? "bg-green-50 text-green-700 shadow-sm translate-x-1"
+              : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+              }`}
           >
-            👥 {t('Pengguna', 'Users')}
+            <span className="text-xl">👥</span>
+            Pengguna
+          </button>
+        </nav>
+
+        <div className="p-4 border-t border-gray-100 space-y-2">
+          <button
+            onClick={async () => {
+              try {
+                setLoading(true);
+                const user = JSON.parse(localStorage.getItem('user'));
+                if (!user) return;
+
+                const { error } = await supabase.from('profiles').upsert({
+                  id: user.id,
+                  email: 'admin@example.com',
+                  role: 'admin',
+                  full_name: 'Administrator',
+                  username: 'admin'
+                });
+
+                if (error) throw error;
+                toast.success("Permission Synced! Try updating product now.");
+              } catch (err) {
+                toast.error("Sync Failed: " + err.message);
+              } finally {
+                setLoading(false);
+              }
+            }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 text-xs text-green-600 bg-green-50 hover:bg-green-100 rounded-xl transition-colors duration-200 font-medium"
+          >
+            🛠️ Fix Permissions
+          </button>
+
+          <button
+            onClick={logout}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors duration-200 font-medium"
+          >
+            <span>🚪</span>
+            Logout
           </button>
         </div>
-      </div>
+      </aside>
 
-      {/* Tab Content */}
-      {activeTab === "orders" && <AdminOrders />}
-      {activeTab === "users" && <AdminUsers />}
-      {activeTab === "products" && (
-        <>
-          {/* Filter & Search Bar */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-6 mb-6 border border-gray-100 dark:border-gray-700 transition-colors duration-300">
-            <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <input
-              type="text"
-              placeholder={t('🔍 Cari produk...', '🔍 Search products...')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-            />
-            </div>
-
-            <select
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
-              className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              <option value="">{t('🏷️ Semua Kategori', '🏷️ All Categories')}</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name_kategori}
-                </option>
-              ))}
-            </select>
-
-            <button
-            className="bg-gradient-to-r from-green-500 to-emerald-600 dark:from-green-600 dark:to-emerald-700 text-white px-6 py-3 rounded-xl font-semibold hover:from-green-600 hover:to-emerald-700 dark:hover:from-green-500 dark:hover:to-emerald-600 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2"
-            onClick={() => {
-              setShowAddProduct(true);
-              setShowEditProduct(false);
-              setNewProduct(emptyProduct);
-              setImagePreview(null);
-            }}
-          >
-              <span className="text-xl">+</span>
-              {t('Tambah Produk', 'Add Product')}
-            </button>
-          </div>
-
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-4 mt-6">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800/30 transition-colors duration-300">
-              <p className="text-sm text-blue-600 dark:text-blue-400 font-medium transition-colors duration-300">
-                {t('Total Produk', 'Total Products')}
-              </p>
-              <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 transition-colors duration-300">
-                {products.length}
-              </p>
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-xl p-4 border border-green-100 dark:border-green-800/30 transition-colors duration-300">
-              <p className="text-sm text-green-600 dark:text-green-400 font-medium transition-colors duration-300">
-                {t('Kategori', 'Categories')}
-              </p>
-              <p className="text-2xl font-bold text-green-700 dark:text-green-300 transition-colors duration-300">
-                {categories.length}
-              </p>
-            </div>
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800/30 transition-colors duration-300">
-              <p className="text-sm text-purple-600 dark:text-purple-400 font-medium transition-colors duration-300">
-                {t('Hasil Filter', 'Filtered Results')}
-              </p>
-              <p className="text-2xl font-bold text-purple-700 dark:text-purple-300 transition-colors duration-300">
-                {filteredProducts.length}
-              </p>
-            </div>
-          </div>
-        </div>
-
-          {/* ADD PRODUCT */}
-          {showAddProduct && (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg mb-6 overflow-hidden border border-gray-100 dark:border-gray-700 transition-colors duration-300">
-          <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-4">
-            <h2 className="text-xl font-bold text-white">
-              ➕ {t('Tambah Produk Baru', 'Add New Product')}
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 flex flex-col overflow-hidden h-screen">
+        {/* TOP NAVBAR */}
+        <header className="bg-white border-b border-gray-200 px-8 py-4 flex justify-between items-center shadow-sm z-0">
+          <div>
+            <h2 className="text-xl font-bold text-gray-800 capitalize">
+              {activeTab === "products" ? "Manajemen Produk" :
+                activeTab === "orders" ? "Daftar Pesanan" :
+                  activeTab === "users" ? "Data Pengguna" :
+                    activeTab === "categories" ? "Kategori" : "Dashboard"}
             </h2>
+            <p className="text-sm text-gray-500">
+              Selamat datang kembali, Admin
+            </p>
           </div>
-          <div className="p-6">
-            <ProductForm
-              product={newProduct}
-              setProduct={setNewProduct}
-              onSubmit={handleAddProduct}
-              onCancel={() => {
-                setShowAddProduct(false);
-                setImagePreview(null);
-                setNewProduct(emptyProduct);
-              }}
-              isEdit={false}
-              categories={categories}
-              imagePreview={imagePreview}
-              uploading={uploading}
-              loading={loading}
-              handleImageUpload={handleImageUpload}
-              />
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold border border-green-200">
+              A
             </div>
           </div>
-          )}
+        </header>
 
-          {/* EDIT PRODUCT */}
-          {showEditProduct && editProduct && (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg mb-6 overflow-hidden border border-gray-100 dark:border-gray-700 transition-colors duration-300">
-          <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-4">
-            <h2 className="text-xl font-bold text-white">
-              ✏️ {t('Edit Produk', 'Edit Product')}
-            </h2>
-          </div>
-          <div className="p-6">
-            <ProductForm
-              product={editProduct}
-              setProduct={setEditProduct}
-              onSubmit={handleUpdateProduct}
-              onCancel={() => {
-                setShowEditProduct(false);
-                setEditProduct(null);
-                setImagePreview(null);
-              }}
-              isEdit={true}
-              categories={categories}
-              imagePreview={imagePreview}
-              uploading={uploading}
-              loading={loading}
-                handleImageUpload={handleImageUpload}
-              />
-            </div>
-          </div>
-          )}
+        {/* CONTENT SCROLLABLE */}
+        <div className="flex-1 overflow-y-auto p-8 bg-gray-50">
+          <div className="max-w-7xl mx-auto space-y-6">
 
-          {/* PRODUCT LIST */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden border border-gray-100 dark:border-gray-700 transition-colors duration-300">
-        <div className="bg-gradient-to-r from-gray-700 to-gray-800 dark:from-gray-600 dark:to-gray-700 px-6 py-4">
-          <h2 className="text-xl font-bold text-white">
-            📦 {t('Daftar Produk', 'Product List')}
-          </h2>
-        </div>
+            {/* CONTENT LOGIC */}
+            {activeTab === "orders" && <AdminOrders />}
+            {activeTab === "users" && <AdminUsers />}
+            {activeTab === "categories" && (
+              <div className="flex flex-col items-center justify-center h-64 bg-white rounded-2xl shadow-sm border border-gray-100">
+                <span className="text-6xl mb-4">🚧</span>
+                <h3 className="text-xl font-bold text-gray-700">Fitur Kategori Segera Hadir</h3>
+                <p className="text-gray-500 mt-2">Anda masih bisa mengelola kategori melalui database Supabase</p>
+              </div>
+            )}
 
-        <div className="p-4 md:p-6">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 dark:border-green-400"></div>
-              <p className="mt-4 text-gray-600 dark:text-gray-300 transition-colors duration-300">
-                {t('Memuat produk...', 'Loading products...')}
-              </p>
-            </div>
-          ) : filteredProducts.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">🌱</div>
-              <p className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2 transition-colors duration-300">
-                {t('Tidak ada produk', 'No products')}
-              </p>
-              <p className="text-gray-500 dark:text-gray-400 transition-colors duration-300">
-                {t('Mulai tambahkan produk pertama Anda', 'Start adding your first product')}
-              </p>
-            </div>
-          ) : (
-            <>
-
-        {/* 📱 MOBILE VIEW - Card Layout */}
-        <div className="block md:hidden space-y-4">
-                {filteredProducts.map((p) => (
-                  <div 
-                    key={p.id}
-                    className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-300"
-                  >
-                    <div className="flex gap-3 mb-3">
-                      <img
-                        src={p.gambar_url}
-                        alt={p.nama_produk}
-                        className="w-20 h-20 object-cover rounded-lg shadow-sm flex-shrink-0"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-gray-800 dark:text-white text-sm mb-1 line-clamp-2 transition-colors duration-300">
-                          {p.nama_produk}
-                        </h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-2 transition-colors duration-300">
-                          {p.deskripsi}
-                        </p>
-                        <span className="inline-block px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium transition-colors duration-300">
-                          {p.categories?.name_kategori || '-'}
-                        </span>
-                      </div>
-                    </div>
-
-              {/* Product Info */}
-          <div className="grid grid-cols-2 gap-2 mb-3 pt-3 border-t border-gray-100 dark:border-gray-600 transition-colors duration-300">
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 transition-colors duration-300">
-                          {t('Harga', 'Price')}
-                        </p>
-                        <p className="font-bold text-green-600 dark:text-green-400 text-sm transition-colors duration-300">
-                          Rp {Number(p.harga).toLocaleString("id-ID")}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 transition-colors duration-300">
-                          {t('Stok', 'Stock')}
-                        </p>
-                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium transition-colors duration-300 ${
-                          p.stok > 10 
-                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
-                            : p.stok > 0 
-                              ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
-                              : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                        }`}>
-                          {p.stok} unit
-                        </span>
-                      </div>
-                    </div>
-
-             
-              {/* Action Buttons */}
-              <div className="flex gap-2">
-                      <button
-                        className="flex-1 px-3 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded-lg hover:bg-blue-600 dark:hover:bg-blue-500 transition-colors duration-300 font-medium text-sm shadow-sm disabled:opacity-50"
-                        onClick={() => {
-                          setEditProduct(p);
-                          setShowEditProduct(true);
-                          setShowAddProduct(false);
-                          setImagePreview(p.gambar_url);
-                        }}
-                        disabled={loading}
-                      >
-                        ✏️ {t('Edit', 'Edit')}
-                      </button>
-                      <button
-                        className="flex-1 px-3 py-2 bg-red-500 dark:bg-red-600 text-white rounded-lg hover:bg-red-600 dark:hover:bg-red-500 transition-colors duration-300 font-medium text-sm shadow-sm disabled:opacity-50"
-                        onClick={() => handleDeleteProduct(p.id, p)}
-                        disabled={loading}
-                      >
-                        {loading ? "⏳" : "🗑️"} {t('Hapus', 'Delete')}
-                      </button>
+            {activeTab === "products" && (
+              <>
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+                    <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-2xl">📦</div>
+                    <div>
+                      <p className="text-sm text-gray-500 font-medium">Total Produk</p>
+                      <h3 className="text-2xl font-bold text-gray-800">{products.length}</h3>
                     </div>
                   </div>
-                ))}
-              </div>
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+                    <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center text-2xl">🏷️</div>
+                    <div>
+                      <p className="text-sm text-gray-500 font-medium">Kategori</p>
+                      <h3 className="text-2xl font-bold text-gray-800">{categories.length}</h3>
+                    </div>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+                    <div className="w-12 h-12 rounded-full bg-yellow-50 flex items-center justify-center text-2xl">⚠️</div>
+                    <div>
+                      <p className="text-sm text-gray-500 font-medium">Stok &lt; 10</p>
+                      <h3 className="text-2xl font-bold text-gray-800">
+                        {products.filter(p => p.stok < 10 && p.stok > 0).length}
+                      </h3>
+                    </div>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+                    <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center text-2xl">❌</div>
+                    <div>
+                      <p className="text-sm text-gray-500 font-medium">Habis</p>
+                      <h3 className="text-2xl font-bold text-gray-800">
+                        {products.filter(p => p.stok === 0).length}
+                      </h3>
+                    </div>
+                  </div>
+                </div>
 
-        {/* 💻 DESKTOP VIEW - Table Layout */}
-        <div className="hidden md:block overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b-2 border-gray-200 dark:border-gray-600 transition-colors duration-300">
-                      <th className="p-4 text-left text-sm font-bold text-gray-700 dark:text-gray-300 transition-colors duration-300">
-                        {t('Produk', 'Product')}
-                      </th>
-                      <th className="p-4 text-left text-sm font-bold text-gray-700 dark:text-gray-300 transition-colors duration-300">
-                        {t('Harga', 'Price')}
-                      </th>
-                      <th className="p-4 text-left text-sm font-bold text-gray-700 dark:text-gray-300 transition-colors duration-300">
-                        {t('Stok', 'Stock')}
-                      </th>
-                      <th className="p-4 text-left text-sm font-bold text-gray-700 dark:text-gray-300 transition-colors duration-300">
-                        {t('Kategori', 'Category')}
-                      </th>
-                      <th className="p-4 text-center text-sm font-bold text-gray-700 dark:text-gray-300 transition-colors duration-300">
-                        {t('Aksi', 'Actions')}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredProducts.map((p) => (
-                      <tr 
-                        key={p.id} 
-                        className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-300"
-                      >
-                        <td className="p-4">
-                          <div className="flex items-center gap-4">
-                            <img
-                              src={p.gambar_url}
-                              alt={p.nama_produk}
-                              className="w-16 h-16 object-cover rounded-xl shadow-md"
-                            />
-                            <div>
-                              <p className="font-bold text-gray-800 dark:text-white transition-colors duration-300">
-                                {p.nama_produk}
-                              </p>
-                              <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1 transition-colors duration-300">
-                                {p.deskripsi}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <span className="font-semibold text-green-600 dark:text-green-400 transition-colors duration-300">
-                            Rp {Number(p.harga).toLocaleString("id-ID")}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <span className={`px-3 py-1 rounded-full text-sm font-medium transition-colors duration-300 ${
-                            p.stok > 10 
-                              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
-                              : p.stok > 0 
-                                ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
-                                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                          }`}>
-                            {p.stok} unit
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-full text-sm font-medium transition-colors duration-300">
-                            {p.categories?.name_kategori || '-'}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <div className="flex gap-2 justify-center">
-                            <button
-                              className="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded-lg hover:bg-blue-600 dark:hover:bg-blue-500 transition-colors duration-300 font-medium shadow-sm hover:shadow-md disabled:opacity-50"
-                              onClick={() => {
-                                setEditProduct(p);
-                                setShowEditProduct(true);
-                                setShowAddProduct(false);
-                                setImagePreview(p.gambar_url);
-                              }}
-                              disabled={loading}
-                            >
-                              ✏️ {t('Edit', 'Edit')}
-                            </button>
-                            <button
-                              className="px-4 py-2 bg-red-500 dark:bg-red-600 text-white rounded-lg hover:bg-red-600 dark:hover:bg-red-500 transition-colors duration-300 font-medium shadow-sm hover:shadow-md disabled:opacity-50"
-                              onClick={() => handleDeleteProduct(p.id, p)}
-                              disabled={loading}
-                            >
-                              {loading ? "⏳" : "🗑️"} {t('Hapus', 'Delete')}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-              ))}
-            </tbody>
-          </table>
+                {/* Filter Bar & Action */}
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-4 items-center justify-between mb-6">
+                  <div className="flex gap-4 w-full md:w-auto">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="🔍 Cari produk..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:bg-white transition-all w-64"
+                      />
+                      <span className="absolute left-3 top-2.5 text-gray-400 text-sm">🔍</span>
+                    </div>
+
+                    <select
+                      value={filterCategory}
+                      onChange={(e) => setFilterCategory(e.target.value)}
+                      className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:bg-white transition-all"
+                    >
+                      <option value="">Semua Kategori</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name_kategori}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setShowAddProduct(true);
+                      setShowEditProduct(false);
+                      setNewProduct(emptyProduct);
+                      setImagePreview(null);
+                    }}
+                    className="bg-green-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors shadow-sm flex items-center gap-2"
+                  >
+                    <span>+</span> Tambah Produk
+                  </button>
+                </div>
+
+                {/* ADD/EDIT MODALS PLACEMENT - FIXED OVERLAY */}
+                {(showAddProduct || showEditProduct) && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 transition-opacity duration-300">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-scale-in">
+                      <div className="bg-gradient-to-r from-green-600 to-emerald-700 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                          {showAddProduct ? "➕ Tambah Produk Baru" : "✏️ Edit Produk"}
+                        </h2>
+                        <button
+                          onClick={() => { setShowAddProduct(false); setShowEditProduct(false); }}
+                          className="text-white hover:text-gray-200 text-2xl font-bold transition-transform hover:rotate-90"
+                        >✕</button>
+                      </div>
+
+                      <div className="p-6 md:p-8">
+                        <ProductForm
+                          product={showAddProduct ? newProduct : editProduct}
+                          setProduct={showAddProduct ? setNewProduct : setEditProduct}
+                          onSubmit={showAddProduct ? handleAddProduct : handleUpdateProduct}
+                          onCancel={() => { setShowAddProduct(false); setShowEditProduct(false); }}
+                          isEdit={!!showEditProduct}
+                          categories={categories}
+                          imagePreview={imagePreview}
+                          uploading={uploading}
+                          loading={loading}
+                          handleImageUpload={handleImageUpload}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* PRODUCT LIST TABLE */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-100">
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Produk</th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Harga</th>
+                          <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Stok</th>
+                          <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Kategori</th>
+                          <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {loading ? (
+                          <tr><td colSpan="5" className="p-8 text-center text-gray-500">Memuat data...</td></tr>
+                        ) : filteredProducts.length === 0 ? (
+                          <tr><td colSpan="5" className="p-8 text-center text-gray-500">Tidak ada produk ditemukan</td></tr>
+                        ) : filteredProducts.map((p) => (
+                          <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-4">
+                                <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
+                                  <img src={p.gambar_url} alt={p.nama_produk} className="w-full h-full object-cover" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-900 line-clamp-1">{p.nama_produk}</p>
+                                  <p className="text-xs text-gray-500 line-clamp-1">{p.icon} {p.deskripsi}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 font-medium">
+                              Rp {Number(p.harga).toLocaleString("id-ID")}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${p.stok > 10 ? 'bg-green-50 text-green-700' :
+                                p.stok > 0 ? 'bg-yellow-50 text-yellow-700' :
+                                  'bg-red-50 text-red-700'
+                                }`}>
+                                {p.stok > 0 ? `${p.stok} unit` : 'Habis'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                                {p.categories?.name_kategori || 'Original'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => { setEditProduct(p); setShowEditProduct(true); setShowAddProduct(false); setImagePreview(p.gambar_url); }}
+                                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                  title="Edit"
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteProduct(p.id, p)}
+                                  className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Delete"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+
+          </div>
         </div>
-            </>
-          )}
-        </div>
-      </div>
-        </>
-      )}
-      </div>
+      </main>
     </div>
   );
 };

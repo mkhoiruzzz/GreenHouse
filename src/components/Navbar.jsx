@@ -2,13 +2,11 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { useTheme } from '../context/ThemeContext';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { user, logout, isAuthenticated, isAdmin } = useAuth();
   const { cartCount } = useCart();
-  const { isDark, toggleTheme, language, toggleLanguage, t } = useTheme();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -22,7 +20,7 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="bg-green-600 dark:bg-green-900 text-white fixed w-full top-0 z-50 shadow-lg transition-colors duration-300">
+    <nav className="bg-green-600 text-white fixed w-full top-0 z-50 shadow-lg transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo dan Hamburger Button */}
@@ -30,7 +28,7 @@ const Navbar = () => {
             {/* Hamburger Button */}
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="flex flex-col justify-center items-center w-10 h-10 space-y-1.5 rounded-lg hover:bg-green-700 dark:hover:bg-green-800 transition duration-200"
+              className="flex flex-col justify-center items-center w-10 h-10 space-y-1.5 rounded-lg hover:bg-green-700 transition duration-200"
               aria-label="Toggle menu"
             >
               <span className={`block w-6 h-1 bg-white transition-all duration-300 ${isOpen ? 'rotate-45 translate-y-2' : ''}`}></span>
@@ -40,42 +38,15 @@ const Navbar = () => {
 
             {/* Logo */}
             <Link to="/" className="flex items-center space-x-1 md:space-x-2 text-xl md:text-2xl font-bold text-yellow-300">
-  <span className="text-lg md:text-xl">🌿</span>
-  {/* Desktop: Full text, Mobile: Short text */}
-  <span className="hidden sm:block">Green House</span>
-  <span className="sm:hidden text-base">GreenHouse</span>
-</Link>
+              <span className="text-lg md:text-xl">🌿</span>
+              {/* Desktop: Full text, Mobile: Short text */}
+              <span className="hidden sm:block">Green House</span>
+              <span className="sm:hidden text-base">GreenHouse</span>
+            </Link>
           </div>
 
           {/* Right Side Controls */}
           <div className="flex items-center space-x-2">
-            {/* Language Toggle */}
-            <button
-              onClick={toggleLanguage}
-              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg hover:bg-green-700 dark:hover:bg-green-800 transition duration-200 text-sm font-semibold"
-              title={language === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}
-            >
-              <span className="text-base">{language === 'id' ? '🇮🇩' : '🇬🇧'}</span>
-              <span>{language === 'id' ? 'ID' : 'EN'}</span>
-            </button>
-
-            {/* Theme Toggle */}
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-lg hover:bg-green-700 dark:hover:bg-green-800 transition duration-200"
-              title={isDark ? (language === 'id' ? 'Mode Terang' : 'Light Mode') : (language === 'id' ? 'Mode Gelap' : 'Dark Mode')}
-            >
-              {isDark ? (
-                <svg className="w-5 h-5 text-yellow-300" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" fillRule="evenodd" clipRule="evenodd"></path>
-                </svg>
-              ) : (
-                <svg className="w-5 h-5 text-yellow-300" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
-                </svg>
-              )}
-            </button>
-
             {/* Cart Indicator */}
             {isAuthenticated && (
               <Link to="/cart" className="relative hover:text-yellow-300 transition duration-200 p-2">
@@ -92,20 +63,20 @@ const Navbar = () => {
 
         {/* Sidebar Overlay */}
         {isOpen && (
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-50 z-40" 
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-40"
             onClick={closeMenu}
           ></div>
         )}
 
         {/* Sidebar Panel */}
-        <div className={`fixed top-0 left-0 h-full w-80 bg-green-600 dark:bg-green-900 shadow-lg transform transition-all duration-300 z-50 overflow-y-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className={`fixed top-0 left-0 h-full w-80 bg-green-600 shadow-lg transform transition-all duration-300 z-50 overflow-y-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className="flex flex-col h-full">
             {/* HEADER SIDEBAR */}
-            <div className="p-4 border-b border-green-500 dark:border-green-700">
+            <div className="p-4 border-b border-green-500">
               <div className="flex items-center justify-between mb-4">
-                <Link 
-                  to="/" 
+                <Link
+                  to="/"
                   className="flex items-center space-x-2 text-2xl font-bold text-yellow-300"
                   onClick={closeMenu}
                 >
@@ -124,7 +95,7 @@ const Navbar = () => {
 
               {/* INFO AKUN USER */}
               {isAuthenticated ? (
-                <div className="bg-green-700 dark:bg-green-800 rounded-lg p-3">
+                <div className="bg-green-700 rounded-lg p-3">
                   <div className="flex items-center space-x-3">
                     <div className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center">
                       <span className="text-xl">👤</span>
@@ -133,7 +104,7 @@ const Navbar = () => {
                       <div className="text-yellow-300 font-semibold text-lg truncate">{user?.username}</div>
                       <div className="text-green-200 text-sm truncate">{user?.email}</div>
                       <div className="text-green-300 text-xs mt-1">
-                        {isAdmin ? (language === 'id' ? 'Administrator' : 'Administrator') : (language === 'id' ? 'Pelanggan' : 'Customer')}
+                        {isAdmin ? 'Administrator' : 'Pelanggan'}
                       </div>
                     </div>
                   </div>
@@ -141,7 +112,7 @@ const Navbar = () => {
               ) : (
                 <div className="text-center py-4">
                   <p className="text-green-200 mb-3">
-                    {t('Selamat datang di Green House', 'Welcome to Green House')}
+                    Selamat datang di Green House
                   </p>
                   <div className="flex space-x-2">
                     <Link
@@ -156,7 +127,7 @@ const Navbar = () => {
                       className="flex-1 bg-white text-green-600 py-2 px-3 rounded-lg hover:bg-gray-100 transition duration-200 text-sm font-semibold"
                       onClick={closeMenu}
                     >
-                      {t('Daftar', 'Register')}
+                      Daftar
                     </Link>
                   </div>
                 </div>
@@ -167,52 +138,52 @@ const Navbar = () => {
             <div className="flex-1 p-4 space-y-2">
               <Link
                 to="/"
-                className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 dark:hover:bg-green-800 rounded-lg transition duration-200"
+                className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                 onClick={closeMenu}
               >
                 <span className="mr-3 text-xl">🏠</span>
-                <span className="text-lg">{t('Beranda', 'Home')}</span>
+                <span className="text-lg">Beranda</span>
               </Link>
-              
+
               <Link
                 to="/products"
-                className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 dark:hover:bg-green-800 rounded-lg transition duration-200"
+                className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                 onClick={closeMenu}
               >
                 <span className="mr-3 text-xl">🛍️</span>
-                <span className="text-lg">{t('Produk', 'Products')}</span>
+                <span className="text-lg">Produk</span>
               </Link>
-              
+
               <Link
                 to="/about"
-                className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 dark:hover:bg-green-800 rounded-lg transition duration-200"
+                className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                 onClick={closeMenu}
               >
                 <span className="mr-3 text-xl">ℹ️</span>
-                <span className="text-lg">{t('Tentang Kami', 'About Us')}</span>
+                <span className="text-lg">Tentang Kami</span>
               </Link>
-              
+
               <Link
                 to="/contact"
-                className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 dark:hover:bg-green-800 rounded-lg transition duration-200"
+                className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                 onClick={closeMenu}
               >
                 <span className="mr-3 text-xl">📞</span>
-                <span className="text-lg">{t('Kontak', 'Contact')}</span>
+                <span className="text-lg">Kontak</span>
               </Link>
 
-              <div className="border-t border-green-500 dark:border-green-700 my-4"></div>
+              <div className="border-t border-green-500 my-4"></div>
 
               {isAuthenticated && (
                 <>
                   <Link
                     to="/cart"
-                    className="flex items-center justify-between py-3 px-4 hover:text-yellow-300 hover:bg-green-700 dark:hover:bg-green-800 rounded-lg transition duration-200"
+                    className="flex items-center justify-between py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                     onClick={closeMenu}
                   >
                     <div className="flex items-center">
                       <span className="mr-3 text-xl">🛒</span>
-                      <span className="text-lg">{t('Keranjang', 'Cart')}</span>
+                      <span className="text-lg">Keranjang</span>
                     </div>
                     {cartCount > 0 && (
                       <span className="bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
@@ -220,55 +191,55 @@ const Navbar = () => {
                       </span>
                     )}
                   </Link>
-                  
+
                   <Link
                     to="/orders"
-                    className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 dark:hover:bg-green-800 rounded-lg transition duration-200"
+                    className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                     onClick={closeMenu}
                   >
                     <span className="mr-3 text-xl">📦</span>
-                    <span className="text-lg">{t('Pesanan Saya', 'My Orders')}</span>
+                    <span className="text-lg">Pesanan Saya</span>
                   </Link>
-                  
+
                   <Link
                     to="/profile"
-                    className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 dark:hover:bg-green-800 rounded-lg transition duration-200"
+                    className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                     onClick={closeMenu}
                   >
                     <span className="mr-3 text-xl">👤</span>
-                    <span className="text-lg">{t('Profil Saya', 'My Profile')}</span>
+                    <span className="text-lg">Profil Saya</span>
                   </Link>
-                  
+
                   {isAdmin && (
                     <Link
                       to="/admin"
-                      className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 dark:hover:bg-green-800 rounded-lg transition duration-200"
+                      className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                       onClick={closeMenu}
                     >
                       <span className="mr-3 text-xl">⚙️</span>
-                      <span className="text-lg">{t('Admin Dashboard', 'Admin Dashboard')}</span>
+                      <span className="text-lg">Admin Dashboard</span>
                     </Link>
                   )}
 
-                  <div className="border-t border-green-500 dark:border-green-700 my-4"></div>
-                  
+                  <div className="border-t border-green-500 my-4"></div>
+
                   <button
                     onClick={handleLogout}
-                    className="flex items-center w-full text-left py-3 px-4 hover:text-yellow-300 hover:bg-green-700 dark:hover:bg-green-800 rounded-lg transition duration-200"
+                    className="flex items-center w-full text-left py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                   >
                     <span className="mr-3 text-xl">🚪</span>
-                    <span className="text-lg">{t('Keluar' ,'Logout')}</span>
+                    <span className="text-lg">Keluar</span>
                   </button>
                 </>
               )}
             </div>
 
             {/* FOOTER SIDEBAR */}
-            <div className="p-4 border-t border-green-500 dark:border-green-700">
+            <div className="p-4 border-t border-green-500">
               <div className="text-center text-green-200 text-sm">
                 <p>🌿 Green House</p>
                 <p className="text-xs mt-1">
-                  {t('Toko Tanaman Hias Terlengkap', 'Complete Ornamental Plant Store')}
+                  Toko Tanaman Hias Terlengkap
                 </p>
               </div>
             </div>

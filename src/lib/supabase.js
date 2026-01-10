@@ -14,7 +14,7 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
 // ✅ Helper function untuk invoke Edge Function dengan Authorization
 export const invokeFunction = async (functionName, body) => {
   const { data: { session } } = await supabase.auth.getSession();
-  
+
   if (!session) {
     throw new Error('No active session');
   }

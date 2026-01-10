@@ -27,7 +27,7 @@ const Register = () => {
   const [otpCode, setOtpCode] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
-  
+
   const navigate = useNavigate();
   const { register, verifyOTP, resendOTP } = useAuth();
 
@@ -63,7 +63,7 @@ const Register = () => {
     try {
       console.log('🔄 Creating profile for user:', userId);
       console.log('📝 Profile data:', userData);
-      
+
       const profileData = {
         id: userId,
         email: userData.email,
@@ -90,7 +90,7 @@ const Register = () => {
       }
 
       console.log('✅ Profile created/updated successfully:', data);
-      
+
       // ✅ Verifikasi data benar-benar tersimpan
       const { data: verifyData, error: verifyError } = await supabase
         .from('profiles')
@@ -109,7 +109,7 @@ const Register = () => {
       console.error('❌ Failed to create profile:', error);
       throw error;
     }
-  };  
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -134,15 +134,15 @@ const Register = () => {
 
     try {
       const { confirmPassword, ...registerData } = formData;
-      
+
       console.log('🔄 Starting registration for:', registerData.email);
       const result = await register(registerData);
       console.log('📋 Registration result:', result);
-      
+
       if (result && result.success) {
         // ✅ Reset loading state terlebih dahulu sebelum beralih ke verification
         setLoading(false);
-        
+
         if (result.needsVerification) {
           // ✅ Tampilkan form verifikasi OTP
           console.log('✅ Registration successful, showing verification form');
@@ -158,7 +158,7 @@ const Register = () => {
             console.error('Profile creation failed:', profileError);
             toast.warning('Registrasi berhasil tetapi gagal membuat profil. Silakan lengkapi profil nanti.');
           }
-          
+
           navigate('/login');
         } else {
           // Fallback: jika tidak ada needsVerification atau user, tetap tampilkan form verifikasi
@@ -199,7 +199,7 @@ const Register = () => {
 
     try {
       const result = await verifyOTP(verificationEmail, otpCode);
-      
+
       if (result.success && result.user) {
         // ✅ BUAT PROFILE SETELAH VERIFIKASI BERHASIL
         const { confirmPassword, ...registerData } = formData;
@@ -210,7 +210,7 @@ const Register = () => {
           console.error('Profile creation failed:', profileError);
           toast.warning('Verifikasi berhasil tetapi gagal membuat profil. Silakan lengkapi profil nanti.');
         }
-        
+
         // Redirect ke login setelah beberapa detik
         setTimeout(() => {
           navigate('/login');
@@ -365,7 +365,7 @@ const Register = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50"
                   placeholder="email@example.com"
                 />
-                
+
                 {/* Note for stuck email */}
                 {emailMessage && (
                   <p className="text-xs text-gray-500 mt-1">

@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 
 const Profile = () => {
   const { user, profile, updateProfile, deleteAccount } = useAuth();
-  
+
   const [formData, setFormData] = useState({
     username: '',
     full_name: '',
@@ -15,7 +15,7 @@ const Profile = () => {
     city: '',
     province: ''
   });
-  
+
   const [loading, setLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -24,10 +24,10 @@ const Profile = () => {
   // ✅ SIMPLE: Set data langsung dari profile context atau user
   useEffect(() => {
     if (!user) return;
-    
+
     console.log('🔄 Profile useEffect - User:', user.email);
     console.log('📊 Profile context:', profile);
-    
+
     // Gunakan profile dari context jika ada
     if (profile) {
       console.log('✅ Using profile from context');
@@ -53,7 +53,7 @@ const Profile = () => {
         province: user.user_metadata?.province || ''
       });
     }
-    
+
     setLoading(false);
   }, [user, profile]); // ✅ Hanya depend on user dan profile
 
@@ -70,7 +70,7 @@ const Profile = () => {
 
     try {
       console.log('💾 Saving profile:', formData);
-      
+
       const result = await updateProfile({
         username: formData.username,
         full_name: formData.full_name,
@@ -101,7 +101,7 @@ const Profile = () => {
     setDeleteLoading(true);
     try {
       const result = await deleteAccount();
-      
+
       if (result.success) {
         toast.success('✅ Akun berhasil dihapus');
         setTimeout(() => {
@@ -155,7 +155,7 @@ const Profile = () => {
                     <span className="font-medium">User ID:</span> {user.id}
                   </p>
                   <p className="text-gray-700">
-                    <span className="font-medium">Status:</span> 
+                    <span className="font-medium">Status:</span>
                     <span className="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
                       Aktif
                     </span>
@@ -302,7 +302,7 @@ const Profile = () => {
                   </span>
                 ) : 'Simpan Perubahan'}
               </button>
-              
+
               <button
                 type="button"
                 onClick={() => window.location.reload()}
@@ -327,7 +327,7 @@ const Profile = () => {
                   <p className="text-red-700 text-sm mt-2">
                     Tindakan ini tidak dapat dibatalkan. Semua data Anda akan dihapus permanen dari sistem.
                   </p>
-                  
+
                   {!showDeleteConfirm ? (
                     <button
                       onClick={() => setShowDeleteConfirm(true)}
@@ -351,7 +351,7 @@ const Profile = () => {
                           <li>Semua data terkait akun ini</li>
                         </ul>
                       </div>
-                      
+
                       <div className="flex gap-3">
                         <button
                           onClick={handleDeleteAccount}

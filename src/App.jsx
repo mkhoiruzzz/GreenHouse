@@ -19,53 +19,48 @@ import About from './pages/About'
 import Contact from './pages/Contact'
 import Profil from './pages/Profile'
 import AdminDashboard from './components/AdminDashboard'
-import ErrorBoundary from './components/ErrorBoundary'
-import { ThemeProvider } from './context/ThemeContext'
 import ProductForm from './components/ProductForm'
 import DebugPage from './pages/DebugPage'
 
 function App() {
   return (
-    <ErrorBoundary>
-      <ThemeProvider>
-      <AuthProvider>
-        <CartProvider>
-          <Router>
-            <ErrorBoundary>
-              <div className="App">
-                <Navbar />
-                <main className="min-h-screen flex flex-col">
-                  <ErrorBoundary>
-                    <Routes>
-                      {/* Your existing routes */}
-                      <Route path="/" element={<Home />} />
-                      <Route path="/login" element={<Login />} />
-                      <Route path="/register" element={<Register />} />
-                      <Route path="/products" element={<Product />} />
-                      <Route path="/product/:id" element={<ProductDetail />} />
-                      <Route path="/cart" element={<Cart />} />
-                      <Route path="/checkout" element={<Checkout />} />
-                      <Route path="/orders" element={<Orders />} />
-                      <Route path="/about" element={<About />} />
-                      <Route path="/contact" element={<Contact />} />
-                      <Route path="/profile" element={<Profil />} />
-                      <Route path="/images/*" element={null} />
-                      <Route path="/admin" element={<AdminDashboard />} />
-                      <Route path="/admin/add-product" element={<ProductForm />} />
-                      <Route path="/debug" element={<DebugPage />} />
-                    </Routes>
-                  </ErrorBoundary>
-                </main>
-                <Footer />
-                <ToastContainer position="bottom-right" />
-              </div>
-            </ErrorBoundary>
-          </Router>
-        </CartProvider>
-      </AuthProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
+
+
+    <AuthProvider>
+      <CartProvider>
+        <Router>
+          <div className="App">
+            <Navbar />
+            <main className="min-h-screen flex flex-col">
+
+              <Routes>
+                {/* Your existing routes */}
+                <Route path="/" element={<Home />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/products" element={<Product />} />
+                <Route path="/product/:id" element={<ProductDetail />} />
+                <Route path="/cart" element={<Cart />} />
+                <Route path="/checkout" element={<Checkout />} />
+                <Route path="/orders" element={<Orders />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/contact" element={<Contact />} />
+                <Route path="/profile" element={<Profil />} />
+                <Route path="/images/*" element={null} />
+                <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/admin/add-product" element={<ProductForm />} />
+                <Route path="/debug" element={<DebugPage />} />
+              </Routes>
+            </main>
+            <Footer />
+            <ToastContainer position="bottom-right" />
+          </div>
+        </Router>
+      </CartProvider>
+    </AuthProvider>
+
+
   )
 }
 
-export default App
+export default App;
