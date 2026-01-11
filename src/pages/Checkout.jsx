@@ -254,7 +254,7 @@ const Checkout = () => {
             quantity: 1
           }] : [])
         ],
-        callback_url: `${window.location.origin}/checkout`,
+        callback_url: `${window.location.origin}/api/tripay/webhook`,
         return_url: `${window.location.origin}/order-success`
       };
 

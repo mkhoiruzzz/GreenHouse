@@ -5,13 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const TRIPAY_PRIVATE_KEY = process.env.TRIPAY_PRIVATE_KEY;
-const FONNTE_TOKEN = process.env.FONNTE_TOKEN;
-
-/* ================= SUPABASE ================= */
-const supabase = createClient(
-  SUPABASE_URL,
-  SUPABASE_SERVICE_ROLE_KEY
-);
+const FONNTE_TOKEN = process.env.FONNTE_TOKEN; // Kept as it's used later and not explicitly removed from usage context
 
 /* ================= UTILS ================= */
 function verifyTripaySignature(req, body) {
@@ -30,19 +24,47 @@ function verifyTripaySignature(req, body) {
 
 /* ================= HANDLER ================= */
 export default async function handler(req, res) {
+  console.log("📨 Incoming Webhook Request:", {
+    method: req.method,
+    headers: req.headers,
+    url: req.url
+  });
+
   if (req.method !== "POST") {
-    return res.status(405).json({ message: "Method not allowed" });
+    return res.status(405).json({ message: "Method not allowed. Use POST." });
   }
 
+  // Check env variables inside handler to avoid top-level crash
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !TRIPAY_PRIVATE_KEY) {
+    console.error("❌ MISSING ENVIRONMENT VARIABLES");
+    return res.status(500).json({
+      message: "Server configuration error: missing credentials",
+      debug: {
+        url: !!SUPABASE_URL,
+        key: !!SUPABASE_SERVICE_ROLE_KEY,
+        tripay: !!TRIPAY_PRIVATE_KEY
+      }
+    });
+  }
+
+  const supabase = createClient(
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY
+  );
   const payload = req.body;
 
   /* ==== VERIFY SIGNATURE ==== */
-  if (!verifyTripaySignature(req, payload)) {
-    console.error("❌ Invalid Tripay signature");
-    return res.status(401).json({ message: "Invalid signature" });
+  try {
+    if (!verifyTripaySignature(req, payload)) {
+      console.error("❌ Invalid Tripay signature");
+      return res.status(401).json({ message: "Invalid signature" });
+    }
+  } catch (sigErr) {
+    console.error("🔥 Signature verification failed:", sigErr);
+    return res.status(500).json({ message: "Signature calculation error" });
   }
 
-  console.log("📩 Tripay Callback:", payload);
+  console.log("📩 Payload Verified:", payload);
 
   const {
     reference,
@@ -54,39 +76,44 @@ export default async function handler(req, res) {
 
   try {
     /* ==== GET ORDER ==== */
-    const { data: order, error } = await supabase
+    const { data: order, error: fetchError } = await supabase
       .from("orders")
       .select("*")
       .eq("tripay_reference", reference)
       .single();
 
-    if (error || !order) {
-      console.error("❌ Order not found", error);
-      return res.status(404).json({ message: "Order not found" });
+    if (fetchError || !order) {
+      console.error("❌ Order not found for reference:", reference, fetchError);
+      return res.status(404).json({ message: "Order not found in database" });
     }
 
     /* ==== UPDATE ORDER ==== */
-    if (status === "PAID") {
-      await supabase
+    // Tripay sends "PAID" or "UNPAID" or "EXPIRED"
+    if (status?.toUpperCase() === "PAID") {
+      const { error: updateError } = await supabase
         .from("orders")
         .update({
-          status_pembayaran: "paid", // ✅ Simpan sebagai 'paid' (lowercase)
+          status_pembayaran: "paid", // Use lowercase for consistency with analytics
           metode_pembayaran: payment_method,
         })
         .eq("id", order.id);
 
+      if (updateError) {
+        console.error("❌ Failed to update order:", updateError);
+        throw updateError;
+      }
       console.log("✅ Order updated to paid (lowercase)");
     }
 
     /* ==== SEND WHATSAPP (FIX FINAL) ==== */
-    if (status === "PAID" && order.customer_phone) {
+    if (status?.toUpperCase() === "PAID" && order.customer_phone) {
       // 🔥 FORMAT PALING AMAN UNTUK FONNTE
       const phone = order.customer_phone
         .replace(/\D/g, "")
         .replace(/^62/, "")
         .replace(/^0/, "");
 
-      console.log("📱 FINAL PHONE:", phone);
+      console.log("📱 FINAL PHONE FORMATTED:", phone);
 
       const customerName = order.customer_name || "Customer";
 
@@ -104,26 +131,34 @@ Pesananmu sedang kami proses 🌿
 Terima kasih 🙏
       `.trim();
 
-      const waRes = await fetch("https://api.fonnte.com/send", {
-        method: "POST",
-        headers: {
-          Authorization: FONNTE_TOKEN,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          target: phone,
-          countryCode: "62",
-          message: message,
-        }),
-      });
+      try {
+        const waRes = await fetch("https://api.fonnte.com/send", {
+          method: "POST",
+          headers: {
+            Authorization: FONNTE_TOKEN || '',
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            target: phone,
+            countryCode: "62",
+            message: message,
+          }),
+        });
 
-      const waText = await waRes.text();
-      console.log("📨 FONNTE RESPONSE:", waText);
+        const waText = await waRes.text();
+        console.log("📨 FONNTE RESPONSE:", waText);
+      } catch (waErr) {
+        console.error("⚠️ Fonnte WhatsApp error:", waErr.message);
+        // Don't fail the whole webhook if WhatsApp fails
+      }
     }
 
     return res.json({ success: true });
   } catch (err) {
-    console.error("🔥 Webhook Error:", err);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("🔥 Webhook processing error:", err);
+    return res.status(500).json({
+      message: "Internal server error during processing",
+      error: err.message
+    });
   }
 }
