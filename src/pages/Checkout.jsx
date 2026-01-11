@@ -237,11 +237,23 @@ const Checkout = () => {
         customer_name: formData.nama_lengkap,
         customer_email: formData.email,
         customer_phone: formData.no_telepon,
-        order_items: cartItems.map(item => ({
-          name: item.nama_produk,
-          price: item.harga,
-          quantity: item.quantity
-        })),
+        order_items: [
+          ...cartItems.map(item => ({
+            name: item.nama_produk,
+            price: item.harga,
+            quantity: item.quantity
+          })),
+          ...(formData.biaya_pengiriman > 0 ? [{
+            name: 'Biaya Pengiriman',
+            price: formData.biaya_pengiriman,
+            quantity: 1
+          }] : []),
+          ...(paymentFee > 0 ? [{
+            name: 'Biaya Layanan',
+            price: paymentFee,
+            quantity: 1
+          }] : [])
+        ],
         callback_url: `${window.location.origin}/checkout`,
         return_url: `${window.location.origin}/order-success`
       };
