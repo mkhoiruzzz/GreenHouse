@@ -254,8 +254,8 @@ const Checkout = () => {
             quantity: 1
           }] : [])
         ],
-        callback_url: `${window.location.origin}/api/tripay/webhook`,
-        return_url: `${window.location.origin}/order-success`
+        callback_url: `https://www.tokotanaman.my.id/api/tripay/webhook`,
+        return_url: `https://www.tokotanaman.my.id/order-success`
       };
 
       const paymentResponse = await tripayService.createTransaction(tripayData);
