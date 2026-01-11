@@ -370,8 +370,8 @@ const AdminOrders = () => {
                                 <h3 className="font-bold text-gray-800 mb-2">Ringkasan</h3>
                                 <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                                     <div className="flex justify-between">
-                                        <span>Subtotal:</span>
-                                        <span>{formatCurrency(selectedOrder.total_harga - (selectedOrder.biaya_pengiriman || 0))}</span>
+                                        <span>Subtotal Produk:</span>
+                                        <span>{formatCurrency(selectedOrder.order_items?.reduce((sum, item) => sum + (item.harga_satuan * item.quantity), 0) || 0)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span>Biaya Pengiriman:</span>
@@ -381,8 +381,14 @@ const AdminOrders = () => {
                                         <span>Biaya Admin:</span>
                                         <span>{formatCurrency(selectedOrder.biaya_admin || 0)}</span>
                                     </div>
+                                    {selectedOrder.discount_amount > 0 && (
+                                        <div className="flex justify-between text-green-600 font-medium">
+                                            <span>Voucher ({selectedOrder.voucher_code}):</span>
+                                            <span>-{formatCurrency(selectedOrder.discount_amount)}</span>
+                                        </div>
+                                    )}
                                     <div className="flex justify-between font-bold text-lg border-t pt-2">
-                                        <span>Total:</span>
+                                        <span>Total Tagihan:</span>
                                         <span className="text-green-600">
                                             {formatCurrency(selectedOrder.total_harga || 0)}
                                         </span>
@@ -450,7 +456,8 @@ const AdminOrders = () => {
                         </div>
                     </div>
                 </div>
-            )}
+            )
+            }
         </div>
     );
 };

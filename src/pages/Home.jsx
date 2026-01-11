@@ -96,74 +96,70 @@ const Home = () => {
         <div className="absolute -bottom-32 left-0 w-[500px] h-[500px] bg-lime-50 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-4000"></div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          <div className="grid grid-cols-2 gap-4 lg:gap-12 items-center">
 
             {/* Hero Text */}
-            <div className="space-y-6 text-center lg:text-left">
-              <div className="inline-flex items-center px-4 py-2 rounded-full bg-green-100 text-green-800 font-medium text-sm mb-4 animate-fade-in-up">
-                <span className="mr-2">🌱</span> Solusi Hijau untuk Rumah Anda
+            <div className="space-y-3 sm:space-y-6 text-left">
+              <div className="inline-flex items-center px-2 py-1 sm:px-4 sm:py-2 rounded-full bg-green-50 text-green-700 border border-green-100 font-medium text-[10px] sm:text-sm animate-fade-in-up">
+                <span className="mr-1 sm:mr-2">🍃</span> Premium Green House
               </div>
 
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-[1.15]">
-                Bawa Alam ke <br />
+              <h1 className="text-xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-tight sm:leading-[1.15]">
+                Hijaukan Ruangan <br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-emerald-500">
-                  Dalam Ruangan
+                  Dengan Tanaman Kami
                 </span>
               </h1>
 
-              <p className="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-                Temukan koleksi tanaman hias premium yang dikurasi khusus untuk menciptakan suasana segar, tenang, dan estetik di rumah Anda.
+              <p className="text-[10px] sm:text-lg md:text-xl text-gray-600 max-w-2xl leading-relaxed line-clamp-2 sm:line-clamp-none">
+                Temukan koleksi tanaman hias terbaik yang siap menghidupkan setiap sudut rumah Anda.
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-4">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 justify-start pt-1 sm:pt-4">
                 <Link
                   to="/products"
-                  className="px-8 py-4 bg-green-600 text-white font-bold rounded-2xl shadow-lg hover:bg-green-700 hover:shadow-green-300/50 hover:-translate-y-1 transition-all duration-300 flex items-center justify-center gap-2"
+                  className="px-4 py-2 sm:px-8 sm:py-4 bg-green-600 text-white font-bold rounded-lg sm:rounded-xl shadow-lg hover:bg-green-700 hover:-translate-y-1 transition-all duration-300 flex items-center justify-center gap-1 sm:gap-2 text-[10px] sm:text-base"
                 >
-                  Belanja Sekarang
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                  Belanja
+                  <svg className="w-3 h-3 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                 </Link>
                 <Link
-                  to="/products?category=tanaman"
-                  className="px-8 py-4 bg-white text-green-700 border-2 border-green-100 font-bold rounded-2xl hover:bg-green-50 hover:border-green-200 transition-all duration-300 flex items-center justify-center"
+                  to="/about"
+                  className="hidden sm:flex px-8 py-4 bg-white text-green-700 border border-green-200 font-bold rounded-xl hover:bg-green-50 transition-all duration-300 items-center justify-center"
                 >
-                  Lihat Koleksi
+                  Tentang Kami
                 </Link>
               </div>
 
-              <div className="pt-8 flex items-center justify-center lg:justify-start gap-8 text-sm text-gray-500 font-medium">
+              <div className="hidden sm:flex pt-8 items-center justify-start gap-8 text-sm text-gray-500 font-medium font-sans">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-green-500"></div>
                   Tanaman Segar
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                  Pengiriman Aman
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                  Support 24/7
+                  Dijamin Kualitas
                 </div>
               </div>
             </div>
 
             {/* Hero Image */}
-            <div className="relative mx-auto lg:mr-0 max-w-md lg:max-w-none">
-              <div className="relative rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-white/50">
+            <div className="relative ml-auto w-full max-w-[180px] sm:max-w-md lg:max-w-none">
+              <div className="relative rounded-2xl sm:rounded-[2.5rem] overflow-hidden shadow-2xl border-2 sm:border-4 border-white/50">
                 <img
                   src="https://images.unsplash.com/photo-1470058869958-2a77ade41c02?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
                   alt="Modern Green Home"
                   className="w-full h-auto object-cover transform hover:scale-105 transition-transform duration-700"
                 />
 
-                {/* Floating Card */}
-                <div className="absolute bottom-8 left-8 bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-lg border border-white/50 flex items-center gap-4 max-w-[200px]">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-xl">
-                    🌵
+                {/* Floating Card - Visible on smaller screens but even smaller */}
+                <div className="absolute bottom-2 left-2 sm:bottom-8 sm:left-8 bg-white/95 backdrop-blur-sm p-1.5 sm:p-4 rounded-lg sm:rounded-2xl shadow-xl border border-white/50 flex items-center gap-2 sm:gap-4 min-w-[100px] sm:min-w-[200px]">
+                  <div className="w-6 h-6 sm:w-12 sm:h-12 bg-green-100 rounded-full flex items-center justify-center text-xs sm:text-xl shadow-inner">
+                    🏆
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-900">Spesies Langka</h3>
-                    <p className="text-xs text-green-600 font-medium">+50 Varian Baru</p>
+                    <h3 className="font-bold text-gray-900 text-[8px] sm:text-sm">Segar</h3>
+                    <p className="hidden sm:block text-xs text-gray-500">Dijamin kualitas</p>
                   </div>
                 </div>
               </div>

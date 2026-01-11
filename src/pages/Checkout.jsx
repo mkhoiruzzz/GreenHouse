@@ -21,6 +21,12 @@ const Checkout = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showShippingModal, setShowShippingModal] = useState(false);
 
+  // Voucher state
+  const [voucherCode, setVoucherCode] = useState('');
+  const [appliedVoucher, setAppliedVoucher] = useState(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [voucherLoading, setVoucherLoading] = useState(false);
+
   // NEW: User profile and address management
   const [userProfile, setUserProfile] = useState(null);
   const [showAddressForm, setShowAddressForm] = useState(false);
@@ -148,8 +154,64 @@ const Checkout = () => {
     return cartItems.reduce((total, item) => total + (item.harga * item.quantity), 0);
   };
 
+  const handleApplyVoucher = async () => {
+    if (!voucherCode.trim()) return;
+
+    try {
+      setVoucherLoading(true);
+      const { data, error } = await supabase
+        .from('vouchers')
+        .select('*')
+        .eq('code', voucherCode.toUpperCase())
+        .eq('is_active', true)
+        .single();
+
+      if (error || !data) {
+        toast.error('Voucher tidak valid atau sudah kadaluarsa');
+        return;
+      }
+
+      // Check expiry
+      if (data.expiry_date && new Date(data.expiry_date) < new Date()) {
+        toast.error('Voucher sudah kadaluarsa');
+        return;
+      }
+
+      // Check min purchase
+      const subtotal = calculateSubtotal();
+      if (subtotal < data.min_purchase) {
+        toast.error(`Minimal pembelian ${formatCurrency(data.min_purchase)} untuk pakai voucher ini`);
+        return;
+      }
+
+      setAppliedVoucher(data);
+
+      let discount = 0;
+      if (data.discount_type === 'percentage') {
+        discount = (subtotal * data.amount) / 100;
+      } else {
+        discount = data.amount;
+      }
+
+      setDiscountAmount(discount);
+      toast.success('Voucher berhasil dipasang!');
+    } catch (error) {
+      toast.error('Terjadi kesalahan saat mengecek voucher');
+    } finally {
+      setVoucherLoading(false);
+    }
+  };
+
+  const removeVoucher = () => {
+    setAppliedVoucher(null);
+    setDiscountAmount(0);
+    setVoucherCode('');
+    toast.info('Voucher dihapus');
+  };
+
   const calculateTotal = () => {
-    return calculateSubtotal() + (formData.biaya_pengiriman || 0) + (paymentFee || 0);
+    const total = calculateSubtotal() + (formData.biaya_pengiriman || 0) + (paymentFee || 0) - discountAmount;
+    return Math.max(0, total);
   };
 
   const handlePlaceOrder = async () => {
@@ -180,6 +242,8 @@ const Checkout = () => {
         total_harga: calculateTotal(),
         biaya_pengiriman: formData.biaya_pengiriman,
         biaya_admin: paymentFee,
+        discount_amount: discountAmount,
+        voucher_code: appliedVoucher?.code || null,
         status_pembayaran: 'unpaid',
         status_pengiriman: 'pending',
         metode_pembayaran: `tripay_${selectedPaymentMethod}`,
@@ -693,6 +757,40 @@ const Checkout = () => {
                 )}
               </div>
 
+              {/* Voucher Section */}
+              <div className="border border-green-100 bg-green-50/30 rounded-xl p-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <span>🎟️</span> Punya Kode Promo?
+                </h3>
+
+                {appliedVoucher ? (
+                  <div className="flex items-center justify-between bg-green-100 border border-green-200 px-3 py-2 rounded-lg">
+                    <div className="flex flex-col">
+                      <span className="text-xs text-green-600 font-bold uppercase">{appliedVoucher.code}</span>
+                      <span className="text-xs text-green-700">Tersimpan: -{formatCurrency(discountAmount)}</span>
+                    </div>
+                    <button onClick={removeVoucher} className="text-green-700 hover:text-green-900 text-lg">✕</button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Kode Promo"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase focus:ring-1 focus:ring-green-500 bg-white"
+                      value={voucherCode}
+                      onChange={(e) => setVoucherCode(e.target.value)}
+                    />
+                    <button
+                      onClick={handleApplyVoucher}
+                      disabled={voucherLoading || !voucherCode.trim()}
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-green-700 disabled:opacity-50 transition-colors"
+                    >
+                      {voucherLoading ? '...' : 'Pasang'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Summary Section */}
               <div className="border-t border-gray-200 pt-4">
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">Ringkasan Belanja</h3>
@@ -710,6 +808,12 @@ const Checkout = () => {
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Biaya Layanan</span>
                       <span className="font-medium">{formatCurrency(paymentFee)}</span>
+                    </div>
+                  )}
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-sm text-green-600 font-medium">
+                      <span>Potongan Voucher</span>
+                      <span>-{formatCurrency(discountAmount)}</span>
                     </div>
                   )}
                 </div>
