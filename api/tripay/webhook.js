@@ -2,10 +2,10 @@ import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 
 /* ================= ENV ================= */
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const TRIPAY_PRIVATE_KEY = process.env.TRIPAY_PRIVATE_KEY;
-const FONNTE_TOKEN = process.env.FONNTE_TOKEN; // Kept as it's used later and not explicitly removed from usage context
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+const TRIPAY_PRIVATE_KEY = process.env.TRIPAY_PRIVATE_KEY || process.env.VITE_TRIPAY_PRIVATE_KEY;
+const FONNTE_TOKEN = process.env.FONNTE_TOKEN || process.env.VITE_FONNTE_TOKEN;
 
 /* ================= UTILS ================= */
 function verifyTripaySignature(req, body) {
