@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react'; // ✅ Added useRef
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/formatCurrency';
@@ -8,316 +8,178 @@ import { supabase } from '../lib/supabase';
 import { tripayService } from '../services/tripay';
 
 const Checkout = () => {
-  console.log('🚀 Checkout component mounting...');
-
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { cartItems, clearCart } = useCart();
   const { user } = useAuth();
 
-  const [loading, setLoading] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1);
-  const [orderId, setOrderId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentChannels, setPaymentChannels] = useState([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
   const [paymentFee, setPaymentFee] = useState(0);
-  const [paymentStatus, setPaymentStatus] = useState('pending');
-  const [tripayReference, setTripayReference] = useState('');
+  const [shippingRates, setShippingRates] = useState([]);
+  const [loadingShippingRates, setLoadingShippingRates] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showShippingModal, setShowShippingModal] = useState(false);
 
-  // ✅ NEW: State untuk menyimpan ringkasan order sebelum cart dikosongkan
-  const [orderSummary, setOrderSummary] = useState(null);
-  const [tempCartItems, setTempCartItems] = useState([]); // ✅ Menyimpan cart items sementara
-  const hasClearedCartRef = useRef(false); // ✅ Mencegah multiple clear cart
+  // NEW: User profile and address management
+  const [userProfile, setUserProfile] = useState(null);
+  const [showAddressForm, setShowAddressForm] = useState(false);
 
   const [formData, setFormData] = useState({
-    email: '',
-    subscribe_newsletter: false,
+    email: user?.email || '',
     nama_lengkap: '',
     kota: '',
+    provinsi: '',
     alamat_pengiriman: '',
     kode_pos: '',
     no_telepon: '',
     metode_pengiriman: '',
     biaya_pengiriman: 0,
-    metode_pembayaran: 'tripay',
-    kode_kupon: ''
+    catatan: ''
   });
 
-  // Log initial state
-  useEffect(() => {
-    console.log('📊 Initial State:', {
-      user: user?.email,
-      cartItemsCount: cartItems?.length,
-      environment: import.meta.env.MODE
-    });
-  }, []);
-
-  // ✅ FIXED: Cek parameter callback dari Tripay
-  useEffect(() => {
-    const handleCallback = async () => {
-      try {
-        const reference = searchParams.get('reference');
-        const status = searchParams.get('status');
-        const tripayRef = searchParams.get('tripay_reference');
-
-        if (reference || tripayRef) {
-          const finalReference = reference || tripayRef;
-          console.log('🔄 Tripay callback detected:', { reference: finalReference, status });
-          setTripayReference(finalReference);
-
-          // Tunggu checkPaymentStatus selesai
-          await checkPaymentStatus(finalReference);
-        }
-      } catch (error) {
-        console.error('❌ Error in callback effect:', error);
-      }
-    };
-
-    handleCallback();
-  }, [searchParams]);
-
-  // ✅ FIXED: Fungsi cek status pembayaran
-  const checkPaymentStatus = async (reference) => {
-    try {
-      console.log('🔍 Checking payment status for:', reference);
-
-      const { data: order, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('tripay_reference', reference)
-        .single();
-
-      if (error) {
-        console.error('❌ Error fetching order:', error);
-        return;
-      }
-
-      if (order) {
-        console.log('📦 Order found:', order);
-
-        if (order.status_pembayaran === 'paid') {
-          setPaymentStatus('success');
-          setOrderId(order.id);
-          setCurrentStep(4);
-
-          // ✅ Kurangi stok setelah pembayaran berhasil
-          // Cek apakah stok sudah dikurangi sebelumnya (untuk mencegah double reduction)
-          try {
-            await updateProductStockAfterPayment(order.id);
-            console.log('✅ Stock updated after payment confirmation');
-          } catch (stockError) {
-            console.error('❌ Error updating stock:', stockError);
-            // Jangan block UI jika ada error update stok
-          }
-
-          // ✅ Simpan ringkasan order sebelum clear cart
-          saveOrderSummary();
-
-          // ✅ Clear cart dengan flag untuk mencegah duplikasi
-          if (!hasClearedCartRef.current) {
-            hasClearedCartRef.current = true;
-            clearCart();
-          }
-
-          toast.success('Pembayaran berhasil!');
-        }
-      }
-    } catch (error) {
-      console.error('❌ Error checking payment status:', error);
-    }
-  };
-
-  // ✅ NEW: Simpan ringkasan order
-  const saveOrderSummary = () => {
-    const summary = {
-      subtotal: calculateSubtotal(),
-      shipping: formData.biaya_pengiriman,
-      paymentFee: paymentFee,
-      total: calculateTotal(),
-      items: [...cartItems], // Salinan cart items
-      timestamp: new Date().toISOString()
-    };
-
-    setOrderSummary(summary);
-    // Simpan juga ke sessionStorage sebagai backup
-    sessionStorage.setItem('lastOrderSummary', JSON.stringify(summary));
-
-    // Simpan cart items sementara
-    setTempCartItems([...cartItems]);
-  };
-
-  // ✅ NEW: Load order summary dari storage jika ada
-  useEffect(() => {
-    const savedSummary = sessionStorage.getItem('lastOrderSummary');
-    if (savedSummary && currentStep === 4) {
-      try {
-        const parsed = JSON.parse(savedSummary);
-        setOrderSummary(parsed);
-      } catch (e) {
-        console.error('❌ Error parsing saved order summary:', e);
-      }
-    }
-  }, [currentStep]);
-
-  // Load payment channels
+  // Fetch payment channels
   useEffect(() => {
     const loadPaymentChannels = async () => {
       try {
-        console.log('🔄 Loading payment channels...');
         const response = await tripayService.getPaymentChannels();
-
-        if (response.success && response.data) {
+        if (response && response.data) {
           setPaymentChannels(response.data);
-          console.log('✅ Payment channels loaded:', response.data.length);
+        } else {
+          setPaymentChannels([]);
         }
       } catch (error) {
-        console.error('❌ Error loading payment channels:', error);
-        toast.error('Gagal memuat metode pembayaran');
+        console.error('Error loading payment channels:', error);
+        setPaymentChannels([]);
       }
     };
-
     loadPaymentChannels();
   }, []);
 
-  // Auto-fill form dari user profile - DISABLED (user harus mengisi sendiri)
-  // useEffect(() => {
-  //   if (user) {
-  //     console.log('🔄 Auto-filling form from user');
+  // Fetch user profile and auto-fill
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user?.id) return;
 
-  //     setFormData(prev => ({
-  //       ...prev,
-  //       email: user.email || '',
-  //       nama_lengkap: user.user_metadata?.full_name || '',
-  //       kota: user.user_metadata?.city || '',
-  //       alamat_pengiriman: user.user_metadata?.address || '',
-  //       kode_pos: user.user_metadata?.postal_code || '',
-  //       no_telepon: user.user_metadata?.phone || ''
-  //     }));
-  //   }
-  // }, [user]);
-
-  const formatOrderItems = () => {
-    return cartItems.map(item => ({
-      product_id: item.id,
-      quantity: item.quantity,
-      harga_satuan: item.harga
-    }));
-  };
-
-  const updateProductStockAfterPayment = async (orderId) => {
-    try {
-      console.log('🔄 Updating product stock for order:', orderId);
-
-      // 1. Ambil semua order items
-      const { data: orderItems, error: itemsError } = await supabase
-        .from('order_items')
-        .select('product_id, quantity')
-        .eq('order_id', orderId);
-
-      if (itemsError) {
-        console.error('❌ Error fetching order items:', itemsError);
-        throw itemsError;
-      }
-
-      if (!orderItems || orderItems.length === 0) {
-        console.warn('⚠️ No order items found for order:', orderId);
-        return;
-      }
-
-      console.log(`📦 Found ${orderItems.length} items to update stock`);
-
-      // 2. Kurangi stok untuk setiap produk
-      for (const item of orderItems) {
-        // Ambil stok saat ini
-        const { data: product, error: productError } = await supabase
-          .from('products')
-          .select('stok, nama_produk')
-          .eq('id', item.product_id)
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
           .single();
 
-        if (productError) {
-          console.error(`❌ Error fetching product ${item.product_id}:`, productError);
-          continue;
+        if (error) {
+          console.error('Error fetching profile:', error);
+          setShowAddressForm(true); // No profile, show form
+          return;
         }
 
-        if (!product) {
-          console.warn(`⚠️ Product ${item.product_id} not found`);
-          continue;
+        if (data) {
+          setUserProfile(data);
+          setFormData(prev => ({
+            ...prev,
+            email: user.email || prev.email,
+            nama_lengkap: data.full_name || '',
+            no_telepon: data.phone || '',
+            alamat_pengiriman: data.address || '',
+            kota: data.city || '',
+            provinsi: data.province || ''
+          }));
+
+          // Profile lengkap, hide form
+          if (data.full_name && data.address && data.city && data.phone) {
+            setShowAddressForm(false);
+            // Auto fetch shipping rates
+            if (data.city) {
+              await fetchShippingRates(data.city);
+            }
+          } else {
+            setShowAddressForm(true);
+          }
         }
-
-        // Pastikan stok tidak negatif dan cukup
-        if (product.stok < item.quantity) {
-          console.warn(`⚠️ Insufficient stock for ${product.nama_produk}. Available: ${product.stok}, Required: ${item.quantity}`);
-          // Tetap kurangi, tapi log warning
-        }
-
-        const newStock = Math.max(0, product.stok - item.quantity);
-
-        // Update stok
-        const { error: updateError } = await supabase
-          .from('products')
-          .update({ stok: newStock })
-          .eq('id', item.product_id);
-
-        if (updateError) {
-          console.error(`❌ Error updating stock for product ${item.product_id}:`, updateError);
-          throw updateError;
-        } else {
-          console.log(`✅ Stock updated for ${product.nama_produk}: ${product.stok} -> ${newStock} (reduced by ${item.quantity})`);
-        }
+      } catch (error) {
+        console.error('Error:', error);
+        setShowAddressForm(true);
       }
+    };
 
-      console.log('✅ Product stock updated successfully for order:', orderId);
-    } catch (error) {
-      console.error('❌ Error updating stock:', error);
-      throw error;
+    fetchUserProfile();
+  }, [user]);
+
+  const handleInputChange = async (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+
+    if (field === 'kota' && value.trim().length > 2) {
+      await fetchShippingRates(value.trim());
     }
   };
 
-  const handlePlaceOrder = async () => {
+  const fetchShippingRates = async (city) => {
     try {
-      setLoading(true);
+      setLoadingShippingRates(true);
+      const { data, error } = await supabase
+        .from('shipping_rates')
+        .select('*')
+        .eq('is_active', true)
+        .ilike('city', `%${city}%`)
+        .order('cost', { ascending: true });
+
+      if (error) {
+        setShippingRates([]);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        setShippingRates(data);
+        if (data[0].province) {
+          setFormData(prev => ({ ...prev, provinsi: data[0].province }));
+        }
+      } else {
+        setShippingRates([]);
+      }
+    } catch (error) {
+      setShippingRates([]);
+    } finally {
+      setLoadingShippingRates(false);
+    }
+  };
+
+  const calculateSubtotal = () => {
+    return cartItems.reduce((total, item) => total + (item.harga * item.quantity), 0);
+  };
+
+  const calculateTotal = () => {
+    return calculateSubtotal() + (formData.biaya_pengiriman || 0) + (paymentFee || 0);
+  };
+
+  const handlePlaceOrder = async () => {
+    // Validation
+    if (!formData.nama_lengkap || !formData.alamat_pengiriman || !formData.no_telepon) {
+      toast.error('Harap lengkapi informasi pengiriman');
+      setShowAddressForm(true);
+      return;
+    }
+
+    if (!formData.metode_pengiriman || !formData.biaya_pengiriman) {
+      toast.error('Pilih metode pengiriman');
+      return;
+    }
+
+    if (!selectedPaymentMethod) {
+      toast.error('Pilih metode pembayaran');
+      setShowPaymentModal(true);
+      return;
+    }
+
+    try {
       setIsSubmitting(true);
-      console.log('🔄 Starting order placement...');
 
-      if (!user) {
-        console.error('❌ No user found');
-        toast.error('Silakan login terlebih dahulu');
-        navigate('/login');
-        return;
-      }
-
-      if (!selectedPaymentMethod) {
-        console.error('❌ No payment method selected');
-        toast.error('Pilih metode pembayaran');
-        return;
-      }
-
-      console.log('👤 User ID:', user.id);
-      console.log('💳 Payment method:', selectedPaymentMethod);
-
-      const orderItems = formatOrderItems();
-      const totalHarga = calculateSubtotal();
-      const totalAmount = calculateTotal();
-
-      console.log('💰 Order totals:', {
-        subtotal: totalHarga,
-        shipping: formData.biaya_pengiriman,
-        paymentFee: paymentFee,
-        total: totalAmount,
-        items: orderItems.length
-      });
-
-      // ✅ Simpan ringkasan order SEBELUM clear cart
-      saveOrderSummary();
-
-      // Create order in database
+      // Create order in Supabase
       const orderData = {
         user_id: user.id,
-        total_harga: totalHarga,
-        biaya_pengiriman: formData.biaya_pengiriman || 0,
-        biaya_admin: paymentFee || 0,
+        total_harga: calculateTotal(),
+        biaya_pengiriman: formData.biaya_pengiriman,
+        biaya_admin: paymentFee,
         status_pembayaran: 'unpaid',
         status_pengiriman: 'pending',
         metode_pembayaran: `tripay_${selectedPaymentMethod}`,
@@ -325,22 +187,9 @@ const Checkout = () => {
         customer_name: formData.nama_lengkap,
         customer_email: formData.email,
         customer_phone: formData.no_telepon,
-        catatan: formData.catatan || null
+        kota: formData.kota,
+        provinsi: formData.provinsi
       };
-
-      // Validasi data sebelum insert
-      if (!orderData.user_id) {
-        throw new Error('User ID is required');
-      }
-      if (!orderData.total_harga || orderData.total_harga <= 0) {
-        throw new Error('Total harga must be greater than 0');
-      }
-      if (!orderData.alamat_pengiriman) {
-        throw new Error('Alamat pengiriman is required');
-      }
-
-      console.log('📝 Creating order with data:', orderData);
-      console.log('📝 Order data validation passed');
 
       const { data: order, error: orderError } = await supabase
         .from('orders')
@@ -348,293 +197,89 @@ const Checkout = () => {
         .select()
         .single();
 
-      if (orderError) {
-        console.error('❌ Database error:', orderError);
-        throw new Error(`Database error: ${orderError.message}`);
-      }
+      if (orderError) throw orderError;
 
-      if (!order) {
-        console.error('❌ No order returned from database');
-        throw new Error('Failed to create order - no data returned');
-      }
+      // Create order items
+      const orderItems = cartItems.map(item => ({
+        order_id: order.id,
+        product_id: item.id,
+        quantity: item.quantity,
+        harga_satuan: item.harga
+      }));
 
-      console.log('✅ Order created in database:', order.id);
-
-      // Insert order items dengan nama_produk
-      if (!cartItems || cartItems.length === 0) {
-        throw new Error('Cart items is empty');
-      }
-
-      const orderItemsData = cartItems.map((item, index) => {
-        if (!item.id) {
-          throw new Error(`Cart item at index ${index} has no product ID`);
-        }
-        if (!item.quantity || item.quantity <= 0) {
-          throw new Error(`Cart item at index ${index} has invalid quantity`);
-        }
-        if (!item.harga || item.harga <= 0) {
-          throw new Error(`Cart item at index ${index} has invalid price`);
-        }
-
-        return {
-          order_id: order.id,
-          product_id: item.id,
-          quantity: item.quantity,
-          harga_satuan: item.harga,
-          nama_produk: item.nama_produk || item.nama || 'Produk'
-        };
-      });
-
-      console.log('📦 Inserting order items:', orderItemsData);
-      console.log('📦 Order items count:', orderItemsData.length);
-      console.log('📦 Order ID:', order.id);
-      console.log('📦 Order items validation passed');
-
-      const { data: insertedItems, error: itemsError } = await supabase
+      const { error: itemsError } = await supabase
         .from('order_items')
-        .insert(orderItemsData)
-        .select();
+        .insert(orderItems);
 
-      if (itemsError) {
-        console.error('❌ Order items error:', itemsError);
-        console.error('❌ Error details:', JSON.stringify(itemsError, null, 2));
-        throw new Error(`Failed to insert order items: ${itemsError.message}`);
-      }
+      if (itemsError) throw itemsError;
 
-      if (!insertedItems || insertedItems.length === 0) {
-        console.error('❌ No order items returned after insert');
-        throw new Error('Failed to insert order items - no data returned');
-      }
+      // Update stock
+      for (const item of cartItems) {
+        const { data: product } = await supabase
+          .from('products')
+          .select('stok')
+          .eq('id', item.id)
+          .single();
 
-      console.log('✅ Order items created successfully:', insertedItems.length, 'items');
-      console.log('✅ Inserted order items:', insertedItems);
-
-      // ✅ VERIFIKASI: Cek apakah data benar-benar ter-insert
-      console.log('🔍 Verifying order and order items in database...');
-      const { data: verifyOrder, error: verifyOrderError } = await supabase
-        .from('orders')
-        .select('*, order_items(*)')
-        .eq('id', order.id)
-        .single();
-
-      if (verifyOrderError) {
-        console.error('⚠️ Warning: Could not verify order:', verifyOrderError);
-        console.error('⚠️ This might indicate a problem with RLS policies or database access');
-      } else {
-        console.log('✅ Verification successful - Order found:', verifyOrder.id);
-        console.log('✅ Order items count in database:', verifyOrder.order_items?.length || 0);
-
-        if (verifyOrder.order_items?.length !== orderItemsData.length) {
-          console.warn('⚠️ Warning: Order items count mismatch!');
-          console.warn('Expected:', orderItemsData.length, 'Found:', verifyOrder.order_items?.length);
-        } else {
-          console.log('✅ All order items verified successfully');
+        if (product) {
+          await supabase
+            .from('products')
+            .update({ stok: product.stok - item.quantity })
+            .eq('id', item.id);
         }
       }
 
-      // Create payment
-      const merchantRef = `ORDER-${order.id}-${Date.now()}`;
-
-      // Include shipping fee in order items for Tripay validation
-      const tripayOrderItems = [
-        // Product items
-        ...cartItems.map(item => ({
-          name: item.nama_produk.substring(0, 50),
-          price: item.harga,
-          quantity: item.quantity
-        })),
-        // Add shipping fee as separate item
-        {
-          name: `Biaya Pengiriman (${formData.metode_pengiriman.toUpperCase()})`,
-          price: formData.biaya_pengiriman,
-          quantity: 1
-        }
-      ];
-
-      // Add payment fee if exists
-      if (paymentFee > 0) {
-        tripayOrderItems.push({
-          name: `Biaya Admin Pembayaran`,
-          price: paymentFee,
-          quantity: 1
-        });
-      }
-
-      const transactionData = {
+      // Create Tripay transaction
+      const tripayData = {
         method: selectedPaymentMethod,
-        merchant_ref: merchantRef,
-        amount: totalAmount,
+        merchant_ref: `ORDER-${order.id}`,
+        amount: calculateTotal(),
         customer_name: formData.nama_lengkap,
         customer_email: formData.email,
         customer_phone: formData.no_telepon,
-        order_items: tripayOrderItems,
-        return_url: `${window.location.origin}/checkout?reference=${merchantRef}&status=success`,
-        expired_time: Math.floor(Date.now() / 1000) + (24 * 60 * 60)
+        order_items: cartItems.map(item => ({
+          name: item.nama_produk,
+          price: item.harga,
+          quantity: item.quantity
+        })),
+        callback_url: `${window.location.origin}/checkout`,
+        return_url: `${window.location.origin}/order-success`
       };
 
-      console.log('💰 Creating payment transaction...');
-      console.log('Transaction data:', {
-        method: transactionData.method,
-        amount: transactionData.amount,
-        itemsCount: transactionData.order_items.length
-      });
+      const paymentResponse = await tripayService.createTransaction(tripayData);
 
-      // Validate: order_items total must equal amount
-      const itemsTotal = transactionData.order_items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      console.log('💰 Validation:', {
-        itemsTotal: itemsTotal,
-        amount: transactionData.amount,
-        match: itemsTotal === transactionData.amount
-      });
-
-      if (itemsTotal !== transactionData.amount) {
-        console.error('❌ Amount mismatch!', { itemsTotal, amount: transactionData.amount });
-        throw new Error(`Amount validation failed: items=${itemsTotal}, amount=${transactionData.amount}`);
-      }
-
-      const tripayPayment = await tripayService.createTransaction(transactionData);
-
-      console.log('🔥 Tripay response:', tripayPayment);
-
-      if (!tripayPayment || !tripayPayment.success) {
-        console.error('❌ Payment creation failed:', tripayPayment);
-        throw new Error(tripayPayment?.message || 'Gagal membuat pembayaran');
-      }
-
-      console.log('✅ Payment created successfully');
-
-      // Update order with payment reference
-      console.log('📝 Updating order with payment reference...');
-
-      const { error: updateError } = await supabase
-        .from('orders')
-        .update({
-          tripay_reference: tripayPayment.data.reference,
-          tripay_checkout_url: tripayPayment.data.checkout_url || '#'
-        })
-        .eq('id', order.id);
-
-      if (updateError) {
-        console.error('⚠️ Warning: Failed to update order with payment reference:', updateError);
-        // Don't throw - continue with order
-      }
-
-      console.log('🎉 Order placement completed successfully!');
-      setOrderId(order.id);
-      setTripayReference(tripayPayment.data.reference);
-
-      if (tripayPayment.data.checkout_url && tripayPayment.data.checkout_url !== '#') {
-        console.log('🚀 Redirecting to payment page:', tripayPayment.data.checkout_url);
-        // ✅ Clear cart sebelum redirect ke Tripay
-        if (!hasClearedCartRef.current) {
-          hasClearedCartRef.current = true;
-          clearCart();
-        }
-        window.location.href = tripayPayment.data.checkout_url;
-      } else {
-        // Mock payment - langsung success
-        console.log('✅ Mock payment - showing success page');
-        setPaymentStatus('success');
-        setCurrentStep(4);
-        // ✅ Update order status di database untuk mock payment
+      if (paymentResponse && paymentResponse.success && paymentResponse.data) {
+        // Update order with Tripay reference
         await supabase
           .from('orders')
-          .update({ status_pembayaran: 'paid' })
+          .update({ tripay_reference: paymentResponse.data.reference })
           .eq('id', order.id);
 
-        await updateProductStockAfterPayment(order.id);
-        toast.success('Pembayaran berhasil!');
+        // Clear cart
+        clearCart();
+
+        // Redirect to payment (or handle mock checkout_url '#')
+        if (paymentResponse.data.checkout_url && paymentResponse.data.checkout_url !== '#') {
+          window.location.href = paymentResponse.data.checkout_url;
+        } else {
+          // If mock or no URL, redirect to success page
+          navigate('/order-success');
+        }
+      } else {
+        throw new Error(paymentResponse?.message || 'Gagal membuat transaksi pembayaran');
       }
 
     } catch (error) {
-      console.error('❌ ERROR in handlePlaceOrder:', {
-        message: error.message,
-        stack: error.stack,
-        error: error
-      });
-      toast.error(error.message || 'Terjadi kesalahan saat membuat pesanan');
-
-      // Reset flag jika error
-      hasClearedCartRef.current = false;
+      console.error('Error placing order:', error);
+      toast.error(error.message || 'Gagal membuat pesanan');
     } finally {
-      console.log('🔄 Resetting loading states');
-      setLoading(false);
       setIsSubmitting(false);
     }
   };
 
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleNextStep = () => {
-    console.log('➡️ Moving to next step. Current:', currentStep);
-
-    // Validasi Step 1
-    if (currentStep === 1) {
-      if (!formData.nama_lengkap || !formData.alamat_pengiriman || !formData.no_telepon) {
-        toast.error('Harap lengkapi informasi pembeli');
-        return;
-      }
-    }
-
-    // Validasi Step 2
-    if (currentStep === 2) {
-      if (!formData.metode_pengiriman) {
-        toast.error('Pilih metode pengiriman');
-        return;
-      }
-      if (formData.biaya_pengiriman <= 0) {
-        toast.error('Biaya pengiriman tidak valid');
-        return;
-      }
-    }
-
-    // Validasi Step 3
-    if (currentStep === 3 && !selectedPaymentMethod) {
-      toast.error('Pilih metode pembayaran');
-      return;
-    }
-
-    if (currentStep < 3) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      handlePlaceOrder();
-    }
-  };
-
-  const handlePrevStep = () => {
-    if (currentStep > 1 && currentStep < 4) {
-      console.log('⬅️ Moving to previous step');
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
-  const calculateSubtotal = () => {
-    // ✅ Gunakan tempCartItems jika ada, jika tidak gunakan cartItems
-    const itemsToCalculate = tempCartItems.length > 0 ? tempCartItems : cartItems;
-    return itemsToCalculate.reduce((total, item) => total + (item.harga * item.quantity), 0);
-  };
-
-  const calculateTotal = () => {
-    const subtotal = calculateSubtotal();
-    const shipping = formData.biaya_pengiriman > 0 ? formData.biaya_pengiriman : 0;
-    const fee = paymentFee > 0 ? paymentFee : 0;
-    return subtotal + shipping + fee;
-  };
-
-  // ✅ NEW: Fungsi untuk mendapatkan items untuk ditampilkan
-  const getDisplayItems = () => {
-    if (currentStep === 4 && orderSummary?.items) {
-      return orderSummary.items;
-    }
-    return cartItems;
-  };
-
-  // Empty cart check (kecuali step 4)
-  if (!cartItems || cartItems.length === 0 && currentStep !== 4) {
+  if (!cartItems || cartItems.length === 0) {
     return (
-      <div className="min-h-screen mt-16 flex items-center justify-center bg-gray-50 flex-col">
+      <div className="min-h-screen mt-16 flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="text-6xl mb-4">🛒</div>
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Keranjang Kosong</h2>
@@ -650,651 +295,431 @@ const Checkout = () => {
   }
 
   return (
-    <div className="min-h-screen mt-16 bg-gray-50 py-6">
-      <div className="max-w-4xl mx-auto px-4">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {currentStep === 4 ? 'Pembayaran Selesai' : 'Pembayaran'}
-          </h1>
-          <p className="text-gray-600">
-            {currentStep === 4
-              ? 'Terima kasih telah berbelanja'
-              : 'Selesaikan pembelian dalam 3 langkah mudah'
-            }
-          </p>
+    <div className="min-h-screen bg-gray-50 pt-20 pb-12">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">Checkout</h1>
         </div>
 
-        {/* Progress Steps */}
-        {currentStep < 4 && (
-          <div className="bg-white rounded-lg shadow p-4 mb-6">
-            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6">
-              {[1, 2, 3].map((step, index) => (
-                <div key={step} className="flex items-center">
-                  <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${currentStep >= step
-                    ? 'bg-green-600 border-green-600 text-white'
-                    : 'border-gray-300 text-gray-500'
-                    } font-semibold`}>
-                    {step}
-                  </div>
-                  <span className={`ml-2 font-medium ${currentStep >= step ? 'text-green-600' : 'text-gray-500'
-                    }`}>
-                    {step === 1 ? 'Info Pembeli' : step === 2 ? 'Pengiriman' : 'Pembayaran'}
-                  </span>
-                  {index < 2 && (
-                    <div className={`hidden sm:block w-12 h-0.5 mx-2 ${currentStep > step ? 'bg-green-600' : 'bg-gray-300'
-                      }`} />
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* LEFT: Form Section */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Alamat Pengiriman Card (Tokopedia Style) */}
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <span>📍</span> Alamat Pengiriman
+                </h2>
+                {!showAddressForm && userProfile && (
+                  <button
+                    onClick={() => setShowAddressForm(true)}
+                    className="text-green-600 hover:text-green-700 font-medium text-sm"
+                  >
+                    Ganti
+                  </button>
+                )}
+              </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-          <div className={currentStep === 4 ? 'lg:col-span-3' : 'lg:col-span-2'}>
-            {/* STEP 1: Info Pembeli */}
-            {currentStep === 1 && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold mb-4 text-gray-900">Informasi Pembeli</h2>
+              {!showAddressForm && formData.nama_lengkap && formData.alamat_pengiriman ? (
+                // Display saved address (like Tokopedia)
+                <div className="border border-green-200 bg-green-50 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="font-bold text-gray-900">{formData.nama_lengkap}</p>
+                        <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded-full">Utama</span>
+                      </div>
+                      <p className="text-sm text-gray-700 font-medium mb-1">{formData.no_telepon}</p>
+                      <p className="text-sm text-gray-600">
+                        {formData.alamat_pengiriman}<br />
+                        {formData.kota}, {formData.provinsi} {formData.kode_pos}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                // Show form for editing
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-700">Email</label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => handleInputChange('email', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-green-500 transition-colors"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-700">Nama Lengkap</label>
-                    <input
-                      type="text"
-                      value={formData.nama_lengkap}
-                      onChange={(e) => handleInputChange('nama_lengkap', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-green-500 transition-colors"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-700">No. Telepon</label>
-                    <input
-                      type="tel"
-                      value={formData.no_telepon}
-                      onChange={(e) => handleInputChange('no_telepon', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-green-500 transition-colors"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-700">Kota</label>
-                    <input
-                      type="text"
-                      value={formData.kota}
-                      onChange={(e) => handleInputChange('kota', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-green-500 transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-700">Alamat Pengiriman</label>
-                    <textarea
-                      value={formData.alamat_pengiriman}
-                      onChange={(e) => handleInputChange('alamat_pengiriman', e.target.value)}
-                      rows="3"
-                      className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-green-500 transition-colors"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-700">Kode Pos</label>
-                    <input
-                      type="text"
-                      value={formData.kode_pos}
-                      onChange={(e) => handleInputChange('kode_pos', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-green-500 transition-colors"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* STEP 2: Metode Pengiriman */}
-            {currentStep === 2 && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold mb-2 text-gray-900">Metode Pengiriman</h2>
-                <p className="text-sm text-gray-600 mb-4">
-                  Pilih metode pengiriman yang sesuai dengan kebutuhan Anda
-                </p>
-
-                <div className="space-y-3">
-                  {[
-                    { value: 'jne', label: 'JNE Reguler', cost: 15000, estimate: '2-3 hari', icon: '📦' },
-                    { value: 'jne_oke', label: 'JNE OKE', cost: 12000, estimate: '3-5 hari', icon: '📮' },
-                    { value: 'tiki', label: 'TIKI Reguler', cost: 18000, estimate: '1-2 hari', icon: '🚚' },
-                    { value: 'pos', label: 'POS Indonesia', cost: 10000, estimate: '4-7 hari', icon: '📪' }
-                  ].map((option) => (
-                    <div
-                      key={option.value}
-                      className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-all ${formData.metode_pengiriman === option.value
-                        ? 'border-green-500 bg-green-50 shadow-md'
-                        : 'border-gray-200 bg-white hover:border-green-300'
-                        }`}
-                      onClick={() => {
-                        handleInputChange('metode_pengiriman', option.value);
-                        handleInputChange('biaya_pengiriman', option.cost);
-                        toast.success(`${option.label} dipilih - ${formatCurrency(option.cost)}`);
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="radio"
-                          checked={formData.metode_pengiriman === option.value}
-                          onChange={() => { }}
-                          className="mr-2 w-4 h-4"
-                        />
-                        <span className="text-2xl">{option.icon}</span>
-                        <div>
-                          <p className="font-semibold text-gray-900">{option.label}</p>
-                          <p className="text-sm text-gray-500">
-                            Estimasi: <span className="font-medium">{option.estimate}</span>
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-lg text-green-600">{formatCurrency(option.cost)}</p>
-                      </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Nama Lengkap *</label>
+                      <input
+                        type="text"
+                        value={formData.nama_lengkap}
+                        onChange={(e) => handleInputChange('nama_lengkap', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-green-500"
+                        required
+                      />
                     </div>
-                  ))}
-                </div>
 
-                {/* Info pengiriman */}
-                <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <div className="flex items-start gap-2">
-                    <span className="text-blue-600 text-lg">ℹ️</span>
                     <div>
-                      <p className="text-blue-900 font-semibold text-sm mb-1">
-                        Pengiriman Tanaman
-                      </p>
-                      <p className="text-blue-700 text-xs">
-                        Kami mengemas tanaman dengan aman untuk memastikan kondisi terbaik saat tiba di tangan Anda
-                      </p>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Nomor Telepon *</label>
+                      <input
+                        type="tel"
+                        value={formData.no_telepon}
+                        onChange={(e) => handleInputChange('no_telepon', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-green-500"
+                        placeholder="08xx"
+                        required
+                      />
                     </div>
-                  </div>
-                </div>
-              </div>
-            )}
 
-            {/* STEP 3: Metode Pembayaran */}
-            {currentStep === 3 && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-semibold mb-2 text-gray-900">Metode Pembayaran</h2>
-                <p className="text-sm text-gray-600 mb-4">
-                  Pilih metode pembayaran yang Anda inginkan
-                </p>
-
-                {paymentChannels.length > 0 ? (
-                  <PaymentMethodAccordion
-                    channels={paymentChannels}
-                    selectedMethod={selectedPaymentMethod}
-                    onSelectMethod={setSelectedPaymentMethod}
-                    onFeeChange={setPaymentFee}
-                  />
-                ) : (
-                  <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Memuat metode pembayaran...</p>
-                  </div>
-                )}
-
-
-                {/* Info Tripay */}
-                <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <div className="flex items-start">
-                    <span className="text-blue-600 mr-2 text-lg">🔒</span>
                     <div>
-                      <p className="text-blue-900 font-semibold text-sm mb-1">
-                        Pembayaran Aman dengan Tripay
-                      </p>
-                      <p className="text-blue-700 text-xs">
-                        Payment Gateway resmi dan terpercaya di Indonesia
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* STEP 4: Success */}
-            {currentStep === 4 && paymentStatus === 'success' && (
-              <div className="bg-white rounded-lg shadow p-6 text-center">
-                <div className="text-6xl mb-4">🎉</div>
-                <h2 className="text-2xl font-bold text-green-600 mb-4">Pembayaran Berhasil!</h2>
-                {orderId ? (
-                  <p className="text-gray-600 mb-2">Order ID: <strong>#{orderId}</strong></p>
-                ) : (
-                  <p className="text-gray-600 mb-2 text-sm italic">Memuat Order ID...</p>
-                )}
-                {tripayReference && (
-                  <p className="text-gray-600 mb-4">Reference: <strong>{tripayReference}</strong></p>
-                )}
-
-                {/* Order Summary on Success */}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mt-6 mb-6 text-left max-w-md mx-auto">
-                  <h3 className="font-semibold text-gray-900 mb-3 text-center">Ringkasan Pembayaran</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Subtotal Produk</span>
-                      <span className="font-medium text-gray-900">
-                        {formatCurrency(orderSummary?.subtotal || calculateSubtotal())}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Biaya Pengiriman</span>
-                      <span className="font-medium text-gray-900">
-                        {formatCurrency(orderSummary?.shipping || formData.biaya_pengiriman)}
-                      </span>
-                    </div>
-                    {(orderSummary?.paymentFee || paymentFee) > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Biaya Admin</span>
-                        <span className="font-medium text-amber-600">
-                          {formatCurrency(orderSummary?.paymentFee || paymentFee)}
-                        </span>
-                      </div>
-                    )}
-                    <div className="border-t border-gray-300 pt-2 mt-2">
-                      <div className="flex justify-between font-bold text-base">
-                        <span className="text-gray-900">Total Dibayar</span>
-                        <span className="text-green-600 text-lg">
-                          {formatCurrency(orderSummary?.total || calculateTotal())}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Items purchased list with images */}
-                {orderSummary?.items && orderSummary.items.length > 0 && (
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 text-left max-w-md mx-auto">
-                    <h4 className="font-semibold text-gray-900 mb-3">Produk yang dibeli:</h4>
-                    <div className="space-y-3 max-h-40 overflow-y-auto">
-                      {orderSummary.items.map((item, index) => (
-                        <div key={index} className="flex items-center gap-3 text-sm">
-                          {/* Product Image */}
-                          <div className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
-                            {item.gambar_url || item.image_url ? (
-                              <img
-                                src={item.gambar_url || item.image_url}
-                                alt={item.nama_produk}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  e.target.style.display = 'none';
-                                  e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-xl">🌱</div>';
-                                }}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-xl">
-                                🌱
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            <span className="text-gray-600 truncate block">
-                              {item.nama_produk} × {item.quantity}
-                            </span>
-                          </div>
-
-                          <span className="font-medium text-gray-900 whitespace-nowrap">
-                            {formatCurrency(item.harga * item.quantity)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex gap-4 justify-center mt-6 flex-wrap">
-                  <button
-                    onClick={() => {
-                      // Clear session storage
-                      sessionStorage.removeItem('lastOrderSummary');
-                      navigate('/orders');
-                    }}
-                    className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-semibold transition-colors"
-                  >
-                    📦 Lihat Pesanan
-                  </button>
-                  <button
-                    onClick={() => {
-                      // Clear session storage
-                      sessionStorage.removeItem('lastOrderSummary');
-                      window.location.href = '/orders';
-                    }}
-                    className="border border-green-600 text-green-600 px-6 py-3 rounded-lg hover:bg-green-50 font-semibold transition-colors"
-                  >
-                    🛍️ Lanjut Belanja
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Order Summary - only show in steps 1-3 */}
-          {currentStep < 4 && (
-            <div className="bg-white rounded-lg shadow p-6 h-fit">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900">Ringkasan Pesanan</h2>
-
-              {/* Cart Items List with Images */}
-              <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
-                {getDisplayItems().map((item) => (
-                  <div key={item.id} className="flex items-center gap-3">
-                    {/* Product Image */}
-                    <div className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
-                      {item.gambar_url || item.image_url ? (
-                        <img
-                          src={item.gambar_url || item.image_url}
-                          alt={item.nama_produk}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-2xl">🌱</div>';
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-2xl">
-                          🌱
-                        </div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Kota *</label>
+                      <input
+                        type="text"
+                        value={formData.kota}
+                        onChange={(e) => handleInputChange('kota', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-green-500"
+                        placeholder="Contoh: Surabaya"
+                        required
+                      />
+                      {loadingShippingRates && (
+                        <p className="text-xs text-blue-600 mt-1">⏳ Men cari tarif ongkir...</p>
                       )}
                     </div>
 
-                    {/* Product Info */}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm text-gray-900 truncate">{item.nama_produk}</p>
-                      <p className="text-xs text-gray-500">{formatCurrency(item.harga)} × {item.quantity}</p>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Provinsi</label>
+                      <input
+                        type="text"
+                        value={formData.provinsi}
+                        onChange={(e) => handleInputChange('provinsi', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-green-500"
+                      />
                     </div>
 
-                    {/* Product Total */}
-                    <p className="font-semibold text-sm text-gray-900 whitespace-nowrap">
-                      {formatCurrency(item.harga * item.quantity)}
-                    </p>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Kode Pos</label>
+                      <input
+                        type="text"
+                        value={formData.kode_pos}
+                        onChange={(e) => handleInputChange('kode_pos', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-green-500"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Alamat Lengkap *</label>
+                      <textarea
+                        value={formData.alamat_pengiriman}
+                        onChange={(e) => handleInputChange('alamat_pengiriman', e.target.value)}
+                        rows="3"
+                        className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-green-500"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {!showAddressForm && (
+                    <button
+                      onClick={() => setShowAddressForm(false)}
+                      className="text-gray-600 hover:text-gray-800 text-sm"
+                    >
+                      ← Kembali
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Product & Shipping Card (Tokopedia Style) */}
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">✓</span>
+                </div>
+                <h3 className="font-bold text-gray-900">{user?.email?.split('@')[0] || 'Toko'}</h3>
+              </div>
+
+              {/* Product Items */}
+              <div className="space-y-4 mb-4">
+                {cartItems.map((item) => (
+                  <div key={item.id} className="flex gap-4">
+                    <img
+                      src={item.gambar_url}
+                      alt={item.nama_produk}
+                      className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 text-sm line-clamp-2">{item.nama_produk}</p>
+                      <p className="text-xs text-gray-500 mt-1">{item.quantity} barang</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="font-bold text-gray-900">{formatCurrency(item.harga * item.quantity)}</p>
+                    </div>
                   </div>
                 ))}
               </div>
 
-              {/* Subtotal, Shipping, Total */}
-              <div className="border-t pt-4 space-y-2 border-gray-200">
-                <div className="flex justify-between text-sm text-gray-700">
-                  <span>Subtotal</span>
-                  <span>{formatCurrency(calculateSubtotal())}</span>
-                </div>
+              {/* Shipping Selector (Clickable to open dropdown) */}
+              <div className="border-t border-gray-200 pt-4 mb-4 relative">
+                <button
+                  onClick={() => setShowShippingModal(!showShippingModal)}
+                  className="w-full flex items-center justify-between p-3 border border-gray-300 rounded-lg hover:border-green-500 transition-colors text-left"
+                >
+                  <div className="flex-1">
+                    {formData.metode_pengiriman ? (
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Opsi Pengiriman</p>
+                        <p className="font-semibold text-gray-900">
+                          {shippingRates.find(r => `db_${r.id}` === formData.metode_pengiriman)?.courier ||
+                            (['def-1', 'def-2', 'def-3'].includes(formData.metode_pengiriman) ?
+                              (formData.metode_pengiriman === 'def-1' ? '📦 Reguler' :
+                                formData.metode_pengiriman === 'def-2' ? '💰 Ekonomi' : '⚡ Express') :
+                              'Pilih Pengiriman')}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          {formatCurrency(formData.biaya_pengiriman)}
+                          {shippingRates.find(r => `db_${r.id}` === formData.metode_pengiriman)?.estimated_days &&
+                            ` • ${shippingRates.find(r => `db_${r.id}` === formData.metode_pengiriman)?.estimated_days}`}
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-sm text-gray-500">Pilih Opsi Pengiriman</p>
+                        <p className="text-xs text-gray-400">Klik untuk memilih</p>
+                      </div>
+                    )}
+                  </div>
+                  <svg
+                    className={`w-5 h-5 text-gray-400 transition-transform ${showShippingModal ? 'rotate-90' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
 
-                {/* Shipping Info based on step */}
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-700">Biaya Pengiriman</span>
-                  {currentStep === 1 ? (
-                    <span className="text-xs text-amber-600 italic font-medium">
-                      Pilih di step berikutnya →
-                    </span>
-                  ) : currentStep >= 2 && formData.biaya_pengiriman > 0 ? (
-                    <span className="text-gray-700 font-medium">
-                      {formatCurrency(formData.biaya_pengiriman)}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-red-500 italic">
-                      Belum dipilih
-                    </span>
-                  )}
-                </div>
+                {/* Dropdown Menu */}
+                {showShippingModal && (
+                  <>
+                    {/* Backdrop to close dropdown when clicking outside */}
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setShowShippingModal(false)}
+                    />
 
-                {/* Payment Fee Info - Similar to shipping */}
-                {currentStep === 3 ? (
-                  paymentFee > 0 ? (
-                    <div className="flex justify-between text-sm text-gray-700">
-                      <span>Biaya Admin</span>
-                      <span className="font-medium">{formatCurrency(paymentFee)}</span>
+                    <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-20 max-h-96 overflow-y-auto">
+                      {formData.kota.length > 2 ? (
+                        <div className="p-3 space-y-2">
+                          {(shippingRates.length > 0 ? shippingRates : [
+                            { id: 'def-1', courier: '📦 Reguler', cost: 15000, estimated_days: '2-3 hari' },
+                            { id: 'def-2', courier: '💰 Ekonomi', cost: 10000, estimated_days: '3-5 hari' },
+                            { id: 'def-3', courier: '⚡ Express', cost: 25000, estimated_days: '1-2 hari' }
+                          ]).map((option) => {
+                            const isFromDB = option.id && !option.id.toString().startsWith('def');
+                            const optionValue = isFromDB ? `db_${option.id}` : option.id;
+                            const isSelected = formData.metode_pengiriman === optionValue;
+
+                            return (
+                              <div
+                                key={option.id}
+                                className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all ${isSelected
+                                  ? 'bg-green-50 border-2 border-green-500'
+                                  : 'border-2 border-transparent hover:bg-gray-50'
+                                  }`}
+                                onClick={() => {
+                                  handleInputChange('metode_pengiriman', optionValue);
+                                  handleInputChange('biaya_pengiriman', parseFloat(option.cost));
+                                  setShowShippingModal(false);
+                                  toast.success(`${option.courier} dipilih`);
+                                }}
+                              >
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-semibold text-gray-900 text-sm">
+                                      {option.courier}
+                                    </p>
+                                    {isFromDB && (
+                                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                                        Khusus {formData.kota}
+                                      </span>
+                                    )}
+                                    {isSelected && (
+                                      <span className="text-green-600 ml-auto">✓</span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-gray-500 mt-1">Estimasi: {option.estimated_days}</p>
+                                </div>
+                                <p className="font-bold text-green-600 ml-3">{formatCurrency(option.cost)}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="p-6 text-center">
+                          <p className="text-sm text-gray-500">Lengkapi alamat untuk melihat opsi pengiriman</p>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-700">Biaya Admin</span>
-                      <span className="text-xs text-amber-600 italic font-medium">
-                        Pilih metode pembayaran →
-                      </span>
-                    </div>
-                  )
-                ) : currentStep > 3 && paymentFee > 0 && (
-                  <div className="flex justify-between text-sm text-gray-700">
-                    <span>Biaya Admin</span>
-                    <span className="font-medium">{formatCurrency(paymentFee)}</span>
-                  </div>
+                  </>
                 )}
-
-                {/* Selected shipping method display */}
-                {currentStep >= 2 && formData.metode_pengiriman && (
-                  <div className="bg-green-50 border border-green-200 rounded p-2 text-xs">
-                    <p className="text-green-800 font-medium">
-                      ✓ {formData.metode_pengiriman.toUpperCase().replace('_', ' ')}
-                    </p>
-                  </div>
-                )}
-
-                {/* Selected payment method display */}
-                {currentStep >= 3 && selectedPaymentMethod && (
-                  <div className="bg-green-50 border border-green-200 rounded p-2 text-xs">
-                    <p className="text-green-800 font-medium">
-                      ✓ {selectedPaymentMethod.toUpperCase().replace('_', ' ')}
-                    </p>
-                  </div>
-                )}
-
-                <div className="flex justify-between font-bold text-base pt-2 border-t border-gray-200">
-                  <span className="text-gray-900">Total</span>
-                  <span className="text-green-600 text-lg">{formatCurrency(calculateTotal())}</span>
-                </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="mt-6 space-y-3">
-                {currentStep > 1 && (
-                  <button
-                    onClick={handlePrevStep}
-                    disabled={isSubmitting}
-                    className="w-full bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
-                  >
-                    ← Kembali
-                  </button>
+              {/* Notes Field */}
+              <div>
+                <label className="flex items-center justify-between text-sm font-medium text-gray-700 mb-2">
+                  <span>💬 Kasih Catatan</span>
+                  <span className="text-xs text-gray-400">{(formData.catatan || '').length}/200</span>
+                </label>
+                <textarea
+                  value={formData.catatan || ''}
+                  onChange={(e) => {
+                    if (e.target.value.length <= 200) {
+                      handleInputChange('catatan', e.target.value);
+                    }
+                  }}
+                  rows="3"
+                  maxLength={200}
+                  className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                  placeholder="Tulis catatan untuk penjual (opsional)"
+                />
+              </div>
+            </div>
+
+          </div>
+
+          {/* RIGHT: Payment & Summary */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-xl shadow-sm p-6 sticky top-24 space-y-6">
+              {/* Payment Method Section */}
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 mb-4">Metode Pembayaran</h2>
+
+                {paymentChannels.length > 0 ? (
+                  <div className="space-y-3">
+                    {selectedPaymentMethod && (
+                      <div className="border-2 border-green-500 bg-green-50 rounded-lg p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            {paymentChannels.find(c => c.code === selectedPaymentMethod)?.icon_url && (
+                              <img
+                                src={paymentChannels.find(c => c.code === selectedPaymentMethod)?.icon_url}
+                                alt=""
+                                className="w-10 h-10 object-contain"
+                              />
+                            )}
+                            <div>
+                              <p className="font-semibold text-gray-900 text-sm">
+                                {paymentChannels.find(c => c.code === selectedPaymentMethod)?.name || 'Payment'}
+                              </p>
+                              {paymentFee > 0 && (
+                                <p className="text-xs text-gray-600">Biaya: {formatCurrency(paymentFee)}</p>
+                              )}
+                            </div>
+                          </div>
+                          <span className="text-green-600 font-bold">✓</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => setShowPaymentModal(!showPaymentModal)}
+                      className="w-full py-3 px-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors text-sm font-medium text-gray-700"
+                    >
+                      {showPaymentModal ? '▼' : '+'} Bayar {formatCurrency(calculateTotal())} pakai metode lain
+                    </button>
+
+                    {showPaymentModal && (
+                      <div className="border border-gray-200 rounded-lg p-3 max-h-96 overflow-y-auto space-y-2">
+                        {Object.entries(paymentChannels.reduce((acc, channel) => {
+                          const group = channel.group || 'Lainnya';
+                          if (!acc[group]) acc[group] = [];
+                          acc[group].push(channel);
+                          return acc;
+                        }, {})).map(([groupName, channels]) => (
+                          <div key={groupName} className="space-y-2">
+                            <p className="text-xs font-semibold text-gray-500 uppercase px-2">{groupName}</p>
+                            {channels.map((channel) => (
+                              <div
+                                key={channel.code}
+                                onClick={() => {
+                                  setSelectedPaymentMethod(channel.code);
+                                  setPaymentFee(channel.total_fee?.flat || 0);
+                                  setShowPaymentModal(false);
+                                  toast.success(`${channel.name} dipilih`);
+                                }}
+                                className={`p-3 rounded-lg cursor-pointer transition-all border ${selectedPaymentMethod === channel.code
+                                  ? 'border-green-500 bg-green-50'
+                                  : 'border-gray-100 hover:border-green-300 hover:bg-gray-50'
+                                  }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  {channel.icon_url && (
+                                    <img src={channel.icon_url} alt={channel.name} className="w-10 h-10 object-contain" />
+                                  )}
+                                  <div className="flex-1">
+                                    <p className="font-medium text-sm text-gray-900">{channel.name}</p>
+                                    {channel.total_fee?.flat > 0 && (
+                                      <p className="text-xs text-gray-500">Biaya: {formatCurrency(channel.total_fee.flat)}</p>
+                                    )}
+                                  </div>
+                                  {selectedPaymentMethod === channel.code && (
+                                    <span className="text-green-600">✓</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-2"></div>
+                    <p className="text-sm text-gray-600">Memuat metode pembayaran...</p>
+                  </div>
                 )}
-                <button
-                  onClick={handleNextStep}
-                  disabled={isSubmitting}
-                  className="w-full bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Memproses...
-                    </span>
-                  ) : currentStep === 3 ? (
-                    'Buat Pesanan 🛒'
-                  ) : (
-                    'Lanjutkan →'
+              </div>
+
+              {/* Summary Section */}
+              <div className="border-t border-gray-200 pt-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Ringkasan Belanja</h3>
+
+                <div className="space-y-2 mb-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Total Harga ({cartItems.length} barang)</span>
+                    <span className="font-medium">{formatCurrency(calculateSubtotal())}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Total Ongkir</span>
+                    <span className="font-medium">{formatCurrency(formData.biaya_pengiriman || 0)}</span>
+                  </div>
+                  {paymentFee > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Biaya Layanan</span>
+                      <span className="font-medium">{formatCurrency(paymentFee)}</span>
+                    </div>
                   )}
+                </div>
+
+                <div className="border-t border-gray-200 pt-3 flex justify-between items-center mb-4">
+                  <span className="font-bold text-gray-900">Total Tagihan</span>
+                  <span className="font-bold text-green-600 text-xl">{formatCurrency(calculateTotal())}</span>
+                </div>
+
+                <button
+                  onClick={handlePlaceOrder}
+                  disabled={isSubmitting || !formData.metode_pengiriman || !selectedPaymentMethod}
+                  className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-bold transition-colors"
+                >
+                  {isSubmitting ? 'Memproses...' : 'Bayar Sekarang'}
                 </button>
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
-  );
-};
-
-// Payment Method Accordion Component
-const PaymentMethodAccordion = ({ channels, selectedMethod, onSelectMethod, onFeeChange }) => {
-  const [openCategories, setOpenCategories] = React.useState({
-    'Virtual Account': true,
-    'E-Wallet': false,
-    'Convenience Store': false,
-    'QR Code': false
-  });
-
-  // Group channels by category
-  const groupedChannels = channels.reduce((acc, channel) => {
-    const category = channel.group || 'Lainnya';
-    if (!acc[category]) {
-      acc[category] = [];
-    }
-    acc[category].push(channel);
-    return acc;
-  }, {});
-
-  const toggleCategory = (category) => {
-    setOpenCategories(prev => ({
-      ...prev,
-      [category]: !prev[category]
-    }));
-  };
-
-  const getCategoryIcon = (category) => {
-    const icons = {
-      'Virtual Account': '🏦',
-      'E-Wallet': '📱',
-      'Convenience Store': '🏪',
-      'QR Code': '📲',
-      'Lainnya': '💳'
-    };
-    return icons[category] || '💳';
-  };
-
-  const getCategoryColor = (category) => {
-    const colors = {
-      'Virtual Account': 'bg-blue-50 border-blue-200',
-      'E-Wallet': 'bg-purple-50 border-purple-200',
-      'Convenience Store': 'bg-orange-50 border-orange-200',
-      'QR Code': 'bg-green-50 border-green-200',
-      'Lainnya': 'bg-gray-50 border-gray-200'
-    };
-    return colors[category] || 'bg-gray-50 border-gray-200';
-  };
-
-  // Calculate fee for a channel
-  const calculateChannelFee = (channel) => {
-    const flatFee = channel.total_fee?.flat || 0;
-    const percentFee = channel.total_fee?.percent || 0;
-    return { flat: flatFee, percent: percentFee };
-  };
-
-  // Handle payment method selection with fee
-  const handleSelectMethod = (channel) => {
-    const fee = calculateChannelFee(channel);
-    const totalFee = fee.flat; // For now, we'll use flat fee
-
-    onSelectMethod(channel.code);
-    onFeeChange(totalFee);
-  };
-
-  return (
-    <div className="space-y-3">
-      {Object.entries(groupedChannels).map(([category, categoryChannels]) => (
-        <div
-          key={category}
-          className={`border rounded-lg overflow-hidden ${getCategoryColor(category)}`}>
-          {/* Category Header - Clickable */}
-          <button
-            type="button"
-            onClick={() => toggleCategory(category)}
-            className="w-full flex items-center justify-between p-4 hover:bg-opacity-70 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">{getCategoryIcon(category)}</span>
-              <div className="text-left">
-                <h3 className="font-semibold text-gray-900">{category}</h3>
-                <p className="text-xs text-gray-600">{categoryChannels.length} metode tersedia</p>
-              </div>
-            </div>
-            <svg
-              className={`w-5 h-5 text-gray-600 transition-transform duration-200 ${openCategories[category] ? 'rotate-180' : ''
-                }`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {/* Category Content - Collapsible */}
-          {openCategories[category] && (
-            <div className="px-2 pb-2 space-y-2">
-              {categoryChannels.map((channel) => {
-                const fee = calculateChannelFee(channel);
-
-                return (
-                  <div
-                    key={channel.code}
-                    className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-all ${selectedMethod === channel.code
-                      ? 'border-green-500 bg-green-50 shadow-md'
-                      : 'border-gray-200 bg-white hover:border-green-300'
-                      }`}
-                    onClick={() => handleSelectMethod(channel)}
-                  >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <input
-                        type="radio"
-                        checked={selectedMethod === channel.code}
-                        onChange={() => { }}
-                        className="w-4 h-4 text-green-600"
-                      />
-
-                      {/* Payment Icon */}
-                      <div className="w-12 h-12 flex items-center justify-center bg-white rounded border border-gray-200 flex-shrink-0">
-                        {channel.icon_url ? (
-                          <img
-                            src={channel.icon_url}
-                            alt={channel.name}
-                            className="max-w-full max-h-full object-contain p-1"
-                            loading="lazy"
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                              e.target.parentElement.innerHTML = '<span class="text-xl">💳</span>';
-                            }}
-                          />
-                        ) : (
-                          <span className="text-2xl">💳</span>
-                        )}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-900">{channel.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {channel.group}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Fee Display - Similar to Step 2 */}
-                    <div className="text-right ml-3 flex-shrink-0">
-                      {fee.flat > 0 ? (
-                        <p className="font-bold text-lg text-green-600">{formatCurrency(fee.flat)}</p>
-                      ) : fee.percent > 0 ? (
-                        <p className="font-bold text-lg text-green-600">{fee.percent}%</p>
-                      ) : (
-                        <p className="font-bold text-lg text-green-600">Gratis</p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      ))
-      }
-    </div >
   );
 };
 

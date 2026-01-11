@@ -9,6 +9,8 @@ import { toast } from "react-toastify";
 import ProductForm from "../components/ProductForm";
 import AdminOrders from "./AdminOrders";
 import AdminUsers from "./AdminUsers";
+import AdminAnalytics from "./AdminAnalytics"; // ✅ NEW
+import AdminShipping from "./AdminShipping"; // ✅ NEW
 
 const AdminDashboard = () => {
   const { user, logout, isAdmin, loading: authLoading } = useAuth(); // ✅ Get loading state
@@ -469,6 +471,30 @@ const AdminDashboard = () => {
             <span className="text-xl">👥</span>
             Pengguna
           </button>
+
+          {/* ✅ NEW: Analytics Tab */}
+          <button
+            onClick={() => setActiveTab("analytics")}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "analytics"
+              ? "bg-green-50 text-green-700 shadow-sm translate-x-1"
+              : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+              }`}
+          >
+            <span className="text-xl">📊</span>
+            Analitik
+          </button>
+
+          {/* ✅ NEW: Shipping Tab */}
+          <button
+            onClick={() => setActiveTab("shipping")}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "shipping"
+              ? "bg-green-50 text-green-700 shadow-sm translate-x-1"
+              : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+              }`}
+          >
+            <span className="text-xl">🚚</span>
+            Pengiriman
+          </button>
         </nav>
 
         <div className="p-4 border-t border-gray-100 space-y-2">
@@ -519,7 +545,9 @@ const AdminDashboard = () => {
               {activeTab === "products" ? "Manajemen Produk" :
                 activeTab === "orders" ? "Daftar Pesanan" :
                   activeTab === "users" ? "Data Pengguna" :
-                    activeTab === "categories" ? "Kategori" : "Dashboard"}
+                    activeTab === "analytics" ? "Dashboard Analitik" :
+                      activeTab === "shipping" ? "Manajemen Pengiriman" :
+                        activeTab === "categories" ? "Kategori" : "Dashboard"}
             </h2>
             <p className="text-sm text-gray-500">
               Selamat datang kembali, Admin
@@ -539,6 +567,8 @@ const AdminDashboard = () => {
             {/* CONTENT LOGIC */}
             {activeTab === "orders" && <AdminOrders />}
             {activeTab === "users" && <AdminUsers />}
+            {activeTab === "analytics" && <AdminAnalytics />} {/* ✅ NEW */}
+            {activeTab === "shipping" && <AdminShipping />} {/* ✅ NEW */}
             {activeTab === "categories" && (
               <div className="flex flex-col items-center justify-center h-64 bg-white rounded-2xl shadow-sm border border-gray-100">
                 <span className="text-6xl mb-4">🚧</span>

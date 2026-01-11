@@ -21,6 +21,7 @@ import Profil from './pages/Profile'
 import AdminDashboard from './components/AdminDashboard'
 import ProductForm from './components/ProductForm'
 import DebugPage from './pages/DebugPage'
+import OrderSuccess from './pages/OrderSuccess'
 
 function App() {
   return (
@@ -50,6 +51,7 @@ function App() {
                 <Route path="/admin" element={<AdminDashboard />} />
                 <Route path="/admin/add-product" element={<ProductForm />} />
                 <Route path="/debug" element={<DebugPage />} />
+                <Route path="/order-success" element={<OrderSuccess />} />
               </Routes>
             </main>
             <Footer />

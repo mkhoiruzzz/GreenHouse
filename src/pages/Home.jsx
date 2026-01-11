@@ -9,84 +9,50 @@ import { useCart } from '../context/CartContext';
 const Home = () => {
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
-  const [visibleItems, setVisibleItems] = useState(4);
 
+  // Cart state for scroll behavior
   const { cartItems } = useCart();
   const prevCartCountRef = useRef(0);
-  const sliderRef = useRef(null);
 
-  // Categories data
+  // Categories Data - Updated with richer visuals
   const categories = [
     {
       id: 1,
-      name: 'Benih-Benih',
-      image: 'https://ycwcbxbytdtmluzalofn.supabase.co/storage/v1/object/public/products/benih.png',
-      description: 'Benih tanaman',
+      name: 'Benih Unggul',
+      image: 'https://images.unsplash.com/photo-1594967396001-f2f518e26895?auto=format&fit=crop&w=500&q=80',
+      description: 'Mulai kebun impian Anda',
       link: '/products?category=benih',
-      gradient: 'from-green-400 to-emerald-600',
-      iconBg: 'bg-green-100',
-      borderColor: 'border-green-200 hover:border-green-400'
+      color: 'bg-green-50',
+      icon: '🌱'
     },
     {
       id: 2,
-      name: 'Pupuk',
-      image: 'https://ycwcbxbytdtmluzalofn.supabase.co/storage/v1/object/public/products/pupuk.png',
-      description: 'Pupuk organik ',
+      name: 'Pupuk Nutrisi',
+      image: 'https://images.unsplash.com/photo-1628172828559-0f6a8e803c4f?auto=format&fit=crop&w=500&q=80',
+      description: 'Makanan terbaik untuk tanaman',
       link: '/products?category=pupuk',
-      gradient: 'from-amber-400 to-orange-600',
-      iconBg: 'bg-amber-100',
-      borderColor: 'border-amber-200 hover:border-amber-400'
+      color: 'bg-amber-50',
+      icon: '⚡'
     },
     {
       id: 3,
-      name: 'Tanaman',
-      image: 'https://ycwcbxbytdtmluzalofn.supabase.co/storage/v1/object/public/products/tanaman.png',
-      description: 'Berbagai jenis tanaman',
+      name: 'Tanaman Hias',
+      image: 'https://images.unsplash.com/photo-1459156212016-c812468e2115?auto=format&fit=crop&w=500&q=80',
+      description: 'Cantikkan ruangan Anda',
       link: '/products?category=tanaman',
-      gradient: 'from-emerald-400 to-teal-600',
-      iconBg: 'bg-emerald-100',
-      borderColor: 'border-emerald-200 hover:border-emerald-400'
+      color: 'bg-emerald-50',
+      icon: '🌿'
     },
     {
       id: 4,
-      name: 'Pot',
-      image: 'https://ycwcbxbytdtmluzalofn.supabase.co/storage/v1/object/public/products/pot.png',
-      description: 'Berbagai jenis pot',
+      name: 'Pot & Alat',
+      image: 'https://images.unsplash.com/photo-1463936575829-25148e1db1b8?auto=format&fit=crop&w=500&q=80',
+      description: 'Perlengkapan berkebun',
       link: '/products?category=pot',
-      gradient: 'from-rose-400 to-pink-600',
-      iconBg: 'bg-rose-100',
-      borderColor: 'border-rose-200 hover:border-rose-400'
+      color: 'bg-stone-50',
+      icon: '🪴'
     }
   ];
-
-  // Calculate visible items based on screen size
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 640) {
-        setVisibleItems(2);
-      } else if (window.innerWidth < 1024) {
-        setVisibleItems(3);
-      } else {
-        setVisibleItems(4);
-      }
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Auto slide
-  useEffect(() => {
-    if (isPaused) return;
-    const interval = setInterval(() => {
-      setCurrentIndex((prevIndex) =>
-        prevIndex >= Math.ceil(categories.length / visibleItems) - 1 ? 0 : prevIndex + 1
-      );
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [currentIndex, isPaused, categories.length, visibleItems]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -99,7 +65,8 @@ const Home = () => {
 
   useEffect(() => {
     if (cartItems.length > prevCartCountRef.current) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Optional: scroll top on add to cart
+      // window.scrollTo({ top: 0, behavior: 'smooth' });
     }
     prevCartCountRef.current = cartItems.length;
   }, [cartItems]);
@@ -108,6 +75,7 @@ const Home = () => {
     try {
       setLoading(true);
       const data = await productsService.getAllProducts();
+      // Get 4 random products for variety or just first 4
       setFeaturedProducts(data.slice(0, 8));
     } catch (error) {
       console.error('Error fetching featured products:', error);
@@ -117,326 +85,216 @@ const Home = () => {
     }
   };
 
-  const nextSlide = () => {
-    const maxIndex = Math.ceil(categories.length / visibleItems) - 1;
-    setCurrentIndex(currentIndex >= maxIndex ? 0 : currentIndex + 1);
-  };
-
-  const prevSlide = () => {
-    const maxIndex = Math.ceil(categories.length / visibleItems) - 1;
-    setCurrentIndex(currentIndex === 0 ? maxIndex : currentIndex - 1);
-  };
-
-  const goToSlide = (index) => {
-    setCurrentIndex(index);
-  };
-
-  const translateX = currentIndex * (100 / visibleItems) * visibleItems;
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Hero Section */}
-      <section className="relative bg-white mt-16 border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 gap-3 md:gap-8 py-6 md:py-12 lg:py-16">
-            {/* Text Content */}
-            <div className="flex flex-col justify-center space-y-3 md:space-y-6">
-              <div className="inline-flex items-center px-2 py-1 md:px-4 md:py-2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 mb-1">
-                <span className="text-xs font-medium">🌿 Premium Green House</span>
+    <div className="min-h-screen bg-white font-sans text-gray-900">
+
+      {/* 🌿 HERO SECTION */}
+      <section className="relative pt-24 pb-12 lg:pt-32 lg:pb-24 overflow-hidden">
+        {/* Abstract Background Shapes */}
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-[600px] h-[600px] bg-green-50 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob"></div>
+        <div className="absolute top-0 right-1/2 w-[500px] h-[500px] bg-emerald-50 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-2000"></div>
+        <div className="absolute -bottom-32 left-0 w-[500px] h-[500px] bg-lime-50 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-4000"></div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+
+            {/* Hero Text */}
+            <div className="space-y-6 text-center lg:text-left">
+              <div className="inline-flex items-center px-4 py-2 rounded-full bg-green-100 text-green-800 font-medium text-sm mb-4 animate-fade-in-up">
+                <span className="mr-2">🌱</span> Solusi Hijau untuk Rumah Anda
               </div>
 
-              <h1 className="text-lg md:text-4xl lg:text-5xl font-bold text-gray-900 leading-snug">
-                Hijaukan Ruangan
-                <span className="block text-emerald-600 text-xs md:text-4xl lg:text-5xl">
-                  Dengan Tanaman Kami
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-[1.15]">
+                Bawa Alam ke <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-emerald-500">
+                  Dalam Ruangan
                 </span>
               </h1>
 
-              <p className="text-xs md:text-lg text-gray-600 leading-relaxed max-w-lg">
-                Temukan koleksi tanaman hias terbaik yang siap menghidupkan setiap sudut rumah Anda. Kualitas premium dengan harga terjangkau.
+              <p className="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
+                Temukan koleksi tanaman hias premium yang dikurasi khusus untuk menciptakan suasana segar, tenang, dan estetik di rumah Anda.
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-2 md:gap-4 pt-2">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-4">
                 <Link
                   to="/products"
-                  className="inline-flex items-center justify-center px-3 py-2 md:px-8 md:py-4 text-xs md:text-base font-semibold text-white bg-emerald-600 rounded-lg md:rounded-xl hover:bg-emerald-700 transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
+                  className="px-8 py-4 bg-green-600 text-white font-bold rounded-2xl shadow-lg hover:bg-green-700 hover:shadow-green-300/50 hover:-translate-y-1 transition-all duration-300 flex items-center justify-center gap-2"
                 >
-                  <span>Belanja Sekarang</span>
-                  <svg className="ml-1 w-3 h-3 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                  </svg>
+                  Belanja Sekarang
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                 </Link>
-
                 <Link
-                  to="/about"
-                  className="inline-flex items-center justify-center px-3 py-2 md:px-8 md:py-4 text-xs md:text-base font-semibold text-emerald-700 border border-emerald-200 md:border-2 rounded-lg md:rounded-xl hover:bg-emerald-50 transition-all duration-300"
+                  to="/products?category=tanaman"
+                  className="px-8 py-4 bg-white text-green-700 border-2 border-green-100 font-bold rounded-2xl hover:bg-green-50 hover:border-green-200 transition-all duration-300 flex items-center justify-center"
                 >
-                  Tentang Kami
+                  Lihat Koleksi
                 </Link>
+              </div>
+
+              <div className="pt-8 flex items-center justify-center lg:justify-start gap-8 text-sm text-gray-500 font-medium">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                  Tanaman Segar
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                  Pengiriman Aman
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                  Support 24/7
+                </div>
               </div>
             </div>
 
-            {/* Image Content */}
-            <div className="flex items-center justify-center lg:justify-end">
-              <div className="relative w-full max-w-xs md:max-w-md">
-                <div className="relative rounded-lg md:rounded-2xl overflow-hidden shadow-md md:shadow-2xl">
-                  <img
-                    src="https://images.unsplash.com/photo-1485955900006-10f4d324d411?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80"
-                    alt="Beautiful indoor plants collection"
-                    className="w-full h-40 md:h-80 object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-                </div>
+            {/* Hero Image */}
+            <div className="relative mx-auto lg:mr-0 max-w-md lg:max-w-none">
+              <div className="relative rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-white/50">
+                <img
+                  src="https://images.unsplash.com/photo-1470058869958-2a77ade41c02?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
+                  alt="Modern Green Home"
+                  className="w-full h-auto object-cover transform hover:scale-105 transition-transform duration-700"
+                />
 
                 {/* Floating Card */}
-                <div className="absolute -bottom-3 -left-3 md:-bottom-6 md:-left-6 bg-white rounded-lg md:rounded-2xl p-2 md:p-6 shadow-md md:shadow-2xl border border-gray-100 max-w-[150px] md:max-w-xs transition-colors duration-300">
-                  <div className="flex items-center space-x-1 md:space-x-3">
-                    <div className="w-6 h-6 md:w-12 md:h-12 bg-emerald-100 rounded-full flex items-center justify-center">
-                      <span className="text-sm md:text-2xl">🏆</span>
-                    </div>
-                    <div>
-                      <div className="text-xs md:text-base font-bold text-gray-900">
-                        Tanaman Segar
-                      </div>
-                      <div className="text-[10px] md:text-sm text-gray-500">
-                        Dijamin kualitas
-                      </div>
-                    </div>
+                <div className="absolute bottom-8 left-8 bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-lg border border-white/50 flex items-center gap-4 max-w-[200px]">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-xl">
+                    🌵
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">Spesies Langka</h3>
+                    <p className="text-xs text-green-600 font-medium">+50 Varian Baru</p>
                   </div>
                 </div>
               </div>
+
+              {/* Decorative Circle Behind */}
+              <div className="absolute -z-10 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-gradient-to-br from-green-100/50 to-emerald-100/30 rounded-full blur-3xl"></div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Category Slider - Integrated */}
-      <section className="py-6 md:py-16 bg-white">
+      {/* 📦 CATEGORIES GRID */}
+      <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6 md:mb-8">
-            <div>
-              <h2 className="text-xl md:text-3xl font-bold text-gray-900 mb-1 md:mb-2 text-gray-900">
-                Kategori Pilihan
-              </h2>
-              <div className="w-16 md:w-20 h-1 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full"></div>
-            </div>
-
-            {/* Navigation Buttons - Desktop */}
-            <div className="hidden md:flex gap-2">
-              <button
-                onClick={prevSlide}
-                className="p-3 rounded-xl bg-white border-2 border-gray-200 hover:border-emerald-500 hover:bg-emerald-50 transition-all duration-300 group shadow-sm hover:shadow-md"
-              >
-                <svg className="w-5 h-5 text-gray-700 group-hover:text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <button
-                onClick={nextSlide}
-                className="p-3 rounded-xl bg-white border-2 border-gray-200 hover:border-emerald-500 hover:bg-emerald-50 transition-all duration-300 group shadow-sm hover:shadow-md"
-              >
-                <svg className="w-5 h-5 text-gray-700 group-hover:text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            </div>
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Kategori Pilihan</h2>
+            <div className="w-24 h-1.5 bg-green-500 mx-auto rounded-full"></div>
+            <p className="mt-4 text-gray-600">Temukan apa yang Anda butuhkan untuk kebun Anda</p>
           </div>
 
-          {/* Slider */}
-          <div
-            className="relative"
-            onMouseEnter={() => setIsPaused(true)}
-            onMouseLeave={() => setIsPaused(false)}
-          >
-            <div className="overflow-hidden rounded-2xl">
-              <div
-                ref={sliderRef}
-                className="flex transition-transform duration-500 ease-in-out"
-                style={{ transform: `translateX(-${translateX}%)` }}
-              >
-                {categories.map((category) => (
-                  <div
-                    key={category.id}
-                    className={`flex-shrink-0 px-2 ${visibleItems === 2 ? 'w-1/2' :
-                      visibleItems === 3 ? 'w-1/3' : 'w-1/4'
-                      }`}
-                  >
-                    <Link
-                      to={category.link}
-                      className="block group"
-                    >
-                      <div className={`
-                        relative bg-white rounded-2xl 
-                        border-2 ${category.borderColor}
-                        overflow-hidden
-                        transition-all duration-300
-                        hover:shadow-xl
-                        hover:-translate-y-2
-                      `}>
-                        {/* Gradient Overlay */}
-                        <div className={`absolute inset-0 bg-gradient-to-br ${category.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300 z-10`}></div>
-
-                        {/* Image Container */}
-                        <div className="relative h-32 md:h-40 bg-gray-100 overflow-hidden">
-                          <img
-                            src={category.image}
-                            alt={category.name}
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                          />
-                          {/* Dark overlay on hover */}
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all duration-300"></div>
-                        </div>
-
-                        {/* Content */}
-                        <div className="relative p-4 text-center">
-                          <h3 className="text-sm md:text-base font-bold text-gray-900 mb-1 group-hover:text-emerald-600 transition-colors duration-300">
-                            {category.name}
-                          </h3>
-                          <p className="text-xs text-gray-600">
-                            {category.description}
-                          </p>
-
-                          {/* Arrow indicator on hover */}
-                          <div className="mt-2 flex items-center justify-center text-emerald-600 opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300">
-                            <span className="text-xs font-semibold mr-1">Lihat</span>
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                          </div>
-                        </div>
-
-                        {/* Badge */}
-                        <div className={`absolute top-3 right-3 ${category.iconBg} px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300`}>
-                          <span className="text-xs font-semibold text-gray-700">New</span>
-                        </div>
-                      </div>
-                    </Link>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {categories.map((cat) => (
+              <Link to={cat.link} key={cat.id} className="group">
+                <div className={`relative overflow-hidden rounded-3xl aspect-[4/5] ${cat.color} transition-all duration-300 hover:shadow-xl hover:-translate-y-2`}>
+                  <img
+                    src={cat.image}
+                    alt={cat.name}
+                    className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700"
+                  />
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-6 text-white translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
+                    <div className="text-3xl mb-2">{cat.icon}</div>
+                    <h3 className="text-xl font-bold mb-1">{cat.name}</h3>
+                    <p className="text-xs text-white/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300">{cat.description}</p>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Dots Indicator */}
-            <div className="flex justify-center mt-6 space-x-2">
-              {Array.from({ length: Math.ceil(categories.length / visibleItems) }).map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => goToSlide(index)}
-                  className={`h-2 rounded-full transition-all duration-300 ${index === currentIndex
-                    ? 'bg-emerald-500 w-8'
-                    : 'bg-gray-300 w-2 hover:bg-gray-400'
-                    }`}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* View All Button */}
-          <div className="text-center mt-8">
-            <Link
-              to="/products"
-              className="inline-flex items-center px-6 py-3 text-sm md:text-base font-semibold text-emerald-600 border-2 border-emerald-200 rounded-xl hover:bg-emerald-50 hover:border-emerald-400 transition-all duration-300 group shadow-sm hover:shadow-md"
-            >
-              Lihat Semua Kategori
-              <svg className="ml-2 w-4 h-4 transform group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
-            </Link>
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-6 md:py-16 bg-gray-50">
+      {/* ✨ FEATURES SECTION */}
+      <section className="py-16 bg-green-50/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-6 md:mb-12">
-            <h2 className="text-lg md:text-3xl font-bold text-gray-900 mb-2 md:mb-4">
-              Mengapa Memilih Kami?
-            </h2>
-            <p className="text-xs md:text-base text-gray-600 max-w-2xl mx-auto">
-              Keunggulan yang membuat kami menjadi pilihan terbaik untuk kebutuhan tanaman Anda
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 md:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
               {
-                icon: '🚚',
-                title: 'Gratis Ongkir',
-                description: 'Pengiriman gratis untuk area tertentu dengan packing aman'
+                icon: "🚚",
+                title: "Pengiriman Cepat & Aman",
+                desc: "Garansi tanaman hidup sampai tujuan dengan packing khusus."
               },
               {
-                icon: '🌱',
-                title: 'Tanaman Segar',
-                description: 'Dipetik langsung dari kebun dengan kualitas terjamin'
+                icon: "💎",
+                title: "Kualitas Premium",
+                desc: "Tanaman sehat yang dirawat oleh ahli hortikultura berpengalaman."
               },
               {
-                icon: '💚',
-                title: 'Perawatan Mudah',
-                description: 'Panduan lengkap untuk perawatan tanaman pemula'
-              },
-              {
-                icon: '📞',
-                title: 'Support 24/7',
-                description: 'Konsultasi gratis dengan ahli tanaman kami'
+                icon: "🛡️",
+                title: "Garansi Ganti Baru",
+                desc: "Jika tanaman mati dalam perjalanan, kami ganti 100% gratis."
               }
-            ].map((feature, index) => (
-              <div
-                key={index}
-                className="bg-white rounded-lg p-3 md:p-6 shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100"
-              >
-                <div className="text-xl md:text-3xl mb-2 md:mb-4">
+            ].map((feature, idx) => (
+              <div key={idx} className="bg-white p-8 rounded-3xl shadow-sm hover:shadow-lg transition-all duration-300 border border-green-50">
+                <div className="w-14 h-14 bg-green-100 rounded-2xl flex items-center justify-center text-3xl mb-6">
                   {feature.icon}
                 </div>
-                <h3 className="text-sm md:text-lg font-semibold text-gray-900 mb-1 md:mb-2">
-                  {feature.title}
-                </h3>
-                <p className="text-xs md:text-sm text-gray-600 leading-relaxed">
-                  {feature.description}
-                </p>
+                <h3 className="text-xl font-bold text-gray-900 mb-3">{feature.title}</h3>
+                <p className="text-gray-600 leading-relaxed">{feature.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Featured Products Section */}
-      <section className="py-6 md:py-16 bg-white">
+      {/* 🛍️ FEATURED PRODUCTS */}
+      <section className="py-24 bg-white relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-6 md:mb-12 gap-2 md:gap-4">
+          <div className="flex flex-col md:flex-row justify-between items-end mb-12">
             <div>
-              <h2 className="text-lg md:text-3xl font-bold text-gray-900 mb-1 md:mb-2">
-                Produk Terbaru
-              </h2>
-              <p className="text-xs md:text-base text-gray-600">
-                Koleksi tanaman hias terbaru yang siap mempercantik ruangan Anda
-              </p>
+              <span className="text-green-600 font-bold tracking-wider uppercase text-sm">Koleksi Terbaru</span>
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2">Tanaman Favorit</h2>
             </div>
-            <Link
-              to="/products"
-              className="inline-flex items-center px-3 py-2 md:px-6 md:py-3 text-xs md:text-base text-emerald-600 hover:text-emerald-700 font-semibold transition-colors duration-300"
-            >
-              Lihat Semua
-              <svg className="ml-1 w-3 h-3 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
+            <Link to="/products" className="hidden md:flex items-center gap-2 text-green-600 font-bold hover:text-green-700 hover:underline">
+              Lihat Semua Produk
+              <span>→</span>
             </Link>
           </div>
 
           {loading ? (
-            <div className="flex justify-center items-center py-6 md:py-12">
-              <LoadingSpinner />
-            </div>
+            <LoadingSpinner />
           ) : (
-            <div className="grid grid-cols-2 gap-3 md:gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 align-stretch">
               {featuredProducts.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}
             </div>
           )}
+
+          <div className="mt-12 text-center md:hidden">
+            <Link to="/products" className="btn-primary w-full py-4 rounded-xl">Lihat Semua Produk</Link>
+          </div>
         </div>
       </section>
+
+      {/* 📧 NEWSLETTER / CTA */}
+      <section className="py-20">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-green-600 rounded-[2.5rem] p-8 md:p-16 text-center text-white relative overflow-hidden shadow-2xl">
+            {/* Background Pattern */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/10 rounded-full blur-3xl -ml-16 -mb-16"></div>
+
+            <h2 className="text-3xl md:text-4xl font-bold mb-6 relative z-10">Siap Menghijaukan Rumahmu?</h2>
+            <p className="text-green-100 text-lg mb-8 max-w-2xl mx-auto relative z-10">
+              Dapatkan diskon 10% untuk pembelian pertamamu dengan mendaftar newsletter kami. Tips perawatan gratis setiap minggu!
+            </p>
+
+            <form className="max-w-md mx-auto flex flex-col sm:flex-row gap-4 relative z-10" onSubmit={(e) => e.preventDefault()}>
+              <input
+                type="email"
+                placeholder="Masukkan email Anda..."
+                className="flex-1 px-6 py-4 rounded-xl text-gray-900 focus:outline-none focus:ring-4 focus:ring-green-400 placeholder-gray-400"
+              />
+              <button className="px-8 py-4 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-colors shadow-lg">
+                Gabung
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+
     </div>
   );
 };
