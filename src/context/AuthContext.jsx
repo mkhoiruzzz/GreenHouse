@@ -272,7 +272,8 @@ export const AuthProvider = ({ children }) => {
           setIsAdmin(false);
           localStorage.removeItem('token');
           localStorage.removeItem('user');
-          localStorage.removeItem('pendingUserData');
+          // Jangan hapus pendingUserData di sini karena signup memicu signOut
+          // yang akan menghapus data yang dibutuhkan untuk verifikasi OTP
         }
         setLoading(false);
       }
