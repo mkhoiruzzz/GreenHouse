@@ -5,7 +5,7 @@ import { useCart } from '../context/CartContext';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const { user, logout, isAuthenticated, isAdmin } = useAuth();
+  const { user, profile, logout, isAuthenticated, isAdmin } = useAuth();
   const { cartCount } = useCart();
   const navigate = useNavigate();
 
@@ -97,11 +97,21 @@ const Navbar = () => {
               {isAuthenticated ? (
                 <div className="bg-green-700 rounded-lg p-3">
                   <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center">
-                      <span className="text-xl">👤</span>
+                    <div className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center overflow-hidden border-2 border-yellow-300">
+                      {(profile?.avatar_url || user?.user_metadata?.avatar_url) ? (
+                        <img
+                          src={profile?.avatar_url || user?.user_metadata?.avatar_url}
+                          alt="Avatar"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-xl">👤</span>
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-yellow-300 font-semibold text-lg truncate">{user?.username}</div>
+                      <div className="text-yellow-300 font-semibold text-lg truncate">
+                        {profile?.username || user?.user_metadata?.username || user?.email?.split('@')[0]}
+                      </div>
                       <div className="text-green-200 text-sm truncate">{user?.email}</div>
                       <div className="text-green-300 text-xs mt-1">
                         {isAdmin ? 'Administrator' : 'Pelanggan'}

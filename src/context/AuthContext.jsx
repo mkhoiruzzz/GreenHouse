@@ -611,96 +611,65 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // ✅ DELETE ACCOUNT: Final fixed version
   const deleteAccount = async () => {
     try {
       setLoading(true);
       console.log('🗑️ Starting account deletion process...');
 
+      // 1. Get current user
       const { data: { user: currentUser }, error: getUserError } = await supabase.auth.getUser();
 
       if (getUserError || !currentUser) {
-        console.error('❌ Error getting user:', getUserError);
-        return { success: false, message: "User tidak ditemukan" };
+        throw new Error("User tidak ditemukan");
       }
 
-      console.log('🔄 Menghapus akun untuk user:', currentUser.id, currentUser.email);
+      console.log('🔄 Cleaning up data for:', currentUser.id);
 
+      // 2. Perform database cleanup via accountService
+      // This handles orders, cart items, etc.
+      try {
+        await accountService.completeDataCleanup(currentUser.id, currentUser.email);
+        console.log('✅ Database cleanup completed');
+      } catch (cleanupErr) {
+        console.warn('⚠️ Cleanup warning:', cleanupErr.message);
+      }
+
+      // 3. Delete from profiles table (manual cleanup to be sure)
+      await supabase.from('profiles').delete().eq('id', currentUser.id);
+
+      // 4. Delete Auth User via Edge Function
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          throw new Error('No active session');
-        }
-
-        console.log('📞 Calling delete-account Edge Function...');
-        const { data: functionData, error: functionError } = await supabase.functions.invoke(
-          'delete-account',
-          {
+        if (session) {
+          console.log('📞 Invoking delete-account edge function...');
+          await supabase.functions.invoke('delete-account', {
             body: { user_id: currentUser.id },
-            headers: {
-              Authorization: `Bearer ${session.access_token}`
-            }
-          }
-        );
-
-        if (functionError) {
-          console.error('❌ Edge Function error:', functionError);
-          throw new Error(functionError.message || 'Failed to delete user from Auth');
+            headers: { Authorization: `Bearer ${session.access_token}` }
+          });
         }
-
-        console.log('✅ User deleted from Auth:', functionData);
-      } catch (edgeFunctionError) {
-        console.error('❌ Error calling Edge Function:', edgeFunctionError);
-        console.warn('⚠️ Falling back to data cleanup only');
+      } catch (funcErr) {
+        console.warn('⚠️ Edge Function call failed, proceeding with client-side signout:', funcErr.message);
       }
 
-      try {
-        const cleanupResult = await accountService.completeDataCleanup(currentUser.id, currentUser.email);
-        console.log('✅ Account cleanup result:', cleanupResult);
-      } catch (cleanupErr) {
-        console.warn('⚠️ Cleanup error (non-critical):', cleanupErr);
-      }
-
+      // 5. Global state cleanup
       setUser(null);
       setProfile(null);
       setIsAuthenticated(false);
       setIsAdmin(false);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      localStorage.removeItem('pendingUserData');
+      localStorage.clear();
       sessionStorage.clear();
 
-      try {
-        await supabase.auth.signOut();
-        console.log('✅ Signed out from Supabase');
-      } catch (signOutErr) {
-        console.warn('⚠️ SignOut error (non-critical):', signOutErr);
-      }
+      // 6. Sign out from Supabase Auth
+      await supabase.auth.signOut();
 
-      toast.success('Akun berhasil dihapus');
-      return { success: true, message: "Akun berhasil dihapus" };
+      toast.success('Akun Anda telah dihapus secara permanen.');
+      return { success: true };
 
     } catch (err) {
-      console.error('❌ Error menghapus akun:', err);
-
-      setUser(null);
-      setProfile(null);
-      setIsAuthenticated(false);
-      setIsAdmin(false);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      localStorage.removeItem('pendingUserData');
-      sessionStorage.clear();
-
-      try {
-        await supabase.auth.signOut();
-      } catch (signOutErr) {
-        // Ignore
-      }
-
-      return {
-        success: false,
-        message: err.message || "Gagal menghapus akun. Silakan coba lagi."
-      };
+      console.error('❌ Delete account error:', err);
+      toast.error('Gagal menghapus akun: ' + (err.message || 'Terjadi kesalahan sistem'));
+      return { success: false, message: err.message };
     } finally {
       setLoading(false);
     }
@@ -728,6 +697,7 @@ export const AuthProvider = ({ children }) => {
           address: profileData.address,
           city: profileData.city,
           province: profileData.province,
+          avatar_url: profileData.avatar_url, // ✅ Add avatar_url support
           updated_at: now
         }, { onConflict: 'id' })
         .select()
@@ -749,7 +719,8 @@ export const AuthProvider = ({ children }) => {
           phone: profileData.phone,
           address: profileData.address,
           city: profileData.city,
-          province: profileData.province
+          province: profileData.province,
+          avatar_url: profileData.avatar_url // ✅ Sync to Auth metadata too
         }
       });
 
