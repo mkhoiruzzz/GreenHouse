@@ -34,8 +34,8 @@ const AdminAnalytics = () => {
 
             if (ordersError) throw ordersError;
 
-            // Revenue: Only from PAID orders
-            const paidOrders = allOrders.filter(o => o.status_pembayaran === 'paid');
+            // Revenue: Only from PAID orders (Case-insensitive check)
+            const paidOrders = allOrders.filter(o => o.status_pembayaran?.toLowerCase() === 'paid');
 
             // Calculate daily revenue
             const dailyPaidOrders = paidOrders.filter(o => new Date(o.created_at) >= new Date(todayStart));

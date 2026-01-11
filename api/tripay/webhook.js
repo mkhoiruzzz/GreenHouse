@@ -70,12 +70,12 @@ export default async function handler(req, res) {
       await supabase
         .from("orders")
         .update({
-          status_pembayaran: "PAID",
+          status_pembayaran: "paid", // ✅ Simpan sebagai 'paid' (lowercase)
           metode_pembayaran: payment_method,
         })
         .eq("id", order.id);
 
-      console.log("✅ Order updated to PAID");
+      console.log("✅ Order updated to paid (lowercase)");
     }
 
     /* ==== SEND WHATSAPP (FIX FINAL) ==== */
