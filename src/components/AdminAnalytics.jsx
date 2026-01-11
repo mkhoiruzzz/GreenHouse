@@ -27,77 +27,86 @@ const AdminAnalytics = () => {
             const todayStart = new Date(now.setHours(0, 0, 0, 0)).toISOString();
             const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-            // 1. Fetch all paid orders
+            // 1. Fetch ALL orders (to show activity even if unpaid)
             const { data: allOrders, error: ordersError } = await supabase
                 .from('orders')
-                .select('*')
-                .eq('status_pembayaran', 'paid');
+                .select('*');
 
             if (ordersError) throw ordersError;
 
+            // Revenue: Only from PAID orders
+            const paidOrders = allOrders.filter(o => o.status_pembayaran === 'paid');
+
             // Calculate daily revenue
-            const dailyOrders = allOrders.filter(o => new Date(o.created_at) >= new Date(todayStart));
-            const dailyRevenue = dailyOrders.reduce((sum, o) => sum + parseFloat(o.total_harga || 0), 0);
+            const dailyPaidOrders = paidOrders.filter(o => new Date(o.created_at) >= new Date(todayStart));
+            const dailyRevenue = dailyPaidOrders.reduce((sum, o) => sum + parseFloat(o.total_harga || 0), 0);
 
             // Calculate monthly revenue
-            const monthlyOrders = allOrders.filter(o => new Date(o.created_at) >= new Date(monthStart));
-            const monthlyRevenue = monthlyOrders.reduce((sum, o) => sum + parseFloat(o.total_harga || 0), 0);
+            const monthlyPaidOrders = paidOrders.filter(o => new Date(o.created_at) >= new Date(monthStart));
+            const monthlyRevenue = monthlyPaidOrders.reduce((sum, o) => sum + parseFloat(o.total_harga || 0), 0);
 
-            // 2. Fetch order items untuk product analytics
+            // 2. Fetch order items (all items to show popular products)
             const { data: orderItems, error: itemsError } = await supabase
                 .from('order_items')
                 .select(`
-          *,
-          products (nama_produk, gambar_url),
-          orders!inner (status_pembayaran)
-        `)
-                .eq('orders.status_pembayaran', 'paid');
+                  *,
+                  products (nama_produk, gambar_url),
+                  orders!inner (*)
+                `);
 
             if (itemsError) throw itemsError;
 
-            // Group by product untuk best sellers
+            // Group by product (all orders for "popularity", but track revenue only for paid)
             const productSales = {};
             orderItems.forEach(item => {
                 const productId = item.product_id;
+                const isPaid = item.orders?.status_pembayaran === 'paid';
+
                 if (!productSales[productId]) {
                     productSales[productId] = {
                         product_id: productId,
                         nama_produk: item.products?.nama_produk || 'Unknown',
                         gambar_url: item.products?.gambar_url,
                         total_quantity: 0,
-                        total_revenue: 0
+                        total_revenue: 0 // Track revenue only from paid orders
                     };
                 }
                 productSales[productId].total_quantity += item.quantity;
-                productSales[productId].total_revenue += item.quantity * parseFloat(item.harga_satuan || 0);
+                if (isPaid) {
+                    productSales[productId].total_revenue += item.quantity * parseFloat(item.harga_satuan || 0);
+                }
             });
 
             const productSalesArray = Object.values(productSales);
 
-            // Top 5 best sellers
+            // Top 5 best sellers (by quantity sold/checkout)
             const topProducts = productSalesArray
                 .sort((a, b) => b.total_quantity - a.total_quantity)
                 .slice(0, 5);
 
-            // Top 5 least sellers (tapi yang pernah terjual)
+            // Top 5 least sellers
             const leastProducts = productSalesArray
                 .sort((a, b) => a.total_quantity - b.total_quantity)
                 .slice(0, 5);
 
-            // 3. Top Cities (dari orders yang paid dan ada kota)
+            // 3. Top Cities (dari semua orders yang ada kota)
             const cityOrders = allOrders.filter(o => o.kota);
             const citySales = {};
             cityOrders.forEach(order => {
                 const city = order.kota.trim();
+                const isPaid = order.status_pembayaran === 'paid';
+
                 if (!citySales[city]) {
                     citySales[city] = {
                         city: city,
                         total_orders: 0,
-                        total_revenue: 0
+                        total_revenue: 0 // Only paid revenue
                     };
                 }
                 citySales[city].total_orders += 1;
-                citySales[city].total_revenue += parseFloat(order.total_harga || 0);
+                if (isPaid) {
+                    citySales[city].total_revenue += parseFloat(order.total_harga || 0);
+                }
             });
 
             const topCities = Object.values(citySales)
@@ -110,8 +119,9 @@ const AdminAnalytics = () => {
                     monthly: monthlyRevenue
                 },
                 totalOrders: {
-                    daily: dailyOrders.length,
-                    monthly: monthlyOrders.length
+                    daily: dailyPaidOrders.length,
+                    monthly: monthlyPaidOrders.length,
+                    all_daily: allOrders.filter(o => new Date(o.created_at) >= new Date(todayStart)).length
                 },
                 topProducts,
                 leastProducts,
@@ -159,16 +169,16 @@ const AdminAnalytics = () => {
                 {/* Total Orders */}
                 <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
                     <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-medium text-blue-800">Jumlah Pesanan (Paid)</h3>
+                        <h3 className="text-sm font-medium text-blue-800">Jumlah Pesanan</h3>
                         <span className="text-2xl">📦</span>
                     </div>
                     <div className="space-y-2">
                         <div>
-                            <p className="text-xs text-blue-600">Hari Ini</p>
-                            <p className="text-2xl font-bold text-blue-900">{analytics.totalOrders.daily} pesanan</p>
+                            <p className="text-xs text-blue-600">Terbayar Hari Ini</p>
+                            <p className="text-2xl font-bold text-blue-900">{analytics.totalOrders.daily} <span className="text-sm font-normal text-blue-500">/ {analytics.totalOrders.all_daily} (Total)</span></p>
                         </div>
                         <div className="border-t border-blue-200 pt-2">
-                            <p className="text-xs text-blue-600">Bulan Ini</p>
+                            <p className="text-xs text-blue-600">Bulan Ini (Terbayar)</p>
                             <p className="text-xl font-bold text-blue-900">{analytics.totalOrders.monthly} pesanan</p>
                         </div>
                     </div>
