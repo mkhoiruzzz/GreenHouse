@@ -294,32 +294,45 @@ const Checkout = () => {
       }
 
       // Create Tripay transaction
+      const tripayItems = [
+        ...cartItems.map(item => ({
+          sku: `PROD-${item.id}`,
+          name: item.nama_produk,
+          price: Math.round(item.total_harga_diskon || item.harga),
+          quantity: item.quantity
+        })),
+        ...(formData.biaya_pengiriman > 0 ? [{
+          sku: 'SHIPPING',
+          name: 'Biaya Pengiriman',
+          price: Math.round(formData.biaya_pengiriman),
+          quantity: 1
+        }] : []),
+        ...(paymentFee > 0 ? [{
+          sku: 'FEE',
+          name: 'Biaya Layanan',
+          price: Math.round(paymentFee),
+          quantity: 1
+        }] : []),
+        ...(discountAmount > 0 ? [{
+          sku: 'VOUCHER',
+          name: `Diskon Voucher (${appliedVoucher?.code || 'Promo'})`,
+          price: -Math.round(discountAmount),
+          quantity: 1
+        }] : [])
+      ];
+
+      const tripayAmount = tripayItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+
       const tripayData = {
         method: selectedPaymentMethod,
         merchant_ref: `ORDER-${order.id}`,
-        amount: calculateTotal(),
+        amount: tripayAmount,
         customer_name: formData.nama_lengkap,
         customer_email: formData.email,
         customer_phone: formData.no_telepon,
-        order_items: [
-          ...cartItems.map(item => ({
-            name: item.nama_produk,
-            price: item.harga,
-            quantity: item.quantity
-          })),
-          ...(formData.biaya_pengiriman > 0 ? [{
-            name: 'Biaya Pengiriman',
-            price: formData.biaya_pengiriman,
-            quantity: 1
-          }] : []),
-          ...(paymentFee > 0 ? [{
-            name: 'Biaya Layanan',
-            price: paymentFee,
-            quantity: 1
-          }] : [])
-        ],
-        callback_url: `https://www.tokotanaman.my.id/api/tripay/webhook`,
-        return_url: `https://www.tokotanaman.my.id/order-success`
+        order_items: tripayItems,
+        callback_url: `https://${window.location.hostname}/api/tripay/webhook`,
+        return_url: `https://${window.location.hostname}/order-success`
       };
 
       const paymentResponse = await tripayService.createTransaction(tripayData);
