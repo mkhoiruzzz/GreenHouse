@@ -511,7 +511,7 @@ const Checkout = () => {
                 <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
                   <span className="text-white font-bold text-sm">✓</span>
                 </div>
-                <h3 className="font-bold text-gray-900">{user?.email?.split('@')[0] || 'Toko'}</h3>
+                <h3 className="font-bold text-gray-900">Toko Tanaman</h3>
               </div>
 
               {/* Product Items */}
@@ -699,13 +699,48 @@ const Checkout = () => {
 
                     <button
                       onClick={() => setShowPaymentModal(!showPaymentModal)}
-                      className="w-full py-3 px-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors text-sm font-medium text-gray-700"
+                      className="w-full py-3 px-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors text-sm font-medium text-gray-700 mb-2"
                     >
-                      {showPaymentModal ? '▼' : '+'} Bayar {formatCurrency(calculateTotal())} pakai metode lain
+                      {showPaymentModal ? '▼ Sembunyikan' : '+ Metode Lain'}
                     </button>
 
+                    {/* Quick Select Methods (1/2/3) */}
+                    {!showPaymentModal && (
+                      <div className="space-y-2">
+                        {paymentChannels.slice(0, 3).map((channel) => (
+                          <div
+                            key={channel.code}
+                            onClick={() => {
+                              setSelectedPaymentMethod(channel.code);
+                              setPaymentFee(channel.total_fee?.flat || 0);
+                              toast.success(`${channel.name} dipilih`);
+                            }}
+                            className={`p-3 rounded-lg cursor-pointer transition-all border flex items-center justify-between ${selectedPaymentMethod === channel.code
+                              ? 'border-green-500 bg-green-50'
+                              : 'border-gray-100 hover:border-green-300 hover:bg-gray-50'
+                              }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              {channel.icon_url && (
+                                <img src={channel.icon_url} alt={channel.name} className="w-10 h-10 object-contain" />
+                              )}
+                              <div className="flex-1">
+                                <p className="font-medium text-sm text-gray-900">{channel.name}</p>
+                                {channel.total_fee?.flat > 0 && (
+                                  <p className="text-xs text-gray-500">Biaya: {formatCurrency(channel.total_fee.flat)}</p>
+                                )}
+                              </div>
+                            </div>
+                            {selectedPaymentMethod === channel.code && (
+                              <span className="text-green-600 font-bold">✓</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     {showPaymentModal && (
-                      <div className="border border-gray-200 rounded-lg p-3 max-h-96 overflow-y-auto space-y-2">
+                      <div className="border border-gray-200 rounded-lg p-3 max-h-96 overflow-y-auto space-y-2 animate-fade-in">
                         {Object.entries(paymentChannels.reduce((acc, channel) => {
                           const group = channel.group || 'Lainnya';
                           if (!acc[group]) acc[group] = [];
@@ -713,7 +748,7 @@ const Checkout = () => {
                           return acc;
                         }, {})).map(([groupName, channels]) => (
                           <div key={groupName} className="space-y-2">
-                            <p className="text-xs font-semibold text-gray-500 uppercase px-2">{groupName}</p>
+                            <p className="text-xs font-semibold text-gray-500 uppercase px-2 mt-2">{groupName}</p>
                             {channels.map((channel) => (
                               <div
                                 key={channel.code}

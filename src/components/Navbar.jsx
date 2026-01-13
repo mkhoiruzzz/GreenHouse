@@ -10,9 +10,11 @@ const Navbar = () => {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    logout();
-    setIsOpen(false);
-    navigate('/');
+    if (window.confirm('Apakah Anda yakin ingin keluar?')) {
+      logout();
+      setIsOpen(false);
+      navigate('/');
+    }
   };
 
   const closeMenu = () => {

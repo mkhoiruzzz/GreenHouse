@@ -159,8 +159,20 @@ const AdminUsers = () => {
                                     >
                                         <td className="p-4">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold">
-                                                    {user.full_name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U'}
+                                                <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold overflow-hidden">
+                                                    {user.avatar_url ? (
+                                                        <img
+                                                            src={user.avatar_url}
+                                                            alt={user.full_name}
+                                                            className="w-full h-full object-cover"
+                                                            onError={(e) => {
+                                                                e.target.style.display = 'none';
+                                                                e.target.parentElement.innerHTML = user.full_name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U';
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        user.full_name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U'
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <p className="font-semibold text-gray-800">
@@ -243,8 +255,20 @@ const AdminUsers = () => {
 
                         <div className="p-6 space-y-4">
                             <div className="flex items-center gap-4 mb-4">
-                                <div className="w-20 h-20 rounded-full bg-green-500 flex items-center justify-center text-white text-3xl font-bold">
-                                    {selectedUser.full_name?.charAt(0)?.toUpperCase() || selectedUser.email?.charAt(0)?.toUpperCase() || 'U'}
+                                <div className="w-20 h-20 rounded-full bg-green-500 flex items-center justify-center text-white text-3xl font-bold overflow-hidden">
+                                    {selectedUser.avatar_url ? (
+                                        <img
+                                            src={selectedUser.avatar_url}
+                                            alt={selectedUser.full_name}
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => {
+                                                e.target.style.display = 'none';
+                                                e.target.parentElement.innerHTML = selectedUser.full_name?.charAt(0)?.toUpperCase() || selectedUser.email?.charAt(0)?.toUpperCase() || 'U';
+                                            }}
+                                        />
+                                    ) : (
+                                        selectedUser.full_name?.charAt(0)?.toUpperCase() || selectedUser.email?.charAt(0)?.toUpperCase() || 'U'
+                                    )}
                                 </div>
                                 <div>
                                     <h3 className="text-xl font-bold text-gray-800">

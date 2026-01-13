@@ -148,17 +148,40 @@ const AdminOrders = () => {
         return matchesSearch;
     });
 
+    const getStatusLabel = (status) => {
+        const labels = {
+            paid: 'Paid',
+            unpaid: 'Unpaid',
+            expired: 'Expired',
+            pending: 'Pending',
+            processing: 'Processing',
+            shipped: 'Shipped',
+            completed: 'Completed',
+            failed: 'Failed',
+            dikonfirmasi: 'Confirmed',
+            dikirim: 'Shipped',
+            selesai: 'Completed',
+            dibatalkan: 'Cancelled'
+        };
+        return labels[status] || (status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Pending');
+    };
+
     const getStatusBadge = (status) => {
         const badges = {
-            paid: 'bg-green-100 text-green-800',
-            unpaid: 'bg-yellow-100 text-yellow-800',
-            expired: 'bg-red-100 text-red-800',
-            pending: 'bg-gray-100 text-gray-800',
-            processing: 'bg-blue-100 text-blue-800',
-            shipped: 'bg-purple-100 text-purple-800',
-            completed: 'bg-green-100 text-green-800'
+            paid: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+            unpaid: 'bg-red-100 text-red-800 border border-red-200',
+            expired: 'bg-gray-100 text-gray-800 border border-gray-200',
+            pending: 'bg-yellow-100 text-yellow-800 border border-yellow-200',
+            processing: 'bg-blue-100 text-blue-800 border border-blue-200',
+            shipped: 'bg-purple-100 text-purple-800 border border-purple-200',
+            completed: 'bg-green-100 text-green-800 border border-green-200',
+            failed: 'bg-red-100 text-red-800 border border-red-200',
+            dikonfirmasi: 'bg-blue-100 text-blue-800 border border-blue-200',
+            dikirim: 'bg-purple-100 text-purple-800 border border-purple-200',
+            selesai: 'bg-green-100 text-green-800 border border-green-200',
+            dibatalkan: 'bg-red-100 text-red-800 border border-red-200'
         };
-        return badges[status] || badges.pending;
+        return badges[status] || 'bg-gray-100 text-gray-800 border border-gray-200';
     };
 
     const stats = {
@@ -269,12 +292,12 @@ const AdminOrders = () => {
                                         </td>
                                         <td className="p-4">
                                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadge(order.status_pembayaran)}`}>
-                                                {order.status_pembayaran || 'pending'}
+                                                {getStatusLabel(order.status_pembayaran)}
                                             </span>
                                         </td>
                                         <td className="p-4">
                                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadge(order.status_pengiriman)}`}>
-                                                {order.status_pengiriman || 'pending'}
+                                                {getStatusLabel(order.status_pengiriman)}
                                             </span>
                                         </td>
                                         <td className="p-4">

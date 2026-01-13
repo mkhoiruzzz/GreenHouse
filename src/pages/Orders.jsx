@@ -200,23 +200,63 @@ const Orders = () => {
     };
 
     // Fixed dark mode status badges
-    const getStatusBadge = (status) => {
+    // Separate logic for Payment and Shipping badges
+    const getPaymentStatusBadge = (status) => {
         const badges = {
+            unpaid: {
+                text: 'Belum Dibayar',
+                color: 'bg-red-100 text-red-800 border border-red-200'
+            },
             pending: {
                 text: 'Menunggu Pembayaran',
                 color: 'bg-yellow-100 text-yellow-800 border border-yellow-200'
             },
             paid: {
                 text: 'Dibayar',
+                color: 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+            },
+            expired: {
+                text: 'Kedaluwarsa',
+                color: 'bg-gray-100 text-gray-800 border border-gray-200'
+            },
+            failed: {
+                text: 'Gagal',
+                color: 'bg-red-100 text-red-800 border border-red-200'
+            },
+            dibatalkan: {
+                text: 'Dibatalkan',
+                color: 'bg-red-100 text-red-800 border border-red-200'
+            }
+        };
+
+        return badges[status] || badges.pending;
+    };
+
+    const getShippingStatusBadge = (status) => {
+        const badges = {
+            pending: {
+                text: 'Menunggu',
+                color: 'bg-gray-100 text-gray-800 border border-gray-200'
+            },
+            processing: {
+                text: 'Diproses',
                 color: 'bg-blue-100 text-blue-800 border border-blue-200'
             },
             dikonfirmasi: {
                 text: 'Dikonfirmasi',
-                color: 'bg-green-100 text-green-800 border border-green-200'
+                color: 'bg-blue-100 text-blue-800 border border-blue-200'
             },
             dikirim: {
                 text: 'Dikirim',
                 color: 'bg-purple-100 text-purple-800 border border-purple-200'
+            },
+            shipped: {
+                text: 'Dikirim',
+                color: 'bg-purple-100 text-purple-800 border border-purple-200'
+            },
+            completed: {
+                text: 'Selesai',
+                color: 'bg-green-100 text-green-800 border border-green-200'
             },
             selesai: {
                 text: 'Selesai',
@@ -232,7 +272,18 @@ const Orders = () => {
     };
 
     const getDisplayStatus = (order) => {
-        return order.status_pengiriman || order.status_pembayaran || 'pending';
+        // Jika sudah dibatalkan, prioritaskan status pembatalan
+        if (order.status_pembayaran === 'dibatalkan' || order.status_pengiriman === 'dibatalkan') {
+            return { type: 'payment', value: 'dibatalkan' };
+        }
+
+        // Prioritas utama adalah status pengiriman jika sudah diproses
+        if (order.status_pengiriman && order.status_pengiriman !== 'pending') {
+            return { type: 'shipping', value: order.status_pengiriman };
+        }
+
+        // Default ke status pembayaran
+        return { type: 'payment', value: order.status_pembayaran || 'pending' };
     };
 
     // ✅ Fungsi untuk cek apakah pesanan masih bisa dibatalkan (dalam 1 hari)
@@ -380,8 +431,10 @@ const Orders = () => {
 
                 <div className="space-y-4">
                     {orders.map((order) => {
-                        const displayStatus = getDisplayStatus(order);
-                        const statusBadge = getStatusBadge(displayStatus);
+                        const displayInfo = getDisplayStatus(order);
+                        const statusBadge = displayInfo.type === 'shipping'
+                            ? getShippingStatusBadge(displayInfo.value)
+                            : getPaymentStatusBadge(displayInfo.value);
                         const totalItems = order.total_items || 0;
                         const totalQuantity = order.total_quantity || 0;
 
@@ -471,18 +524,18 @@ const Orders = () => {
                                         <span className="text-sm font-medium text-gray-600">
                                             Status Pembayaran
                                         </span>
-                                        <span className={`text-sm font-semibold px-3 py-2 rounded-full block text-center transition-colors duration-300 ${getStatusBadge(selectedOrder.status_pembayaran).color
+                                        <span className={`text-sm font-semibold px-3 py-2 rounded-full block text-center transition-colors duration-300 ${getPaymentStatusBadge(selectedOrder.status_pembayaran).color
                                             }`}>
-                                            {getStatusBadge(selectedOrder.status_pembayaran).text}
+                                            {getPaymentStatusBadge(selectedOrder.status_pembayaran).text}
                                         </span>
                                     </div>
                                     <div className="space-y-2">
                                         <span className="text-sm font-medium text-gray-600">
                                             Status Pengiriman
                                         </span>
-                                        <span className={`text-sm font-semibold px-3 py-2 rounded-full block text-center transition-colors duration-300 ${getStatusBadge(selectedOrder.status_pengiriman).color
+                                        <span className={`text-sm font-semibold px-3 py-2 rounded-full block text-center transition-colors duration-300 ${getShippingStatusBadge(selectedOrder.status_pengiriman).color
                                             }`}>
-                                            {getStatusBadge(selectedOrder.status_pengiriman).text}
+                                            {getShippingStatusBadge(selectedOrder.status_pengiriman).text}
                                         </span>
                                     </div>
                                 </div>
