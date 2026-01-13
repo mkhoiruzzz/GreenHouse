@@ -11,12 +11,13 @@ import AdminAnalytics from "./AdminAnalytics";
 import AdminShipping from "./AdminShipping";
 import AdminVouchers from "./AdminVouchers";
 import AdminCategories from "./AdminCategories";
+import AdminOverview from "./AdminOverview";
 
 const AdminDashboard = () => {
   const { user, logout, isAdmin, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState("products");
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
 
@@ -267,6 +268,13 @@ const AdminDashboard = () => {
 
         <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
           <button
+            onClick={() => setActiveTab("dashboard")}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "dashboard" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+          >
+            <span className="text-xl">🏠</span>
+            Dashboard
+          </button>
+          <button
             onClick={() => setActiveTab("products")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "products" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
           >
@@ -346,6 +354,7 @@ const AdminDashboard = () => {
 
         <div className="flex-1 overflow-y-auto p-8 bg-gray-50">
           <div className="max-w-7xl mx-auto space-y-6">
+            {activeTab === "dashboard" && <AdminOverview onSwitchTab={setActiveTab} />}
             {activeTab === "orders" && <AdminOrders />}
             {activeTab === "users" && <AdminUsers />}
             {activeTab === "analytics" && <AdminAnalytics />}
