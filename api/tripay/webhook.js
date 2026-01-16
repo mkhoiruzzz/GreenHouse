@@ -151,6 +151,21 @@ Terima kasih 🙏
         console.error("⚠️ Fonnte WhatsApp error:", waErr.message);
         // Don't fail the whole webhook if WhatsApp fails
       }
+
+      // 📟 INSERT PERSISTENT NOTIFICATION
+      try {
+        await supabase.from("notifications").insert({
+          user_id: order.user_id,
+          type: "payment",
+          title: "Pembayaran Berhasil ✅",
+          message: `Terima kasih! Pembayaran pesanan #${order.id} telah kami terima.`,
+          order_id: order.id,
+          link: "/orders"
+        });
+        console.log("✅ Persistent notification inserted");
+      } catch (notifErr) {
+        console.error("⚠️ Failed to insert notification:", notifErr.message);
+      }
     }
 
     return res.json({ success: true });

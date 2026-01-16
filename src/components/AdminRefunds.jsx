@@ -57,6 +57,26 @@ const AdminRefunds = () => {
 
             toast.success(`Permintaan refund berhasil di-${newStatus}`);
             fetchRefunds();
+
+            // ✅ Kirim notifikasi ke user via database
+            const refundData = refunds.find(r => r.id === id);
+            if (refundData && refundData.user_id) {
+                console.log('📝 Inserting refund notification for user:', refundData.user_id);
+                const isApproved = newStatus === 'approved';
+                const { error: notifError } = await supabase.from('notifications').insert({
+                    user_id: refundData.user_id,
+                    type: 'refund',
+                    title: isApproved ? 'Refund Disetujui ✅' : 'Refund Ditolak ❌',
+                    message: isApproved
+                        ? `Pengajuan refund pesanan #${refundData.order_id} telah disetujui.`
+                        : `Mohon maaf, pengajuan refund pesanan #${refundData.order_id} ditolak.`,
+                    order_id: refundData.order_id,
+                    link: '/orders'
+                });
+
+                if (notifError) console.error('❌ Failed to insert refund notification:', notifError);
+                else console.log('✅ Refund notification inserted successfully');
+            }
         } catch (error) {
             console.error('Error updating refund:', error);
             toast.error('Gagal memperbarui status refund');

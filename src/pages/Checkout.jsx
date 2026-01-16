@@ -263,6 +263,20 @@ const Checkout = () => {
 
       if (orderError) throw orderError;
 
+      // ✅ ADD PERSISTENT NOTIFICATION
+      try {
+        await supabase.from('notifications').insert({
+          user_id: user.id,
+          type: 'order',
+          title: 'Pesanan Dibuat 📝',
+          message: `Pesanan #${order.id} berhasil dibuat. Silakan selesaikan pembayaran.`,
+          order_id: order.id,
+          link: '/orders'
+        });
+      } catch (notifErr) {
+        console.error('⚠️ Failed to insert order notification:', notifErr);
+      }
+
       // Create order items
       const orderItems = cartItems.map(item => ({
         order_id: order.id,

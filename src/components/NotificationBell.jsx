@@ -13,173 +13,118 @@ const NotificationBell = () => {
     useEffect(() => {
         if (user) {
             fetchNotifications();
-            // Optional: Set up real-time subscription for orders
-            const subscription = supabase
-                .channel('orders-status-change')
-                .on('postgres_changes', {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'orders',
-                    filter: `user_id=eq.${user.id}`
-                }, () => {
-                    fetchNotifications();
-                })
-                .subscribe();
 
-            const refundSubscription = supabase
-                .channel('refunds-status-change')
+            // Listen for new notifications specifically for this user
+            const channel = supabase
+                .channel(`user-notifications-${user.id}`)
                 .on('postgres_changes', {
-                    event: 'UPDATE',
+                    event: 'INSERT',
                     schema: 'public',
-                    table: 'refunds',
+                    table: 'notifications',
                     filter: `user_id=eq.${user.id}`
-                }, () => {
-                    fetchNotifications();
+                }, (payload) => {
+                    console.log('New notification received:', payload.new);
+                    setNotifications(prev => [payload.new, ...prev].slice(0, 20));
+                    setUnreadCount(prev => prev + 1);
+
+                    // Show a small browser notification or toast if desired
+                    if (Notification.permission === 'granted' && !isOpen) {
+                        new Notification(payload.new.title, { body: payload.new.message });
+                    }
                 })
                 .subscribe();
 
             return () => {
-                supabase.removeChannel(subscription);
-                supabase.removeChannel(refundSubscription);
+                supabase.removeChannel(channel);
             };
         }
     }, [user]);
 
-    // Close dropdown on click outside
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
     const fetchNotifications = async () => {
         try {
-            // 1. Fetch recent orders for payment & shipping updates
-            const { data: orders, error: ordersError } = await supabase
-                .from('orders')
-                .select('id, status_pembayaran, status_pengiriman, created_at, updated_at')
+            // 1. Fetch persistent notifications from DB
+            const { data: dbNotifs, error: dbError } = await supabase
+                .from('notifications')
+                .select('*')
                 .eq('user_id', user.id)
-                .order('updated_at', { ascending: false })
-                .limit(10);
+                .order('created_at', { ascending: false })
+                .limit(20);
 
-            if (ordersError) throw ordersError;
+            if (dbError) throw dbError;
+
+            // 2. Fetch active vouchers (they are global, so we fetch them dynamically)
+            const { data: vouchers, error: vouchersError } = await supabase
+                .from('vouchers')
+                .select('*')
+                .eq('is_active', true)
+                .order('created_at', { ascending: false })
+                .limit(5);
 
             if (vouchersError) throw vouchersError;
 
-            // 3. Fetch recent refunds
-            const { data: refunds, error: refundsError } = await supabase
-                .from('refunds')
-                .select('id, order_id, status, created_at, updated_at')
-                .eq('user_id', user.id)
-                .order('updated_at', { ascending: false })
-                .limit(5);
+            // 3. Combine and transform
+            const formattedDbNotifs = (dbNotifs || []).map(n => ({
+                ...n,
+                source: 'db'
+            }));
 
-            if (refundsError) throw refundsError;
+            const formattedVouchers = (vouchers || []).map(v => ({
+                id: `vouch-${v.id}`,
+                user_id: user.id,
+                type: 'voucher',
+                title: 'Voucher Baru! 🏷️',
+                message: `Gunakan kode ${v.code} untuk diskon ${v.discount_type === 'percentage' ? v.amount + '%' : 'Rp ' + v.amount.toLocaleString()}.`,
+                link: '/products',
+                is_read: false, // Will be calculated by timestamp
+                created_at: v.created_at,
+                source: 'voucher'
+            }));
 
-            // Combine and format
-            const formattedNotifications = [];
+            const combined = [...formattedDbNotifs, ...formattedVouchers]
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                .slice(0, 20);
 
-            // Add payment notifications
-            orders.forEach(order => {
-                if (order.status_pembayaran === 'paid') {
-                    formattedNotifications.push({
-                        id: `pay-${order.id}`,
-                        type: 'payment',
-                        title: 'Pembayaran Berhasil',
-                        message: `Pesanan #${order.id} telah berhasil dibayar.`,
-                        time: new Date(order.updated_at),
-                        link: `/orders`,
-                        icon: '✅',
-                        color: 'bg-emerald-100'
-                    });
-                }
+            const lastCheck = parseInt(localStorage.getItem('last_notif_check') || '0');
 
-                if (order.status_pengiriman !== 'pending') {
-                    let title = 'Update Pengiriman';
-                    let message = `Status pesanan #${order.id}: ${order.status_pengiriman}`;
+            // Calculate unread: DB is_read=false OR (Voucher and time > lastCheck)
+            const unread = combined.filter(n => {
+                if (n.source === 'db') return !n.is_read;
+                if (n.source === 'voucher') return new Date(n.created_at).getTime() > lastCheck;
+                return false;
+            }).length;
 
-                    if (order.status_pengiriman === 'shipped') {
-                        title = 'Pesanan Dikirim 🚚';
-                        message = `Pesanan #${order.id} sedang dalam perjalanan.`;
-                    } else if (order.status_pengiriman === 'delivered') {
-                        title = 'Pesanan Sampai ✅';
-                        message = `Pesanan #${order.id} telah sampai di tujuan.`;
-                    } else if (order.status_pengiriman === 'processing') {
-                        title = 'Pesanan Diproses 📦';
-                        message = `Pesanan #${order.id} sedang diproses penjual.`;
-                    }
-
-                    formattedNotifications.push({
-                        id: `ship-${order.id}-${order.status_pengiriman}`,
-                        type: 'shipping',
-                        title: title,
-                        message: message,
-                        time: new Date(order.updated_at),
-                        link: `/orders`,
-                        icon: '📦',
-                        color: 'bg-purple-100'
-                    });
-                }
-            });
-
-            // Add refund notifications
-            refunds.forEach(refund => {
-                if (refund.status !== 'pending') {
-                    const isApproved = refund.status === 'approved';
-                    formattedNotifications.push({
-                        id: `refund-${refund.id}`,
-                        type: 'refund',
-                        title: isApproved ? 'Refund Disetujui ✅' : 'Refund Ditolak ❌',
-                        message: isApproved
-                            ? `Pengajuan refund pesanan #${refund.order_id} telah disetujui.`
-                            : `Mohon maaf, pengajuan refund pesanan #${refund.order_id} ditolak.`,
-                        time: new Date(refund.updated_at),
-                        link: `/orders`,
-                        icon: isApproved ? '💰' : '⚠️',
-                        color: isApproved ? 'bg-green-100' : 'bg-red-100'
-                    });
-                }
-            });
-
-            // Add voucher notifications
-            vouchers.forEach(v => {
-                const discountText = v.discount_type === 'percentage' ? `${v.amount}%` : `Rp ${v.amount.toLocaleString()}`;
-                formattedNotifications.push({
-                    id: `vouch-${v.code}`,
-                    type: 'voucher',
-                    title: 'Voucher Baru! 🏷️',
-                    message: `Gunakan kode ${v.code} untuk diskon ${discountText}.`,
-                    time: new Date(v.created_at),
-                    link: '/products',
-                    icon: '🎁',
-                    color: 'bg-orange-100'
-                });
-            });
-
-            // Sort by time
-            const sorted = formattedNotifications.sort((a, b) => b.time - a.time).slice(0, 15);
-            setNotifications(sorted);
-
-            // Calculate unread (simple mock: everything new since last check)
-            const lastCheck = localStorage.getItem('last_notif_check') || 0;
-            const unread = sorted.filter(n => n.time.getTime() > parseInt(lastCheck)).length;
+            console.log('🔔 Combined Notifications:', combined.length, 'Unread:', unread);
+            setNotifications(combined);
             setUnreadCount(unread);
-
         } catch (error) {
             console.error('Error fetching notifications:', error);
         }
     };
 
-    const handleToggle = () => {
-        setIsOpen(!isOpen);
-        if (!isOpen) {
-            // Mark all as read by updating last check time
-            localStorage.setItem('last_notif_check', Date.now().toString());
-            setUnreadCount(0);
+    const handleToggle = async () => {
+        const nextIsOpen = !isOpen;
+        setIsOpen(nextIsOpen);
+
+        if (nextIsOpen && unreadCount > 0) {
+            // Mark DB notifications as read
+            try {
+                const { error } = await supabase
+                    .from('notifications')
+                    .update({ is_read: true })
+                    .eq('user_id', user.id)
+                    .eq('is_read', false);
+
+                if (error) throw error;
+
+                // Mark Vouchers as read locally
+                localStorage.setItem('last_notif_check', Date.now().toString());
+
+                setUnreadCount(0);
+                // Update local state
+                setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+            } catch (error) {
+                console.error('Error marking notifications as read:', error);
+            }
         }
     };
 
@@ -235,12 +180,18 @@ const NotificationBell = () => {
                                 {notifications.map((notif) => (
                                     <Link
                                         key={notif.id}
-                                        to={notif.link}
+                                        to={notif.link || '/orders'}
                                         onClick={() => setIsOpen(false)}
                                         className="flex items-start gap-4 p-4 hover:bg-gray-50 transition-colors group"
                                     >
-                                        <div className={`flex-shrink-0 w-12 h-12 ${notif.color} rounded-xl flex items-center justify-center text-2xl shadow-sm group-hover:scale-110 transition-transform duration-200`}>
-                                            {notif.icon}
+                                        <div className={`flex-shrink-0 w-12 h-12 ${notif.type === 'payment' ? 'bg-emerald-100' :
+                                            notif.type === 'shipping' ? 'bg-purple-100' :
+                                                notif.type === 'refund' ? 'bg-red-100' :
+                                                    'bg-blue-100'} rounded-xl flex items-center justify-center text-2xl shadow-sm group-hover:scale-110 transition-transform duration-200`}>
+                                            {notif.type === 'payment' ? '✅' :
+                                                notif.type === 'shipping' ? '📦' :
+                                                    notif.type === 'refund' ? '💰' :
+                                                        '🔔'}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <p className="font-bold text-gray-900 text-sm mb-0.5">
@@ -253,11 +204,11 @@ const NotificationBell = () => {
                                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                 </svg>
-                                                {formatRelatif(notif.time)}
+                                                {formatRelatif(new Date(notif.created_at))}
                                             </p>
                                         </div>
                                         {/* Status Dot */}
-                                        {notif.time.getTime() > parseInt(localStorage.getItem('last_notif_check') || 0) && (
+                                        {!notif.is_read && (
                                             <div className="w-2.5 h-2.5 bg-blue-500 rounded-full mt-2"></div>
                                         )}
                                     </Link>

@@ -75,6 +75,16 @@ const AdminOrders = () => {
 
     const updateOrderStatus = async (orderId, field, value) => {
         try {
+            // ✅ Validasi: Jika merubah status pengiriman ke Selesai/Delivered, cek apakah sudah bayar
+            if (field === 'status_pengiriman' && (value === 'delivered' || value === 'selesai' || value === 'terima' || value === 'Selesai')) {
+                const orderToUpdate = orders.find(o => o.id === orderId) || selectedOrder;
+
+                if (orderToUpdate && orderToUpdate.status_pembayaran !== 'paid' && orderToUpdate.status_pembayaran !== 'lunas') {
+                    const confirmMsg = `⚠️ PERINGATAN: Pesanan #${orderId} BELUM DIBAYAR (Status: ${orderToUpdate.status_pembayaran}).\n\nPenjual biasanya tidak mengirim barang sebelum dibayar.\n\nApakah Anda yakin ingin merubah status pengiriman menjadi "Selesai"?`;
+                    if (!window.confirm(confirmMsg)) return;
+                }
+            }
+
             console.log(`🔄 Updating order ${orderId}: ${field} -> ${value}`);
             const { error } = await supabase
                 .from('orders')
@@ -86,8 +96,47 @@ const AdminOrders = () => {
                 throw error;
             }
 
-            toast.success('Status pesanan berhasil diperbarui');
+            toast.success(`Status ${field === 'status_pembayaran' ? 'Pembayaran' : 'Pengiriman'} diperbarui ke: ${getStatusLabel(value)}`);
             fetchOrders();
+
+            // ✅ Kirim notifikasi ke user via database
+            const orderToNotify = orders.find(o => o.id === orderId) || selectedOrder;
+            if (orderToNotify && orderToNotify.user_id) {
+                let notifTitle = 'Update Pesanan';
+                let notifMessage = `Status ${field === 'status_pembayaran' ? 'pembayaran' : 'pengiriman'} pesanan #${orderId} telah diperbarui menjadi ${getStatusLabel(value)}.`;
+                let notifType = field === 'status_pembayaran' ? 'payment' : 'shipping';
+
+                if (field === 'status_pengiriman') {
+                    if (value === 'shipped' || value === 'dikirim') {
+                        notifTitle = 'Pesanan Dikirim 🚚';
+                        notifMessage = `Hore! Pesanan #${orderId} sedang dalam perjalanan.`;
+                    } else if (value === 'delivered' || value === 'selesai' || value === 'terima') {
+                        notifTitle = 'Pesanan Sampai ✅';
+                        notifMessage = `Pesanan #${orderId} telah sampai. Silakan berikan ulasan!`;
+                    } else if (value === 'processing' || value === 'diproses') {
+                        notifTitle = 'Pesanan Diproses 📦';
+                        notifMessage = `Pesanan #${orderId} sedang disiapkan oleh kami.`;
+                    }
+                } else if (field === 'status_pembayaran' && (value === 'paid' || value === 'lunas')) {
+                    notifTitle = 'Pembayaran Dikonfirmasi ✅';
+                    notifMessage = `Pembayaran pesanan #${orderId} telah kami terima. Terima kasih!`;
+                }
+
+                console.log('📝 Attempting to insert notification for user:', orderToNotify.user_id);
+                const { error: notifError } = await supabase.from('notifications').insert({
+                    user_id: orderToNotify.user_id,
+                    type: notifType,
+                    title: notifTitle,
+                    message: notifMessage,
+                    order_id: orderId,
+                    link: '/orders'
+                });
+
+                if (notifError) console.error('❌ Failed to insert notification:', notifError);
+                else console.log('✅ Notification inserted successfully');
+            } else {
+                console.warn('⚠️ No user found to notify for order:', orderId);
+            }
 
             if (selectedOrder?.id === orderId) {
                 setSelectedOrder({ ...selectedOrder, [field]: value });
