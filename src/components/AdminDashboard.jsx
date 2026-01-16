@@ -12,6 +12,7 @@ import AdminShipping from "./AdminShipping";
 import AdminVouchers from "./AdminVouchers";
 import AdminCategories from "./AdminCategories";
 import AdminOverview from "./AdminOverview";
+import AdminRefunds from "./AdminRefunds";
 
 const AdminDashboard = () => {
   const { user, logout, isAdmin, loading: authLoading } = useAuth();
@@ -323,6 +324,13 @@ const AdminDashboard = () => {
             <span className="text-xl">🎟️</span>
             Voucher
           </button>
+          <button
+            onClick={() => setActiveTab("refunds")}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "refunds" ? "bg-red-50 text-red-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+          >
+            <span className="text-xl">🔄</span>
+            Retur & Refund
+          </button>
         </nav>
 
         <div className="p-4 border-t border-gray-100 space-y-2">
@@ -360,6 +368,7 @@ const AdminDashboard = () => {
             {activeTab === "analytics" && <AdminAnalytics />}
             {activeTab === "shipping" && <AdminShipping />}
             {activeTab === "vouchers" && <AdminVouchers />}
+            {activeTab === "refunds" && <AdminRefunds />}
             {activeTab === "categories" && <AdminCategories onCategoryChange={fetchCategories} />}
 
             {activeTab === "products" && (

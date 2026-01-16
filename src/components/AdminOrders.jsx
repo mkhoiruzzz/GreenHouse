@@ -75,12 +75,16 @@ const AdminOrders = () => {
 
     const updateOrderStatus = async (orderId, field, value) => {
         try {
+            console.log(`🔄 Updating order ${orderId}: ${field} -> ${value}`);
             const { error } = await supabase
                 .from('orders')
                 .update({ [field]: value })
                 .eq('id', orderId);
 
-            if (error) throw error;
+            if (error) {
+                console.error('❌ Supabase Update Error Details:', JSON.stringify(error, null, 2));
+                throw error;
+            }
 
             toast.success('Status pesanan berhasil diperbarui');
             fetchOrders();
@@ -89,8 +93,9 @@ const AdminOrders = () => {
                 setSelectedOrder({ ...selectedOrder, [field]: value });
             }
         } catch (error) {
-            console.error('Error updating order:', error);
-            toast.error('Gagal memperbarui status pesanan');
+            console.error('❌ Error updating order:', error);
+            const errorMsg = error.message || (typeof error === 'object' ? JSON.stringify(error) : 'Unknown error');
+            toast.error(`Gagal: ${errorMsg}`);
         }
     };
 
@@ -161,7 +166,12 @@ const AdminOrders = () => {
             dikonfirmasi: 'Confirmed',
             dikirim: 'Shipped',
             selesai: 'Completed',
-            dibatalkan: 'Cancelled'
+            dibatalkan: 'Cancelled',
+            diproses: 'Processing',
+            dikemas: 'Processing',
+            terkirim: 'Shipped',
+            diterima: 'Completed',
+            delivered: 'Completed'
         };
         return labels[status] || (status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Pending');
     };
@@ -179,7 +189,12 @@ const AdminOrders = () => {
             dikonfirmasi: 'bg-blue-100 text-blue-800 border border-blue-200',
             dikirim: 'bg-purple-100 text-purple-800 border border-purple-200',
             selesai: 'bg-green-100 text-green-800 border border-green-200',
-            dibatalkan: 'bg-red-100 text-red-800 border border-red-200'
+            dibatalkan: 'bg-red-100 text-red-800 border border-red-200',
+            diproses: 'bg-blue-100 text-blue-800 border border-blue-200',
+            dikemas: 'bg-blue-100 text-blue-800 border border-blue-200',
+            terkirim: 'bg-purple-100 text-purple-800 border border-purple-200',
+            diterima: 'bg-green-100 text-green-800 border border-green-200',
+            delivered: 'bg-green-100 text-green-800 border border-green-200'
         };
         return badges[status] || 'bg-gray-100 text-gray-800 border border-gray-200';
     };
@@ -455,8 +470,10 @@ const AdminOrders = () => {
                                         >
                                             <option value="pending">Pending</option>
                                             <option value="unpaid">Unpaid</option>
-                                            <option value="paid">Paid</option>
+                                            <option value="paid">Paid (Telah Bayar)</option>
                                             <option value="expired">Expired</option>
+                                            <option value="failed">Failed</option>
+                                            <option value="lunas">Lunas (Indo)</option>
                                         </select>
                                     </div>
                                     <div>
@@ -468,11 +485,15 @@ const AdminOrders = () => {
                                             onChange={(e) => updateOrderStatus(selectedOrder.id, 'status_pengiriman', e.target.value)}
                                             className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
                                         >
-                                            <option value="pending">Pending</option>
-                                            <option value="processing">Processing</option>
-                                            <option value="shipped">Shipped</option>
-                                            <option value="completed">Completed</option>
+                                            <option value="pending">Pending - Menunggu</option>
+                                            <option value="processing">Processing - Sedang Diproses</option>
+                                            <option value="shipped">Shipped - Sedang Dikirim</option>
+                                            <option value="delivered">Delivered - Sudah Sampai/Selesai ✅</option>
+                                            <option value="cancelled">Cancelled - Dibatalkan</option>
                                         </select>
+                                        <p className="mt-1 text-[10px] text-emerald-600 italic font-medium">
+                                            ✅ Gunakan "Delivered" untuk pesanan yang sudah sampai ke customer.
+                                        </p>
                                     </div>
                                 </div>
                             </div>

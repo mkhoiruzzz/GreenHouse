@@ -13,6 +13,12 @@ const Orders = () => {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedOrder, setSelectedOrder] = useState(null);
+    const [showReviewModal, setShowReviewModal] = useState(false);
+    const [showRefundModal, setShowRefundModal] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [uploadedFiles, setUploadedFiles] = useState([]);
+    const [reviewRating, setReviewRating] = useState(0);
+    const [hoverRating, setHoverRating] = useState(0);
 
 
 
@@ -262,9 +268,21 @@ const Orders = () => {
                 text: 'Selesai',
                 color: 'bg-green-100 text-green-800 border border-green-200'
             },
+            delivered: {
+                text: 'Selesai',
+                color: 'bg-green-100 text-green-800 border border-green-200'
+            },
             dibatalkan: {
                 text: 'Dibatalkan',
                 color: 'bg-red-100 text-red-800 border border-red-200'
+            },
+            cancelled: {
+                text: 'Dibatalkan',
+                color: 'bg-red-100 text-red-800 border border-red-200'
+            },
+            returned: {
+                text: 'Dikembalikan (Retur)',
+                color: 'bg-orange-100 text-orange-800 border border-orange-200'
             }
         };
 
@@ -387,6 +405,57 @@ const Orders = () => {
         }
     };
 
+    // ✅ Fungsi untuk handle upload file
+    const handleFileUpload = (files) => {
+        const maxSize = 10 * 1024 * 1024; // 10MB
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'video/mp4', 'video/quicktime'];
+
+        const validFiles = files.filter(file => {
+            if (file.size > maxSize) {
+                toast.error(`File ${file.name} terlalu besar (max 10MB)`);
+                return false;
+            }
+            if (!allowedTypes.includes(file.type)) {
+                toast.error(`Format file ${file.name} tidak didukung`);
+                return false;
+            }
+            return true;
+        });
+
+        setUploadedFiles(prev => [...prev, ...validFiles]);
+    };
+
+    // ✅ Fungsi untuk remove file
+    const removeFile = (index) => {
+        setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // ✅ Fungsi untuk upload files ke Supabase Storage
+    const uploadFilesToSupabase = async () => {
+        if (uploadedFiles.length === 0) return [];
+
+        const uploadPromises = uploadedFiles.map(async (file) => {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+            const filePath = `${user.id}/${fileName}`;
+
+            const { data, error } = await supabase.storage
+                .from('refund-proofs')
+                .upload(filePath, file);
+
+            if (error) throw error;
+
+            // Get public URL
+            const { data: urlData } = supabase.storage
+                .from('refund-proofs')
+                .getPublicUrl(filePath);
+
+            return urlData.publicUrl;
+        });
+
+        return await Promise.all(uploadPromises);
+    };
+
     const handleImageError = (e) => {
         e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik01MCAzM0M0MS4xNjM0IDMzIDM0IDQwLjE2MzQgMzQgNTBDMzQgNTkuODM2NiA0MS4xNjM0IDY3IDUwIDY3QzU4LjgzNjYgNjcgNjYgNTkuODM2NiA2NiA1MEM2NiA0MC4xNjM0IDU4LjgzNjYgMzMgNTAgMzNaIiBmaWxsPSIjMDlCOEI2Ii8+CjxwYXRoIGQ9Ik01MCA0MEM1NC40MTgzIDQwIDU4IDQzLjU4MTcgNTggNDhDNTggNTIuNDE4MyA1NC40MTgzIDU2IDUwIDU2QzQ1LjU4MTcgNTYgNDIgNTIuNDE4MyA0MiA0OEM0MiA0My41ODE3IDQ1LjU4MTcgNDAgNTAgNDBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K';
         e.target.onerror = null;
@@ -474,13 +543,49 @@ const Orders = () => {
                                     </div>
                                 </div>
 
-                                <div className="flex gap-3">
+                                <div className="flex flex-wrap gap-2">
                                     <button
                                         onClick={() => fetchOrderDetail(order.id)}
-                                        className="flex-1 py-3 rounded-lg text-sm font-semibold transition-all duration-300 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg hover:shadow-emerald-500/25"
+                                        className="flex-1 py-3 rounded-lg text-sm font-semibold transition-all duration-300 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/25"
                                     >
                                         Lihat Detail
                                     </button>
+
+                                    {order.status_pembayaran === 'paid' && (
+                                        <button
+                                            onClick={() => navigate(`/invoice/${order.id}`)}
+                                            className="px-4 py-3 border border-emerald-600 text-emerald-600 rounded-lg text-sm font-semibold hover:bg-emerald-50 transition-all flex items-center gap-2"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 00-2 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                            </svg>
+                                            Invoice
+                                        </button>
+                                    )}
+
+                                    {(order.status_pengiriman === 'delivered' || order.status_pengiriman === 'shipped') && order.status_pembayaran === 'paid' && (
+                                        <>
+                                            <button
+                                                className="px-4 py-3 bg-yellow-500 text-white rounded-lg text-sm font-semibold hover:bg-yellow-600 shadow-md transition-all"
+                                                onClick={() => {
+                                                    setSelectedOrder(order);
+                                                    setShowReviewModal(true);
+                                                }}
+                                            >
+                                                Beri Ulasan
+                                            </button>
+                                            <button
+                                                className="px-4 py-3 border border-red-500 text-red-500 rounded-lg text-sm font-semibold hover:bg-red-50 transition-all"
+                                                onClick={() => {
+                                                    setSelectedOrder(order);
+                                                    setShowRefundModal(true);
+                                                }}
+                                            >
+                                                Retur/Refund
+                                            </button>
+                                        </>
+                                    )}
+
                                     {canCancelOrder(order) && (
                                         <button
                                             onClick={() => handleCancelOrder(order)}
@@ -498,7 +603,7 @@ const Orders = () => {
                 </div>
 
                 {/* Order Detail Modal */}
-                {selectedOrder && (
+                {selectedOrder && !showReviewModal && !showRefundModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
                         <div className="rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto bg-white text-gray-900 shadow-2xl border border-gray-200">
                             <div className="p-6 border-b sticky top-0 bg-white border-gray-200">
@@ -625,27 +730,277 @@ const Orders = () => {
                                     </div>
                                 </div>
 
-                                {/* Cancel Button in Detail Modal */}
-                                {canCancelOrder(selectedOrder) && (
-                                    <div className="border-t pt-4 border-gray-200">
-                                        <div className="mb-3 p-3 rounded-lg text-sm bg-yellow-50 text-yellow-800 border border-yellow-200">
-                                            <p className="font-semibold mb-1">
-                                                ⏰ Batas Waktu Pembatalan
-                                            </p>
-                                            <p>
-                                                Anda dapat membatalkan pesanan ini dalam {getRemainingCancelTime(selectedOrder)} jam lagi.
-                                            </p>
-                                        </div>
+                                <div className="grid grid-cols-2 gap-3 pt-4 border-t border-gray-200">
+                                    <button
+                                        onClick={() => navigate(`/invoice/${selectedOrder.id}`)}
+                                        className="py-3 rounded-lg text-emerald-600 border border-emerald-600 font-bold hover:bg-emerald-50 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 00-2 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                        </svg>
+                                        Cetak Invoice
+                                    </button>
+
+                                    {canCancelOrder(selectedOrder) && (
                                         <button
                                             onClick={() => handleCancelOrder(selectedOrder)}
                                             disabled={loading}
-                                            className="w-full py-3 rounded-lg text-sm font-semibold transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-red-600 hover:bg-red-700 text-white"
+                                            className="py-3 rounded-lg text-white bg-red-600 font-bold hover:bg-red-700 transition-all"
                                         >
                                             {loading ? 'Membatalkan...' : 'Batalkan Pesanan'}
                                         </button>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Review Modal */}
+                {showReviewModal && selectedOrder && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                        <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+                            <h2 className="text-xl font-bold mb-4 text-gray-900">Beri Ulasan Produk</h2>
+                            <form onSubmit={async (e) => {
+                                e.preventDefault();
+                                const formData = new FormData(e.target);
+                                const rating = formData.get('rating');
+                                const comment = formData.get('comment');
+
+                                try {
+                                    setIsSubmitting(true);
+
+                                    if (reviewRating === 0) {
+                                        toast.error('Harap pilih rating bintang');
+                                        return;
+                                    }
+
+                                    for (const item of selectedOrder.order_items) {
+                                        const { error } = await supabase.from('reviews').insert({
+                                            user_id: user.id,
+                                            product_id: item.product_id,
+                                            order_id: selectedOrder.id,
+                                            rating: reviewRating,
+                                            comment
+                                        });
+                                        if (error) throw error;
+                                    }
+                                    toast.success('Terima kasih atas ulasannya!');
+                                    setShowReviewModal(false);
+                                    setSelectedOrder(null);
+                                    setReviewRating(0); // Reset rating
+                                } catch (error) {
+                                    console.error('Error submitting review:', error);
+                                    toast.error('Gagal mengirim ulasan');
+                                } finally {
+                                    setIsSubmitting(false);
+                                }
+                            }}>
+                                <div className="mb-6">
+                                    <label className="block text-sm font-medium mb-3 text-center text-gray-700">Rating Produk</label>
+                                    <div className="flex justify-center gap-2">
+                                        {[1, 2, 3, 4, 5].map(num => (
+                                            <button
+                                                key={num}
+                                                type="button"
+                                                onMouseEnter={() => setHoverRating(num)}
+                                                onMouseLeave={() => setHoverRating(0)}
+                                                onClick={() => setReviewRating(num)}
+                                                className="transition-all duration-200 transform hover:scale-125 focus:outline-none"
+                                            >
+                                                <span className={`text-5xl transition-all duration-300 ${(hoverRating || reviewRating) >= num
+                                                    ? 'text-yellow-400 drop-shadow-md'
+                                                    : 'text-gray-300'
+                                                    }`}>
+                                                    ★
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {reviewRating > 0 && (
+                                        <p className="text-center text-sm font-semibold mt-2 text-emerald-600 animate-pulse">
+                                            {reviewRating === 1 && 'Sangat Buruk 😞'}
+                                            {reviewRating === 2 && 'Buruk 😕'}
+                                            {reviewRating === 3 && 'Cukup OK 🙂'}
+                                            {reviewRating === 4 && 'Bagus! 😊'}
+                                            {reviewRating === 5 && 'Sangat Puas! 😍'}
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="mb-6">
+                                    <label className="block text-sm font-medium mb-2 text-gray-700">Komentar</label>
+                                    <textarea name="comment" className="w-full border border-gray-200 rounded-xl p-3 h-32 focus:ring-2 focus:ring-emerald-500 transition-all outline-none text-gray-800" placeholder="Apa pendapatmu tentang produk ini?" required></textarea>
+                                </div>
+                                <div className="flex gap-3">
+                                    <button type="button" onClick={() => setShowReviewModal(false)} className="flex-1 py-3 border border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-all">Batal</button>
+                                    <button type="submit" disabled={isSubmitting} className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-500/30 transition-all">
+                                        {isSubmitting ? 'Mengirim...' : 'Kirim Ulasan'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* Refund Modal */}
+                {showRefundModal && selectedOrder && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                        <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                                    <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    Ajukan Pengembalian Dana
+                                </h2>
+                                <button onClick={() => {
+                                    setShowRefundModal(false);
+                                    setUploadedFiles([]);
+                                }} className="text-gray-400 hover:text-gray-600">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div className="bg-red-50 p-3 rounded-lg border border-red-100 mb-6">
+                                <p className="text-xs text-red-600 leading-relaxed font-medium">
+                                    ⚠️ Pastikan Anda memiliki bukti foto/video barang yang tidak sesuai. Upload minimal 1 file bukti.
+                                </p>
+                            </div>
+
+                            <form onSubmit={async (e) => {
+                                e.preventDefault();
+                                const formData = new FormData(e.target);
+                                const reason = formData.get('reason');
+
+                                if (uploadedFiles.length === 0) {
+                                    toast.error('Harap upload minimal 1 foto/video bukti');
+                                    return;
+                                }
+
+                                try {
+                                    setIsSubmitting(true);
+                                    toast.info('Mengupload file bukti...');
+
+                                    const fileUrls = await uploadFilesToSupabase();
+
+                                    const { error } = await supabase.from('refunds').insert({
+                                        user_id: user.id,
+                                        order_id: selectedOrder.id,
+                                        reason,
+                                        proof_image_url: fileUrls.join(','),
+                                        status: 'pending'
+                                    });
+
+                                    if (error) throw error;
+
+                                    toast.success('Pengajuan refund berhasil dengan bukti!');
+                                    setShowRefundModal(false);
+                                    setSelectedOrder(null);
+                                    setUploadedFiles([]);
+                                } catch (error) {
+                                    console.error('Error:', error);
+                                    toast.error('Gagal mengajukan refund: ' + error.message);
+                                } finally {
+                                    setIsSubmitting(false);
+                                }
+                            }}>
+                                <div className="mb-6">
+                                    <label className="block text-sm font-medium mb-2 text-gray-700">
+                                        Alasan Pengembalian <span className="text-red-500">*</span>
+                                    </label>
+                                    <textarea
+                                        name="reason"
+                                        className="w-full border border-gray-200 rounded-xl p-3 h-32 focus:ring-2 focus:ring-red-500 transition-all outline-none text-gray-800"
+                                        placeholder="Jelaskan secara detail ketidaksesuaian barang..."
+                                        required
+                                    />
+                                </div>
+
+                                <div className="mb-6">
+                                    <label className="block text-sm font-medium mb-2 text-gray-700">
+                                        Upload Bukti (Foto/Video) <span className="text-red-500">*</span>
+                                    </label>
+                                    <div
+                                        className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-red-500 transition-all cursor-pointer bg-gray-50"
+                                        onClick={() => document.getElementById('fileInput').click()}
+                                        onDragOver={(e) => e.preventDefault()}
+                                        onDrop={(e) => {
+                                            e.preventDefault();
+                                            const files = Array.from(e.dataTransfer.files);
+                                            handleFileUpload(files);
+                                        }}
+                                    >
+                                        <svg className="mx-auto h-12 w-12 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                        </svg>
+                                        <p className="text-sm text-gray-600 font-medium">Klik atau drag file ke sini</p>
+                                        <p className="text-xs text-gray-400 mt-1">JPG, PNG, MP4, MOV (Max 10MB)</p>
+                                        <input
+                                            id="fileInput"
+                                            type="file"
+                                            className="hidden"
+                                            multiple
+                                            accept="image/*,video/*"
+                                            onChange={(e) => handleFileUpload(Array.from(e.target.files))}
+                                        />
+                                    </div>
+
+                                    {uploadedFiles.length > 0 && (
+                                        <div className="mt-4 space-y-2">
+                                            {uploadedFiles.map((file, index) => (
+                                                <div key={index} className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
+                                                    <div className="flex-shrink-0">
+                                                        {file.type.startsWith('image/') ? (
+                                                            <img src={URL.createObjectURL(file)} alt="preview" className="w-12 h-12 rounded object-cover" />
+                                                        ) : (
+                                                            <div className="w-12 h-12 bg-red-100 rounded flex items-center justify-center">
+                                                                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                                </svg>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                                                        <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeFile(index)}
+                                                        className="flex-shrink-0 p-1 hover:bg-red-100 rounded transition-colors"
+                                                    >
+                                                        <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowRefundModal(false);
+                                            setUploadedFiles([]);
+                                        }}
+                                        className="flex-1 py-3 border border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-all"
+                                    >
+                                        Batal
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmitting || uploadedFiles.length === 0}
+                                        className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 shadow-lg shadow-red-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isSubmitting ? 'Mengajukan...' : 'Kirim Pengajuan'}
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 )}

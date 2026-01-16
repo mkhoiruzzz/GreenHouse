@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import NotificationBell from './NotificationBell';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -48,7 +49,10 @@ const Navbar = () => {
           </div>
 
           {/* Right Side Controls */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1 md:space-x-3">
+            {/* Notification Bell */}
+            {isAuthenticated && <NotificationBell />}
+
             {/* Cart Indicator */}
             {isAuthenticated && (
               <Link to="/cart" className="relative hover:text-yellow-300 transition duration-200 p-2">
