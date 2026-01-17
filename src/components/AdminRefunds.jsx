@@ -149,7 +149,7 @@ const AdminRefunds = () => {
                                                     📸 {refund.proof_image_url.split(',').length} File
                                                 </button>
                                             ) : (
-                                                <span className="text-gray-300">N/A</span>
+                                                <span className="text-gray-300">Tidak Ada</span>
                                             )}
                                         </td>
                                         <td className="px-6 py-4 text-center">
@@ -157,7 +157,9 @@ const AdminRefunds = () => {
                                                 refund.status === 'approved' ? 'bg-green-100 text-green-700' :
                                                     'bg-red-100 text-red-700'
                                                 }`}>
-                                                {refund.status}
+                                                {refund.status === 'pending' ? 'Menunggu' :
+                                                    refund.status === 'approved' ? 'Disetujui' :
+                                                        refund.status === 'rejected' ? 'Ditolak' : refund.status}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-center">

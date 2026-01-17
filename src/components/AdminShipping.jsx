@@ -223,7 +223,7 @@ const AdminShipping = () => {
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Provinsi</th>
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Kota</th>
                                 <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">Jumlah Kurir</th>
-                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">Range Harga</th>
+                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">Rentang Harga</th>
                                 <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">Aksi</th>
                             </tr>
                         </thead>
@@ -404,7 +404,7 @@ const AdminShipping = () => {
                                     <option value="🚀 Instant">🚀 Instant</option>
                                     <option value="📦 Reguler">📦 Reguler</option>
                                     <option value="💰 Ekonomi">💰 Ekonomi</option>
-                                    <option value="📮 Standart">📮 Standart</option>
+                                    <option value="📮 Standar">📮 Standar</option>
                                     <option value="🚚 Kargo">🚚 Kargo</option>
                                 </select>
                                 <p className="text-xs text-gray-500 mt-1">Pilih tipe layanan pengiriman</p>

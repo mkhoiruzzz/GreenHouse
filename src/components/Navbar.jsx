@@ -43,8 +43,8 @@ const Navbar = () => {
             <Link to="/" className="flex items-center space-x-1 md:space-x-2 text-xl md:text-2xl font-bold text-yellow-300">
               <span className="text-lg md:text-xl">🌿</span>
               {/* Desktop: Full text, Mobile: Short text */}
-              <span className="hidden sm:block">Green House</span>
-              <span className="sm:hidden text-base">GreenHouse</span>
+              <span className="hidden sm:block">Toko Tanaman</span>
+              <span className="sm:hidden text-base">Toko Tanaman</span>
             </Link>
           </div>
 
@@ -87,7 +87,7 @@ const Navbar = () => {
                   onClick={closeMenu}
                 >
                   <span>🌿</span>
-                  <span>Green House</span>
+                  <span>Toko Tanaman</span>
                 </Link>
                 <button
                   onClick={closeMenu}
@@ -128,7 +128,7 @@ const Navbar = () => {
               ) : (
                 <div className="text-center py-4">
                   <p className="text-green-200 mb-3">
-                    Selamat datang di Green House
+                    Selamat datang di Toko Tanaman
                   </p>
                   <div className="flex space-x-2">
                     <Link
@@ -136,7 +136,7 @@ const Navbar = () => {
                       className="flex-1 bg-yellow-500 text-white py-2 px-3 rounded-lg hover:bg-yellow-600 transition duration-200 text-sm font-semibold"
                       onClick={closeMenu}
                     >
-                      Login
+                      Masuk
                     </Link>
                     <Link
                       to="/register"
@@ -157,7 +157,6 @@ const Navbar = () => {
                 className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                 onClick={closeMenu}
               >
-                <span className="mr-3 text-xl">🏠</span>
                 <span className="text-lg">Beranda</span>
               </Link>
 
@@ -166,7 +165,7 @@ const Navbar = () => {
                 className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                 onClick={closeMenu}
               >
-                <span className="mr-3 text-xl">🛍️</span>
+
                 <span className="text-lg">Produk</span>
               </Link>
 
@@ -175,7 +174,7 @@ const Navbar = () => {
                 className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                 onClick={closeMenu}
               >
-                <span className="mr-3 text-xl">ℹ️</span>
+
                 <span className="text-lg">Tentang Kami</span>
               </Link>
 
@@ -184,7 +183,7 @@ const Navbar = () => {
                 className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                 onClick={closeMenu}
               >
-                <span className="mr-3 text-xl">📞</span>
+
                 <span className="text-lg">Kontak</span>
               </Link>
 
@@ -198,7 +197,7 @@ const Navbar = () => {
                     onClick={closeMenu}
                   >
                     <div className="flex items-center">
-                      <span className="mr-3 text-xl">🛒</span>
+
                       <span className="text-lg">Keranjang</span>
                     </div>
                     {cartCount > 0 && (
@@ -213,7 +212,7 @@ const Navbar = () => {
                     className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                     onClick={closeMenu}
                   >
-                    <span className="mr-3 text-xl">📦</span>
+
                     <span className="text-lg">Pesanan Saya</span>
                   </Link>
 
@@ -222,7 +221,7 @@ const Navbar = () => {
                     className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                     onClick={closeMenu}
                   >
-                    <span className="mr-3 text-xl">👤</span>
+
                     <span className="text-lg">Profil Saya</span>
                   </Link>
 
@@ -232,8 +231,8 @@ const Navbar = () => {
                       className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                       onClick={closeMenu}
                     >
-                      <span className="mr-3 text-xl">⚙️</span>
-                      <span className="text-lg">Admin Dashboard</span>
+
+                      <span className="text-lg">Panel Admin</span>
                     </Link>
                   )}
 
@@ -243,7 +242,7 @@ const Navbar = () => {
                     onClick={handleLogout}
                     className="flex items-center w-full text-left py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
                   >
-                    <span className="mr-3 text-xl">🚪</span>
+
                     <span className="text-lg">Keluar</span>
                   </button>
                 </>
@@ -253,7 +252,7 @@ const Navbar = () => {
             {/* FOOTER SIDEBAR */}
             <div className="p-4 border-t border-green-500">
               <div className="text-center text-green-200 text-sm">
-                <p>🌿 Green House</p>
+                <p>🌿 Toko Tanaman</p>
                 <p className="text-xs mt-1">
                   Toko Tanaman Hias Terlengkap
                 </p>

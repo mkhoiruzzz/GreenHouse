@@ -252,7 +252,8 @@ const Checkout = () => {
         customer_email: formData.email,
         customer_phone: formData.no_telepon,
         kota: formData.kota,
-        provinsi: formData.provinsi
+        provinsi: formData.provinsi,
+        catatan: formData.catatan || ''
       };
 
       const { data: order, error: orderError } = await supabase

@@ -79,13 +79,7 @@ const AdminOverview = ({ onSwitchTab }) => {
 
     return (
         <div className="space-y-8">
-            {/* Welcome Section */}
-            <div className="bg-gradient-to-r from-green-600 to-emerald-700 rounded-2xl p-8 text-white shadow-lg">
-                <h2 className="text-3xl font-bold mb-2">Halo, Admin! 👋</h2>
-                <p className="opacity-90 max-w-xl">
-                    Berikut adalah ringkasan performa toko **Green House** hari ini. Pantau stok dan pesanan terbaru Anda di sini.
-                </p>
-            </div>
+
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -146,7 +140,7 @@ const AdminOverview = ({ onSwitchTab }) => {
                         <table className="w-full text-sm text-left">
                             <thead className="bg-gray-50 text-gray-600 font-medium">
                                 <tr>
-                                    <th className="px-6 py-4">Customer</th>
+                                    <th className="px-6 py-4">Pelanggan</th>
                                     <th className="px-6 py-4">Total</th>
                                     <th className="px-6 py-4">Status</th>
                                 </tr>
@@ -156,7 +150,7 @@ const AdminOverview = ({ onSwitchTab }) => {
                                     stats.recentOrders.map((order) => (
                                         <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4">
-                                                <p className="font-semibold text-gray-900">{order.nama_pembeli || order.email_pembeli || "Guest"}</p>
+                                                <p className="font-semibold text-gray-900">{order.nama_pembeli || order.email_pembeli || "Tamu"}</p>
                                                 <p className="text-xs text-gray-500">{order.email_pembeli || "-"}</p>
                                             </td>
                                             <td className="px-6 py-4 font-bold text-green-600">
@@ -165,7 +159,7 @@ const AdminOverview = ({ onSwitchTab }) => {
                                             <td className="px-6 py-4">
                                                 <span className={`px-3 py-1 rounded-full text-xs font-medium ${order.status_pembayaran === 'paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
                                                     }`}>
-                                                    {order.status_pembayaran === 'paid' ? 'Paid' : 'Pending'}
+                                                    {order.status_pembayaran === 'paid' ? 'Sudah Bayar' : 'Menunggu'}
                                                 </span>
                                             </td>
                                         </tr>

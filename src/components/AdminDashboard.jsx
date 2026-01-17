@@ -343,7 +343,7 @@ const AdminDashboard = () => {
             className="w-full flex items-center justify-center gap-2 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors duration-200 font-medium"
           >
             <span>🚪</span>
-            Logout
+            Keluar
           </button>
         </div>
       </aside>

@@ -16,6 +16,18 @@ const AdminOrders = () => {
         fetchOrders();
     }, [filterStatus]);
 
+    // ✅ Lock scroll when modal is open
+    useEffect(() => {
+        if (selectedOrder) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'unset';
+        }
+        return () => {
+            document.body.style.overflow = 'unset';
+        };
+    }, [selectedOrder]);
+
     const fetchOrders = async () => {
         try {
             setLoading(true);
@@ -203,31 +215,35 @@ const AdminOrders = () => {
     });
 
     const getStatusLabel = (status) => {
+        const s = (status || 'pending').toLowerCase();
         const labels = {
-            paid: 'Paid',
-            unpaid: 'Unpaid',
-            expired: 'Expired',
-            pending: 'Pending',
-            processing: 'Processing',
-            shipped: 'Shipped',
-            completed: 'Completed',
-            failed: 'Failed',
-            dikonfirmasi: 'Confirmed',
-            dikirim: 'Shipped',
-            selesai: 'Completed',
-            dibatalkan: 'Cancelled',
-            diproses: 'Processing',
-            dikemas: 'Processing',
-            terkirim: 'Shipped',
-            diterima: 'Completed',
-            delivered: 'Completed'
+            paid: 'Telah Dibayar',
+            unpaid: 'Belum Bayar',
+            expired: 'Kedaluwarsa',
+            pending: 'Menunggu',
+            processing: 'Diproses',
+            shipped: 'Dikirim',
+            completed: 'Selesai',
+            failed: 'Gagal',
+            dikonfirmasi: 'Dikonfirmasi',
+            dikirim: 'Dikirim',
+            selesai: 'Selesai',
+            dibatalkan: 'Dibatalkan',
+            diproses: 'Sedang Diproses',
+            dikemas: 'Dikemas',
+            terkirim: 'Terkirim',
+            diterima: 'Diterima',
+            delivered: 'Sudah Sampai',
+            lunas: 'Lunas'
         };
-        return labels[status] || (status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Pending');
+        return labels[s] || (status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Menunggu');
     };
 
     const getStatusBadge = (status) => {
+        const s = (status || 'pending').toLowerCase();
         const badges = {
             paid: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+            lunas: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
             unpaid: 'bg-red-100 text-red-800 border border-red-200',
             expired: 'bg-gray-100 text-gray-800 border border-gray-200',
             pending: 'bg-yellow-100 text-yellow-800 border border-yellow-200',
@@ -245,7 +261,7 @@ const AdminOrders = () => {
             diterima: 'bg-green-100 text-green-800 border border-green-200',
             delivered: 'bg-green-100 text-green-800 border border-green-200'
         };
-        return badges[status] || 'bg-gray-100 text-gray-800 border border-gray-200';
+        return badges[s] || 'bg-gray-100 text-gray-800 border border-gray-200';
     };
 
     const stats = {
@@ -274,7 +290,7 @@ const AdminOrders = () => {
                     <p className="text-2xl font-bold text-yellow-700">{stats.unpaid}</p>
                 </div>
                 <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-100">
-                    <p className="text-sm text-purple-600 font-medium">Total Revenue</p>
+                    <p className="text-sm text-purple-600 font-medium">Total Pendapatan</p>
                     <p className="text-2xl font-bold text-purple-700">
                         {formatCurrency(stats.totalRevenue)}
                     </p>
@@ -297,9 +313,9 @@ const AdminOrders = () => {
                         className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white text-gray-900"
                     >
                         <option value="all">Semua Status</option>
-                        <option value="paid">Sudah Dibayar</option>
-                        <option value="unpaid">Belum Dibayar</option>
-                        <option value="expired">Expired</option>
+                        <option value="paid">Telah Dibayar</option>
+                        <option value="unpaid">Belum Bayar</option>
+                        <option value="expired">Kedaluwarsa</option>
                     </select>
                 </div>
             </div>
@@ -325,7 +341,7 @@ const AdminOrders = () => {
                             <thead className="bg-gray-50">
                                 <tr>
                                     <th className="p-4 text-left text-sm font-bold text-gray-700">ID</th>
-                                    <th className="p-4 text-left text-sm font-bold text-gray-700">Customer</th>
+                                    <th className="p-4 text-left text-sm font-bold text-gray-700">Pelanggan</th>
                                     <th className="p-4 text-left text-sm font-bold text-gray-700">Total</th>
                                     <th className="p-4 text-left text-sm font-bold text-gray-700">Status Pembayaran</th>
                                     <th className="p-4 text-left text-sm font-bold text-gray-700">Status Pengiriman</th>
@@ -404,8 +420,8 @@ const AdminOrders = () => {
             {/* Order Detail Modal */}
             {selectedOrder && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-4 flex justify-between items-center">
+                    <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-scale-in">
+                        <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
                             <h2 className="text-xl font-bold text-white">Detail Pesanan #{selectedOrder.id}</h2>
                             <button
                                 onClick={() => setSelectedOrder(null)}
@@ -415,15 +431,25 @@ const AdminOrders = () => {
                             </button>
                         </div>
 
-                        <div className="p-6 space-y-6">
+                        <div className="p-6 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
                             {/* Customer Info */}
-                            <div>
-                                <h3 className="font-bold text-gray-800 mb-2">Informasi Customer</h3>
-                                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                                    <p><span className="font-semibold">Nama:</span> {selectedOrder.customer_name || '-'}</p>
-                                    <p><span className="font-semibold">Email:</span> {selectedOrder.customer_email || '-'}</p>
-                                    <p><span className="font-semibold">Telepon:</span> {selectedOrder.customer_phone || '-'}</p>
-                                    <p><span className="font-semibold">Alamat:</span> {selectedOrder.alamat_pengiriman || '-'}</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <h3 className="font-bold text-gray-800 mb-2">Informasi Pelanggan</h3>
+                                    <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+                                        <p><span className="font-semibold">Nama:</span> {selectedOrder.customer_name || '-'}</p>
+                                        <p><span className="font-semibold">Email:</span> {selectedOrder.customer_email || '-'}</p>
+                                        <p><span className="font-semibold">Telepon:</span> {selectedOrder.customer_phone || '-'}</p>
+                                        <p><span className="font-semibold">Alamat:</span> {selectedOrder.alamat_pengiriman || '-'}</p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-gray-800 mb-2">Catatan Pelanggan</h3>
+                                    <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-4 h-full">
+                                        <p className="text-gray-700 italic text-sm">
+                                            {selectedOrder.catatan ? `"${selectedOrder.catatan}"` : 'Tidak ada catatan dari pelanggan.'}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
 
@@ -517,12 +543,12 @@ const AdminOrders = () => {
                                             onChange={(e) => updateOrderStatus(selectedOrder.id, 'status_pembayaran', e.target.value)}
                                             className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
                                         >
-                                            <option value="pending">Pending</option>
-                                            <option value="unpaid">Unpaid</option>
-                                            <option value="paid">Paid (Telah Bayar)</option>
-                                            <option value="expired">Expired</option>
-                                            <option value="failed">Failed</option>
-                                            <option value="lunas">Lunas (Indo)</option>
+                                            <option value="pending">Menunggu Pembayaran</option>
+                                            <option value="unpaid">Belum Bayar</option>
+                                            <option value="paid">Sudah Bayar</option>
+                                            <option value="expired">Kedaluwarsa</option>
+                                            <option value="failed">Gagal</option>
+                                            <option value="lunas">Lunas</option>
                                         </select>
                                     </div>
                                     <div>
@@ -534,15 +560,12 @@ const AdminOrders = () => {
                                             onChange={(e) => updateOrderStatus(selectedOrder.id, 'status_pengiriman', e.target.value)}
                                             className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
                                         >
-                                            <option value="pending">Pending - Menunggu</option>
-                                            <option value="processing">Processing - Sedang Diproses</option>
-                                            <option value="shipped">Shipped - Sedang Dikirim</option>
-                                            <option value="delivered">Delivered - Sudah Sampai/Selesai ✅</option>
-                                            <option value="cancelled">Cancelled - Dibatalkan</option>
+                                            <option value="pending">Menunggu - Belum Diproses</option>
+                                            <option value="processing">Diproses - Sedang Disiapkan</option>
+                                            <option value="shipped">Dikirim - Dalam Perjalanan</option>
+                                            <option value="delivered">Sudah Sampai/Selesai</option>
+                                            <option value="cancelled">Dibatalkan</option>
                                         </select>
-                                        <p className="mt-1 text-[10px] text-emerald-600 italic font-medium">
-                                            ✅ Gunakan "Delivered" untuk pesanan yang sudah sampai ke customer.
-                                        </p>
                                     </div>
                                 </div>
                             </div>

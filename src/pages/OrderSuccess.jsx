@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { tripayService } from '../services/tripay';
 
+import { supabase } from '../lib/supabase';
+
 const OrderSuccess = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -17,11 +19,33 @@ const OrderSuccess = () => {
             }
 
             try {
+                // 1. Cek di Database Lokal dulu (karena Webhook mungkin sudah update)
+                const { data: order, error: dbError } = await supabase
+                    .from('orders')
+                    .select('status_pembayaran')
+                    .eq('tripay_reference', reference)
+                    .single();
+
+                if (!dbError && order && (order.status_pembayaran?.toLowerCase() === 'paid' || order.status_pembayaran?.toLowerCase() === 'lunas')) {
+                    console.log('✅ Order status in DB is PAID/LUNAS');
+                    setStatus('success');
+                    return;
+                }
+
+                // 2. Jika di DB belum Paid, cek langsung ke Tripay
                 const response = await tripayService.checkTransaction(reference);
                 if (response.success && response.data) {
                     const tripayStatus = response.data.status;
                     if (tripayStatus === 'PAID') {
                         setStatus('success');
+
+                        // Sync DB if Tripay says PAID but DB was still pending
+                        if (order && order.status_pembayaran !== 'paid') {
+                            await supabase
+                                .from('orders')
+                                .update({ status_pembayaran: 'paid' })
+                                .eq('tripay_reference', reference);
+                        }
                     } else {
                         setStatus('pending');
                     }

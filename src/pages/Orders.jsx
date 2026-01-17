@@ -208,6 +208,7 @@ const Orders = () => {
     // Fixed dark mode status badges
     // Separate logic for Payment and Shipping badges
     const getPaymentStatusBadge = (status) => {
+        const s = (status || 'pending').toLowerCase();
         const badges = {
             unpaid: {
                 text: 'Belum Dibayar',
@@ -218,6 +219,10 @@ const Orders = () => {
                 color: 'bg-yellow-100 text-yellow-800 border border-yellow-200'
             },
             paid: {
+                text: 'Dibayar',
+                color: 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+            },
+            lunas: {
                 text: 'Dibayar',
                 color: 'bg-emerald-100 text-emerald-800 border border-emerald-200'
             },
@@ -235,7 +240,7 @@ const Orders = () => {
             }
         };
 
-        return badges[status] || badges.pending;
+        return badges[s] || badges.pending;
     };
 
     const getShippingStatusBadge = (status) => {

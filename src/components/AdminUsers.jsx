@@ -93,19 +93,19 @@ const AdminUsers = () => {
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-100">
-                    <p className="text-sm text-blue-600 font-medium">Total Users</p>
+                    <p className="text-sm text-blue-600 font-medium">Total Pengguna</p>
                     <p className="text-2xl font-bold text-blue-700">{stats.total}</p>
                 </div>
                 <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-100">
-                    <p className="text-sm text-green-600 font-medium">Active Users</p>
+                    <p className="text-sm text-green-600 font-medium">Pengguna Aktif</p>
                     <p className="text-2xl font-bold text-green-700">{stats.active}</p>
                 </div>
                 <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-4 border border-yellow-100">
-                    <p className="text-sm text-yellow-600 font-medium">Inactive Users</p>
+                    <p className="text-sm text-yellow-600 font-medium">Pengguna Nonaktif</p>
                     <p className="text-2xl font-bold text-yellow-700">{stats.inactive}</p>
                 </div>
                 <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-100">
-                    <p className="text-sm text-purple-600 font-medium">Total Orders</p>
+                    <p className="text-sm text-purple-600 font-medium">Total Pesanan</p>
                     <p className="text-2xl font-bold text-purple-700">{stats.totalOrders}</p>
                 </div>
             </div>
@@ -141,7 +141,7 @@ const AdminUsers = () => {
                         <table className="w-full">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="p-4 text-left text-sm font-bold text-gray-700">User</th>
+                                    <th className="p-4 text-left text-sm font-bold text-gray-700">Pengguna</th>
                                     <th className="p-4 text-left text-sm font-bold text-gray-700">Email</th>
                                     <th className="p-4 text-left text-sm font-bold text-gray-700">Total Pesanan</th>
                                     <th className="p-4 text-left text-sm font-bold text-gray-700">Total Belanja</th>
@@ -198,7 +198,7 @@ const AdminUsers = () => {
                                                 ? 'bg-green-100 text-green-800'
                                                 : 'bg-red-100 text-red-800'
                                                 }`}>
-                                                {user.status === 'active' || !user.status ? 'Active' : 'Inactive'}
+                                                {user.status === 'active' || !user.status ? 'Aktif' : 'Nonaktif'}
                                             </span>
                                         </td>
                                         <td className="p-4">
@@ -227,7 +227,7 @@ const AdminUsers = () => {
                                                         : 'bg-green-500 text-white hover:bg-green-600'
                                                         }`}
                                                 >
-                                                    {user.status === 'active' || !user.status ? 'Deactivate' : 'Activate'}
+                                                    {user.status === 'active' || !user.status ? 'Nonaktifkan' : 'Aktifkan'}
                                                 </button>
                                             </div>
                                         </td>
@@ -285,7 +285,7 @@ const AdminUsers = () => {
                                         ? 'bg-green-100 text-green-800'
                                         : 'bg-red-100 text-red-800'
                                         }`}>
-                                        {selectedUser.status === 'active' || !selectedUser.status ? 'Active' : 'Inactive'}
+                                        {selectedUser.status === 'active' || !selectedUser.status ? 'Aktif' : 'Nonaktif'}
                                     </span>
                                 </p>
                                 <p><span className="font-semibold">Total Pesanan:</span> {selectedUser.totalOrders}</p>

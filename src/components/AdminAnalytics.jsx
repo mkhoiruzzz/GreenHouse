@@ -88,7 +88,7 @@ const AdminAnalytics = () => {
                 if (!productSales[productId]) {
                     productSales[productId] = {
                         product_id: productId,
-                        nama_produk: item.products?.nama_produk || 'Unknown',
+                        nama_produk: item.products?.nama_produk || 'Tidak Diketahui',
                         gambar_url: item.products?.gambar_url,
                         total_quantity: 0,
                         total_revenue: 0
@@ -175,7 +175,7 @@ const AdminAnalytics = () => {
                 new Date(order.created_at).toLocaleDateString('id-ID'),
                 order.payment_name || '-',
                 order.nama_pembeli || order.email_pembeli,
-                order.status_pembayaran.toUpperCase(),
+                order.status_pembayaran === 'paid' ? 'SUDAH BAYAR' : (order.status_pembayaran === 'unpaid' ? 'BELUM BAYAR' : order.status_pembayaran.toUpperCase()),
                 formatCurrency(order.total_harga)
             ]);
 
