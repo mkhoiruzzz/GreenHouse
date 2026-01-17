@@ -27,6 +27,7 @@ import Invoice from './pages/Invoice'
 const AppContent = () => {
   const location = useLocation();
   const isAdminPath = location.pathname.startsWith('/admin');
+  const isNoFooterPage = ['/cart', '/checkout', '/order-success', '/orders', '/profile', '/contact'].includes(location.pathname);
 
   return (
     <div className="App">
@@ -52,7 +53,7 @@ const AppContent = () => {
           <Route path="/invoice/:orderId" element={<Invoice />} />
         </Routes>
       </main>
-      {!isAdminPath && <Footer />}
+      {!isAdminPath && !isNoFooterPage && <Footer />}
       <ToastContainer position="bottom-right" />
     </div>
   );

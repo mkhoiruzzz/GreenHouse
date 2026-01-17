@@ -24,7 +24,7 @@ const NotificationBell = () => {
                     filter: `user_id=eq.${user.id}`
                 }, (payload) => {
                     console.log('New notification received:', payload.new);
-                    setNotifications(prev => [payload.new, ...prev].slice(0, 20));
+                    setNotifications(prev => [payload.new, ...prev]);
                     setUnreadCount(prev => prev + 1);
 
                     // Show a small browser notification or toast if desired
@@ -40,7 +40,19 @@ const NotificationBell = () => {
         }
     }, [user]);
 
+    // Close dropdown on click outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     const fetchNotifications = async () => {
+        if (!user) return;
         try {
             // 1. Fetch persistent notifications from DB
             const { data: dbNotifs, error: dbError } = await supabase
@@ -48,7 +60,7 @@ const NotificationBell = () => {
                 .select('*')
                 .eq('user_id', user.id)
                 .order('created_at', { ascending: false })
-                .limit(20);
+                .limit(30);
 
             if (dbError) throw dbError;
 
@@ -81,51 +93,55 @@ const NotificationBell = () => {
             }));
 
             const combined = [...formattedDbNotifs, ...formattedVouchers]
-                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-                .slice(0, 20);
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
             const lastCheck = parseInt(localStorage.getItem('last_notif_check') || '0');
 
             // Calculate unread: DB is_read=false OR (Voucher and time > lastCheck)
-            const unread = combined.filter(n => {
-                if (n.source === 'db') return !n.is_read;
-                if (n.source === 'voucher') return new Date(n.created_at).getTime() > lastCheck;
-                return false;
-            }).length;
+            const markedCombined = combined.map(n => {
+                if (n.source === 'voucher') {
+                    return { ...n, is_read: new Date(n.created_at).getTime() <= lastCheck };
+                }
+                return n;
+            });
 
-            console.log('🔔 Combined Notifications:', combined.length, 'Unread:', unread);
-            setNotifications(combined);
+            const unread = markedCombined.filter(n => !n.is_read).length;
+
+            console.log('🔔 Combined Notifications:', markedCombined.length, 'Unread:', unread);
+            setNotifications(markedCombined);
             setUnreadCount(unread);
         } catch (error) {
             console.error('Error fetching notifications:', error);
         }
     };
 
-    const handleToggle = async () => {
-        const nextIsOpen = !isOpen;
-        setIsOpen(nextIsOpen);
+    const handleMarkAllAsRead = async (e) => {
+        if (e) e.stopPropagation();
+        if (!user || unreadCount === 0) return;
 
-        if (nextIsOpen && unreadCount > 0) {
+        try {
             // Mark DB notifications as read
-            try {
-                const { error } = await supabase
-                    .from('notifications')
-                    .update({ is_read: true })
-                    .eq('user_id', user.id)
-                    .eq('is_read', false);
+            const { error } = await supabase
+                .from('notifications')
+                .update({ is_read: true })
+                .eq('user_id', user.id)
+                .eq('is_read', false);
 
-                if (error) throw error;
+            if (error) throw error;
 
-                // Mark Vouchers as read locally
-                localStorage.setItem('last_notif_check', Date.now().toString());
+            // Mark Vouchers as read locally
+            localStorage.setItem('last_notif_check', Date.now().toString());
 
-                setUnreadCount(0);
-                // Update local state
-                setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-            } catch (error) {
-                console.error('Error marking notifications as read:', error);
-            }
+            setUnreadCount(0);
+            // Update local state
+            setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+        } catch (error) {
+            console.error('Error marking notifications as read:', error);
         }
+    };
+
+    const handleToggle = () => {
+        setIsOpen(!isOpen);
     };
 
     // ✅ Helper untuk format waktu relatif tanpa library eksternal
@@ -134,12 +150,15 @@ const NotificationBell = () => {
         const diffInSeconds = Math.floor((now - date) / 1000);
 
         if (diffInSeconds < 60) return 'Baru saja';
-        if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} menit yang lalu`;
-        if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} jam yang lalu`;
-        if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} hari yang lalu`;
+        if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m`;
+        if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}j`;
+        if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}h`;
 
         return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
     };
+
+    const unreadNotifs = notifications.filter(n => !n.is_read);
+    const readNotifs = notifications.filter(n => n.is_read);
 
     return (
         <div className="relative" ref={dropdownRef}>
@@ -151,7 +170,7 @@ const NotificationBell = () => {
             >
                 <div className="text-xl">🔔</div>
                 {unreadCount > 0 && (
-                    <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-green-600 animate-pulse">
+                    <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-emerald-600 animate-bounce">
                         {unreadCount}
                     </span>
                 )}
@@ -159,71 +178,65 @@ const NotificationBell = () => {
 
             {/* Dropdown Panel */}
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-80 md:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden transform origin-top-right transition-all duration-300 animate-fade-in">
-                    <div className="p-4 bg-emerald-600 text-white flex justify-between items-center">
-                        <h3 className="font-bold text-lg">Notifikasi</h3>
-                        {unreadCount > 0 && (
-                            <span className="bg-white/20 text-xs px-2 py-1 rounded-full border border-white/30">
-                                {unreadCount} baru
-                            </span>
-                        )}
+                <div className="absolute right-0 mt-3 w-[280px] sm:w-[320px] bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-emerald-100 z-[100] overflow-hidden transform origin-top-right transition-all duration-300 animate-in fade-in slide-in-from-top-2">
+                    {/* Header */}
+                    <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-emerald-50/30">
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-sm">🌿</span>
+                            <h3 className="font-bold text-gray-800 text-sm">Notifikasi</h3>
+                        </div>
                     </div>
 
-                    <div className="max-h-[400px] overflow-y-auto">
+                    {/* Notification List */}
+                    <div className="max-h-[280px] overflow-y-auto custom-scrollbar">
                         {notifications.length === 0 ? (
-                            <div className="p-10 text-center text-gray-500">
-                                <div className="text-4xl mb-2">📭</div>
-                                <p className="text-sm italic">Belum ada notifikasi baru</p>
+                            <div className="py-10 text-center text-gray-400">
+                                <div className="text-3xl mb-2 opacity-20">🍃</div>
+                                <p className="text-xs font-medium">Kosong nih...</p>
                             </div>
                         ) : (
                             <div className="divide-y divide-gray-50">
-                                {notifications.map((notif) => (
-                                    <Link
-                                        key={notif.id}
-                                        to={notif.link || '/orders'}
-                                        onClick={() => setIsOpen(false)}
-                                        className="flex items-start gap-4 p-4 hover:bg-gray-50 transition-colors group"
-                                    >
-                                        <div className={`flex-shrink-0 w-12 h-12 ${notif.type === 'payment' ? 'bg-emerald-100' :
-                                            notif.type === 'shipping' ? 'bg-purple-100' :
-                                                notif.type === 'refund' ? 'bg-red-100' :
-                                                    'bg-blue-100'} rounded-xl flex items-center justify-center text-2xl shadow-sm group-hover:scale-110 transition-transform duration-200`}>
-                                            {notif.type === 'payment' ? '✅' :
-                                                notif.type === 'shipping' ? '📦' :
-                                                    notif.type === 'refund' ? '💰' :
-                                                        '🔔'}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-bold text-gray-900 text-sm mb-0.5">
-                                                {notif.title}
-                                            </p>
-                                            <p className="text-gray-600 text-xs leading-relaxed line-clamp-2">
-                                                {notif.message}
-                                            </p>
-                                            <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
-                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                </svg>
-                                                {formatRelatif(new Date(notif.created_at))}
-                                            </p>
-                                        </div>
-                                        {/* Status Dot */}
-                                        {!notif.is_read && (
-                                            <div className="w-2.5 h-2.5 bg-blue-500 rounded-full mt-2"></div>
+                                {/* Unread Section */}
+                                {unreadNotifs.length > 0 && (
+                                    <div className="bg-white">
+                                        <div className="px-4 py-1.5 bg-gray-50/50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Baru</div>
+                                        {unreadNotifs.map((notif) => (
+                                            <NotificationItem key={notif.id} notif={notif} formatRelatif={formatRelatif} setIsOpen={setIsOpen} />
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Read Section */}
+                                {readNotifs.length > 0 && (
+                                    <div className="bg-white">
+                                        {(unreadNotifs.length > 0) && (
+                                            <div className="px-4 py-1.5 bg-gray-50/50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sebelumnya</div>
                                         )}
-                                    </Link>
-                                ))}
+                                        {readNotifs.map((notif) => (
+                                            <NotificationItem key={notif.id} notif={notif} formatRelatif={formatRelatif} setIsOpen={setIsOpen} />
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
 
-                    <div className="p-3 border-t bg-gray-50 text-center">
+                    {/* Footer */}
+                    <div className="p-3 bg-emerald-50/10 border-t border-gray-50 space-y-2">
+                        {unreadCount > 0 && (
+                            <button
+                                onClick={handleMarkAllAsRead}
+                                className="w-full py-1.5 text-[10px] font-bold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg uppercase tracking-wider transition-colors border border-emerald-100/50"
+                            >
+                                Tandai Semua Sudah Dibaca
+                            </button>
+                        )}
                         <Link
                             to="/orders"
                             onClick={() => setIsOpen(false)}
-                            className="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition-colors py-2"
+                            className="flex items-center justify-center w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold shadow-md shadow-emerald-100 transition-all active:scale-95"
                         >
-                            Lihat Semua Pesanan →
+                            Lihat Semua Aktivitas
                         </Link>
                     </div>
                 </div>
@@ -231,5 +244,41 @@ const NotificationBell = () => {
         </div>
     );
 };
+
+const NotificationItem = ({ notif, formatRelatif, setIsOpen }) => (
+    <Link
+        to={notif.link || '/orders'}
+        onClick={() => setIsOpen(false)}
+        className={`flex items-start gap-3 px-4 py-3 transition-all duration-200 border-l-2 hover:bg-emerald-50/30 ${notif.is_read ? 'border-transparent' : 'border-emerald-500 bg-emerald-50/40'}`}
+    >
+        {/* Icon */}
+        <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm ${notif.type === 'payment' ? 'bg-emerald-100 text-emerald-600' :
+            notif.type === 'shipping' ? 'bg-purple-100 text-purple-600' :
+                notif.type === 'refund' ? 'bg-red-100 text-red-600' :
+                    notif.type === 'voucher' ? 'bg-amber-100 text-amber-600' :
+                        'bg-blue-100 text-blue-600'}`}>
+            {notif.type === 'payment' ? '💳' :
+                notif.type === 'shipping' ? '🚚' :
+                    notif.type === 'refund' ? '💰' :
+                        notif.type === 'voucher' ? '🏷️' :
+                            '🔔'}
+        </div>
+
+        {/* Text */}
+        <div className="flex-1 min-w-0">
+            <div className="flex justify-between items-start">
+                <p className={`font-bold text-[11px] leading-tight truncate ${notif.is_read ? 'text-gray-600' : 'text-gray-900'}`}>
+                    {notif.title}
+                </p>
+                <span className="text-[9px] font-medium text-gray-400 shrink-0 ml-2">
+                    {formatRelatif(new Date(notif.created_at))}
+                </span>
+            </div>
+            <p className={`text-[10px] leading-snug mt-0.5 line-clamp-2 ${notif.is_read ? 'text-gray-400' : 'text-gray-700'}`}>
+                {notif.message}
+            </p>
+        </div>
+    </Link>
+);
 
 export default NotificationBell;

@@ -19,20 +19,18 @@ const Home = () => {
     {
       id: 1,
       name: 'Benih Unggul',
-      image: 'https://images.unsplash.com/photo-1594967396001-f2f518e26895?auto=format&fit=crop&w=500&q=80',
-      description: 'Mulai kebun impian Anda',
+      image: 'https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?auto=format&fit=crop&w=500&q=80',
       link: '/products?category=benih',
       color: 'bg-green-50',
-      icon: '🌱'
     },
     {
       id: 2,
       name: 'Pupuk Nutrisi',
-      image: 'https://images.unsplash.com/photo-1628172828559-0f6a8e803c4f?auto=format&fit=crop&w=500&q=80',
+      image: 'https://images.unsplash.com/photo-1585314062604-1a357de8b000?auto=format&fit=crop&w=500&q=80',
       description: 'Makanan terbaik untuk tanaman',
       link: '/products?category=pupuk',
       color: 'bg-amber-50',
-      icon: '⚡'
+
     },
     {
       id: 3,
@@ -41,7 +39,7 @@ const Home = () => {
       description: 'Cantikkan ruangan Anda',
       link: '/products?category=tanaman',
       color: 'bg-emerald-50',
-      icon: '🌿'
+
     },
     {
       id: 4,
@@ -50,7 +48,7 @@ const Home = () => {
       description: 'Perlengkapan berkebun',
       link: '/products?category=pot',
       color: 'bg-stone-50',
-      icon: '🪴'
+
     }
   ];
 
