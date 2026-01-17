@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-route
 import { AuthProvider } from './context/AuthContext'
 import { CartProvider } from './context/CartContext'
 import Navbar from './components/Navbar'
+import CartDrawer from './components/CartDrawer'
 import Footer from './components/Footer'
 import Home from './pages/Home'
 import Login from './pages/Login'
@@ -32,6 +33,7 @@ const AppContent = () => {
   return (
     <div className="App">
       <Navbar />
+      <CartDrawer />
       <main className="min-h-screen flex flex-col">
         <Routes>
           <Route path="/" element={<Home />} />

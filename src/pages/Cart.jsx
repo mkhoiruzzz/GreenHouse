@@ -204,9 +204,6 @@ const Cart = () => {
                       {formatCurrency(total)}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    *Ongkir dihitung di checkout
-                  </p>
                 </div>
               </div>
 
@@ -224,12 +221,7 @@ const Cart = () => {
                 ➕ Belanja Lagi
               </button>
 
-              {/* Info */}
-              <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
-                <p className="text-gray-700">
-                  <strong>📦 Info:</strong> Pengiriman disesuaikan dengan ketahanan tanaman
-                </p>
-              </div>
+
             </div>
           </div>
         </div>

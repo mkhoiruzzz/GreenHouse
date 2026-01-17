@@ -7,7 +7,7 @@ import NotificationBell from './NotificationBell';
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { user, profile, logout, isAuthenticated, isAdmin } = useAuth();
-  const { cartCount } = useCart();
+  const { cartCount, toggleCartDrawer } = useCart();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -55,14 +55,18 @@ const Navbar = () => {
 
             {/* Cart Indicator */}
             {isAuthenticated && (
-              <Link to="/cart" className="relative hover:text-yellow-300 transition duration-200 p-2">
+              <button
+                onClick={() => toggleCartDrawer(true)}
+                className="relative hover:text-yellow-300 transition duration-200 p-2"
+                aria-label="Keranjang Belanja"
+              >
                 <span className="text-xl">🛒</span>
                 {cartCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
                     {cartCount}
                   </span>
                 )}
-              </Link>
+              </button>
             )}
           </div>
         </div>
@@ -191,21 +195,20 @@ const Navbar = () => {
 
               {isAuthenticated && (
                 <>
-                  <Link
-                    to="/cart"
-                    className="flex items-center justify-between py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
-                    onClick={closeMenu}
+                  <button
+                    onClick={() => {
+                      closeMenu();
+                      toggleCartDrawer(true);
+                    }}
+                    className="flex justify-between items-center w-full py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200 text-left"
                   >
-                    <div className="flex items-center">
-
-                      <span className="text-lg">Keranjang</span>
-                    </div>
+                    <span className="text-lg">Keranjang</span>
                     {cartCount > 0 && (
                       <span className="bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
                         {cartCount}
                       </span>
                     )}
-                  </Link>
+                  </button>
 
                   <Link
                     to="/orders"
