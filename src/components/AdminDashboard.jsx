@@ -272,80 +272,65 @@ const AdminDashboard = () => {
             onClick={() => setActiveTab("dashboard")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "dashboard" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
           >
-            <span className="text-xl">🏠</span>
+
             Dashboard
           </button>
           <button
             onClick={() => setActiveTab("products")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "products" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
           >
-            <span className="text-xl">📦</span>
+
             Produk
           </button>
           <button
             onClick={() => setActiveTab("categories")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "categories" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
           >
-            <span className="text-xl">🏷️</span>
+
             Kategori
           </button>
           <button
             onClick={() => setActiveTab("orders")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "orders" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
           >
-            <span className="text-xl">📋</span>
+
             Pesanan
           </button>
           <button
             onClick={() => setActiveTab("users")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "users" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
           >
-            <span className="text-xl">👥</span>
             Pengguna
           </button>
           <button
             onClick={() => setActiveTab("analytics")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "analytics" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
           >
-            <span className="text-xl">📊</span>
+
             Analitik
           </button>
           <button
             onClick={() => setActiveTab("shipping")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "shipping" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
           >
-            <span className="text-xl">🚚</span>
+
             Pengiriman
           </button>
           <button
             onClick={() => setActiveTab("vouchers")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "vouchers" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
           >
-            <span className="text-xl">🎟️</span>
+
             Voucher
           </button>
           <button
             onClick={() => setActiveTab("refunds")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "refunds" ? "bg-red-50 text-red-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
           >
-            <span className="text-xl">🔄</span>
+
             Retur & Refund
           </button>
         </nav>
-
-        <div className="p-4 border-t border-gray-100 space-y-2">
-          <button
-            onClick={() => {
-              if (window.confirm('Apakah Anda yakin ingin keluar dari halaman Admin?')) {
-                logout();
-              }
-            }}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors duration-200 font-medium"
-          >
-            <span>🚪</span>
-            Keluar
-          </button>
-        </div>
       </aside>
 
       <main className="flex-1 flex flex-col overflow-hidden h-screen">

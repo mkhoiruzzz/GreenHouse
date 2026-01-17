@@ -315,46 +315,6 @@ const Product = () => {
               </button>
             )}
           </div>
-
-          {/* Enhanced Quick Categories */}
-          <div className="flex gap-3 overflow-x-auto pb-2 mt-6 px-2 scrollbar-hide">
-            <button
-              onClick={() => handleFilterChange('productType', 'all')}
-              className={`px-5 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-300 shadow-md ${filters.productType === 'all'
-                ? 'bg-white text-green-600 shadow-lg scale-105'
-                : 'bg-green-500/20 text-white hover:bg-green-500/30 backdrop-blur-sm'
-                }`}
-            >
-              🌿 Semua
-            </button>
-            <button
-              onClick={() => handleFilterChange('productType', 'plants')}
-              className={`px-5 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-300 shadow-md ${filters.productType === 'plants'
-                ? 'bg-white text-green-600 shadow-lg scale-105'
-                : 'bg-green-500/20 text-white hover:bg-green-500/30 backdrop-blur-sm'
-                }`}
-            >
-              🌱 Tanaman Hias
-            </button>
-            <button
-              onClick={() => handleFilterChange('productType', 'accessories')}
-              className={`px-5 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-300 shadow-md ${filters.productType === 'accessories'
-                ? 'bg-white text-green-600 shadow-lg scale-105'
-                : 'bg-green-500/20 text-white hover:bg-green-500/30 backdrop-blur-sm'
-                }`}
-            >
-              🪴 Aksesoris
-            </button>
-            <button
-              onClick={() => handleFilterChange('durability', 'easy')}
-              className={`px-5 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-300 shadow-md ${filters.durability === 'easy'
-                ? 'bg-white text-green-600 shadow-lg scale-105'
-                : 'bg-green-500/20 text-white hover:bg-green-500/30 backdrop-blur-sm'
-                }`}
-            >
-              ⭐ Mudah Rawat
-            </button>
-          </div>
         </div>
       </div>
 
@@ -382,15 +342,15 @@ const Product = () => {
               {/* Sort Options */}
               <div className="mb-6">
                 <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                  <span className="text-green-600">📊</span>
+
                   Urutkan
                 </h4>
                 <div className="space-y-2">
                   {[
-                    { value: 'newest', label: 'Terbaru', icon: '🆕' },
-                    { value: 'price_low', label: 'Harga Terendah', icon: '💰' },
-                    { value: 'price_high', label: 'Harga Tertinggi', icon: '💎' },
-                    { value: 'name', label: 'Nama A-Z', icon: '🔤' }
+                    { value: 'newest', label: 'Terbaru', },
+                    { value: 'price_low', label: 'Harga Terendah', },
+                    { value: 'price_high', label: 'Harga Tertinggi', },
+                    { value: 'name', label: 'Nama A-Z', }
                   ].map((option) => (
                     <button
                       key={option.value}
@@ -410,7 +370,6 @@ const Product = () => {
               {/* Categories */}
               <div className="mb-6">
                 <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                  <span className="text-green-600">🏷️</span>
                   Kategori
                 </h4>
                 <select
@@ -475,27 +434,9 @@ const Product = () => {
               </div>
             </div>
 
-            {/* Enhanced Sort Bar */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-lg p-4 mb-6">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="text-sm text-gray-700">
-                  Menampilkan <span className="font-bold text-green-600 text-lg">{products.length}</span> produk
-                </div>
-                <div className="flex items-center gap-3 w-full sm:w-auto">
-                  <span className="text-xs text-gray-500 whitespace-nowrap">Urutkan:</span>
-                  <select
-                    value={filters.sort}
-                    onChange={(e) => handleFilterChange('sort', e.target.value)}
-                    className="flex-1 sm:flex-none text-sm border-2 border-gray-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white text-gray-900 transition-all duration-300 hover:border-green-300"
-                  >
-                    <option value="newest">🆕 Terbaru</option>
-                    <option value="price_low">💰 Harga Terendah</option>
-                    <option value="price_high">💎 Harga Tertinggi</option>
-                    <option value="name">🔤 Nama A-Z</option>
-                  </select>
-                </div>
-              </div>
-            </div>
+
+
+
 
             {/* Products Grid/List */}
             {loading ? (
@@ -544,99 +485,101 @@ const Product = () => {
       </div>
 
       {/* Mobile Filter Modal */}
-      {showFilters && (
-        <>
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-            onClick={() => setShowFilters(false)}
-          />
-          <div className="fixed inset-y-0 left-0 w-80 bg-white z-50 lg:hidden overflow-y-auto">
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200">
-                <h3 className="text-lg font-semibold">Filter Produk</h3>
-                <button
-                  onClick={() => setShowFilters(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
+      {
+        showFilters && (
+          <>
+            <div
+              className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+              onClick={() => setShowFilters(false)}
+            />
+            <div className="fixed inset-y-0 left-0 w-80 bg-white z-50 lg:hidden overflow-y-auto">
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200">
+                  <h3 className="text-lg font-semibold">Filter Produk</h3>
+                  <button
+                    onClick={() => setShowFilters(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
 
-              {/* Mobile Filter Content */}
-              <div className="space-y-6">
-                {/* Sort Options */}
-                <div>
-                  <h4 className="font-medium text-gray-700 mb-3">Urutkan</h4>
-                  <div className="space-y-2">
-                    {[
-                      { value: 'newest', label: 'Terbaru' },
-                      { value: 'price_low', label: 'Harga Terendah' },
-                      { value: 'price_high', label: 'Harga Tertinggi' },
-                      { value: 'name', label: 'Nama A-Z' }
-                    ].map((option) => (
-                      <button
-                        key={option.value}
-                        onClick={() => {
-                          handleFilterChange('sort', option.value);
-                          setShowFilters(false);
-                        }}
-                        className={`w-full text-left p-3 rounded text-sm border ${filters.sort === option.value
-                          ? 'bg-green-50 text-green-600 border-green-200'
-                          : 'text-gray-600 border-gray-200 hover:bg-gray-50'
-                          }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
+                {/* Mobile Filter Content */}
+                <div className="space-y-6">
+                  {/* Sort Options */}
+                  <div>
+                    <h4 className="font-medium text-gray-700 mb-3">Urutkan</h4>
+                    <div className="space-y-2">
+                      {[
+                        { value: 'newest', label: 'Terbaru' },
+                        { value: 'price_low', label: 'Harga Terendah' },
+                        { value: 'price_high', label: 'Harga Tertinggi' },
+                        { value: 'name', label: 'Nama A-Z' }
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          onClick={() => {
+                            handleFilterChange('sort', option.value);
+                            setShowFilters(false);
+                          }}
+                          className={`w-full text-left p-3 rounded text-sm border ${filters.sort === option.value
+                            ? 'bg-green-50 text-green-600 border-green-200'
+                            : 'text-gray-600 border-gray-200 hover:bg-gray-50'
+                            }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                {/* Categories */}
-                <div>
-                  <h4 className="font-medium text-gray-700 mb-3">Kategori</h4>
-                  <select
-                    value={filters.category}
-                    onChange={(e) => handleFilterChange('category', e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                  {/* Categories */}
+                  <div>
+                    <h4 className="font-medium text-gray-700 mb-3">Kategori</h4>
+                    <select
+                      value={filters.category}
+                      onChange={(e) => handleFilterChange('category', e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                    >
+                      <option value="">Semua Kategori</option>
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name_kategori || category.nama_kategori || category.title || category.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Durability */}
+                  <div>
+                    <h4 className="font-medium text-gray-700 mb-3">Tingkat Perawatan</h4>
+                    <select
+                      value={filters.durability}
+                      onChange={(e) => handleFilterChange('durability', e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                    >
+                      <option value="">Semua Tingkat</option>
+                      <option value="easy">Mudah</option>
+                      <option value="medium">Sedang</option>
+                      <option value="hard">Sulit</option>
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={clearFilters}
+                    className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-lg font-medium"
                   >
-                    <option value="">Semua Kategori</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name_kategori || category.nama_kategori || category.title || category.name}
-                      </option>
-                    ))}
-                  </select>
+                    Reset Semua Filter
+                  </button>
                 </div>
-
-                {/* Durability */}
-                <div>
-                  <h4 className="font-medium text-gray-700 mb-3">Tingkat Perawatan</h4>
-                  <select
-                    value={filters.durability}
-                    onChange={(e) => handleFilterChange('durability', e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
-                  >
-                    <option value="">Semua Tingkat</option>
-                    <option value="easy">Mudah</option>
-                    <option value="medium">Sedang</option>
-                    <option value="hard">Sulit</option>
-                  </select>
-                </div>
-
-                <button
-                  onClick={clearFilters}
-                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-lg font-medium"
-                >
-                  Reset Semua Filter
-                </button>
               </div>
             </div>
-          </div>
-        </>
-      )}
-    </div>
+          </>
+        )
+      }
+    </div >
   );
 };
 
