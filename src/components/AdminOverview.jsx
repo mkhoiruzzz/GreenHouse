@@ -140,7 +140,7 @@ const AdminOverview = ({ onSwitchTab }) => {
                         <table className="w-full text-sm text-left">
                             <thead className="bg-gray-50 text-gray-600 font-medium">
                                 <tr>
-                                    <th className="px-6 py-4">Pelanggan</th>
+                                    <th className="px-6 py-4">Customer</th>
                                     <th className="px-6 py-4">Total</th>
                                     <th className="px-6 py-4">Status</th>
                                 </tr>
@@ -150,8 +150,8 @@ const AdminOverview = ({ onSwitchTab }) => {
                                     stats.recentOrders.map((order) => (
                                         <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4">
-                                                <p className="font-semibold text-gray-900">{order.nama_pembeli || order.email_pembeli || "Tamu"}</p>
-                                                <p className="text-xs text-gray-500">{order.email_pembeli || "-"}</p>
+                                                <p className="font-semibold text-gray-900">{order.customer_name || order.customer_email || "Guest"}</p>
+                                                <p className="text-xs text-gray-500">{order.customer_email || "-"}</p>
                                             </td>
                                             <td className="px-6 py-4 font-bold text-green-600">
                                                 {formatCurrency(order.total_harga)}
@@ -159,7 +159,7 @@ const AdminOverview = ({ onSwitchTab }) => {
                                             <td className="px-6 py-4">
                                                 <span className={`px-3 py-1 rounded-full text-xs font-medium ${order.status_pembayaran === 'paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
                                                     }`}>
-                                                    {order.status_pembayaran === 'paid' ? 'Sudah Bayar' : 'Menunggu'}
+                                                    {order.status_pembayaran === 'paid' ? 'Paid' : 'Pending'}
                                                 </span>
                                             </td>
                                         </tr>

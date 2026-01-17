@@ -1,5 +1,5 @@
 import React from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { CartProvider } from './context/CartContext'
 import Navbar from './components/Navbar'
@@ -24,47 +24,50 @@ import DebugPage from './pages/DebugPage'
 import OrderSuccess from './pages/OrderSuccess'
 import Invoice from './pages/Invoice'
 
+const AppContent = () => {
+  const location = useLocation();
+  const isAdminPath = location.pathname.startsWith('/admin');
+
+  return (
+    <div className="App">
+      <Navbar />
+      <main className="min-h-screen flex flex-col">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/products" element={<Product />} />
+          <Route path="/product/:id" element={<ProductDetail />} />
+          <Route path="/cart" element={<Cart />} />
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/orders" element={<Orders />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/profile" element={<Profil />} />
+          <Route path="/images/*" element={null} />
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/add-product" element={<ProductForm />} />
+          <Route path="/debug" element={<DebugPage />} />
+          <Route path="/order-success" element={<OrderSuccess />} />
+          <Route path="/invoice/:orderId" element={<Invoice />} />
+        </Routes>
+      </main>
+      {!isAdminPath && <Footer />}
+      <ToastContainer position="bottom-right" />
+    </div>
+  );
+};
+
 function App() {
   return (
-
-
     <AuthProvider>
       <CartProvider>
         <Router>
-          <div className="App">
-            <Navbar />
-            <main className="min-h-screen flex flex-col">
-
-              <Routes>
-                {/* Your existing routes */}
-                <Route path="/" element={<Home />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/products" element={<Product />} />
-                <Route path="/product/:id" element={<ProductDetail />} />
-                <Route path="/cart" element={<Cart />} />
-                <Route path="/checkout" element={<Checkout />} />
-                <Route path="/orders" element={<Orders />} />
-                <Route path="/about" element={<About />} />
-                <Route path="/contact" element={<Contact />} />
-                <Route path="/profile" element={<Profil />} />
-                <Route path="/images/*" element={null} />
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/admin/add-product" element={<ProductForm />} />
-                <Route path="/debug" element={<DebugPage />} />
-                <Route path="/order-success" element={<OrderSuccess />} />
-                <Route path="/invoice/:orderId" element={<Invoice />} />
-              </Routes>
-            </main>
-            <Footer />
-            <ToastContainer position="bottom-right" />
-          </div>
+          <AppContent />
         </Router>
       </CartProvider>
     </AuthProvider>
-
-
-  )
+  );
 }
 
 export default App;

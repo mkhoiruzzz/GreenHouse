@@ -76,8 +76,8 @@ const Profile = () => {
   const uploadAvatar = async (userId) => {
     try {
       const fileExt = imageFile.name.split('.').pop();
-      const fileName = `${userId}-${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const fileName = `${userId} -${Math.random()}.${fileExt} `;
+      const filePath = `${fileName} `;
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
@@ -117,7 +117,7 @@ const Profile = () => {
         await refreshProfile(); // Refresh context data
         setImageFile(null); // Clear pending file
       } else {
-        toast.error(`❌ ${result.message || 'Gagal memperbarui profil'}`);
+        toast.error(`❌ ${result.message || 'Gagal memperbarui profil'} `);
       }
     } catch (error) {
       console.error('Update error:', error);

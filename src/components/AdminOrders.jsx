@@ -16,18 +16,6 @@ const AdminOrders = () => {
         fetchOrders();
     }, [filterStatus]);
 
-    // ✅ Lock scroll when modal is open
-    useEffect(() => {
-        if (selectedOrder) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = 'unset';
-        }
-        return () => {
-            document.body.style.overflow = 'unset';
-        };
-    }, [selectedOrder]);
-
     const fetchOrders = async () => {
         try {
             setLoading(true);
@@ -290,7 +278,7 @@ const AdminOrders = () => {
                     <p className="text-2xl font-bold text-yellow-700">{stats.unpaid}</p>
                 </div>
                 <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-100">
-                    <p className="text-sm text-purple-600 font-medium">Total Pendapatan</p>
+                    <p className="text-sm text-purple-600 font-medium">Total Revenue</p>
                     <p className="text-2xl font-bold text-purple-700">
                         {formatCurrency(stats.totalRevenue)}
                     </p>
@@ -341,7 +329,7 @@ const AdminOrders = () => {
                             <thead className="bg-gray-50">
                                 <tr>
                                     <th className="p-4 text-left text-sm font-bold text-gray-700">ID</th>
-                                    <th className="p-4 text-left text-sm font-bold text-gray-700">Pelanggan</th>
+                                    <th className="p-4 text-left text-sm font-bold text-gray-700">Customer</th>
                                     <th className="p-4 text-left text-sm font-bold text-gray-700">Total</th>
                                     <th className="p-4 text-left text-sm font-bold text-gray-700">Status Pembayaran</th>
                                     <th className="p-4 text-left text-sm font-bold text-gray-700">Status Pengiriman</th>
@@ -420,8 +408,8 @@ const AdminOrders = () => {
             {/* Order Detail Modal */}
             {selectedOrder && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-scale-in">
-                        <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
+                    <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-4 flex justify-between items-center">
                             <h2 className="text-xl font-bold text-white">Detail Pesanan #{selectedOrder.id}</h2>
                             <button
                                 onClick={() => setSelectedOrder(null)}
@@ -431,11 +419,11 @@ const AdminOrders = () => {
                             </button>
                         </div>
 
-                        <div className="p-6 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
+                        <div className="p-6 space-y-6">
                             {/* Customer Info */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <h3 className="font-bold text-gray-800 mb-2">Informasi Pelanggan</h3>
+                                    <h3 className="font-bold text-gray-800 mb-2">Informasi Customer</h3>
                                     <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
                                         <p><span className="font-semibold">Nama:</span> {selectedOrder.customer_name || '-'}</p>
                                         <p><span className="font-semibold">Email:</span> {selectedOrder.customer_email || '-'}</p>
@@ -444,10 +432,10 @@ const AdminOrders = () => {
                                     </div>
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-gray-800 mb-2">Catatan Pelanggan</h3>
+                                    <h3 className="font-bold text-gray-800 mb-2">Catatan Customer</h3>
                                     <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-4 h-full">
                                         <p className="text-gray-700 italic text-sm">
-                                            {selectedOrder.catatan ? `"${selectedOrder.catatan}"` : 'Tidak ada catatan dari pelanggan.'}
+                                            {selectedOrder.catatan ? `"${selectedOrder.catatan}"` : 'Tidak ada catatan dari customer.'}
                                         </p>
                                     </div>
                                 </div>

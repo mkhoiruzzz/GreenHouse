@@ -174,7 +174,7 @@ const AdminAnalytics = () => {
             const tableData = analytics.rawOrders.slice(-20).map(order => [
                 new Date(order.created_at).toLocaleDateString('id-ID'),
                 order.payment_name || '-',
-                order.nama_pembeli || order.email_pembeli,
+                order.customer_name || order.customer_email,
                 order.status_pembayaran === 'paid' ? 'SUDAH BAYAR' : (order.status_pembayaran === 'unpaid' ? 'BELUM BAYAR' : order.status_pembayaran.toUpperCase()),
                 formatCurrency(order.total_harga)
             ]);
