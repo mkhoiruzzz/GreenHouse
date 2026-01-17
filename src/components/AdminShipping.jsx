@@ -32,9 +32,11 @@ const AdminShipping = () => {
 
             if (error) throw error;
             setShippingRates(data || []);
+            return data || [];
         } catch (error) {
             console.error('Error fetching shipping rates:', error);
             toast.error('Gagal memuat tarif pengiriman');
+            return [];
         } finally {
             setLoading(false);
         }
@@ -115,12 +117,14 @@ const AdminShipping = () => {
             }
 
             setShowAddCourierModal(false);
-            await fetchShippingRates();
+            const freshData = await fetchShippingRates();
 
-            // Refresh city rates
-            const updatedGroup = cityGroups.find(g => g.city === selectedCity.city);
-            if (updatedGroup) {
-                setCityRates(updatedGroup.rates);
+            // Refresh city rates from fresh data
+            if (selectedCity) {
+                const refreshedCityRates = freshData.filter(
+                    r => r.city === selectedCity.city && r.province === selectedCity.province
+                );
+                setCityRates(refreshedCityRates);
             }
         } catch (error) {
             console.error('Error saving courier:', error);

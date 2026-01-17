@@ -437,7 +437,7 @@ const Checkout = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <p className="font-bold text-gray-900">{formData.nama_lengkap}</p>
-                        <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded-full">Utama</span>
+
                       </div>
                       <p className="text-sm text-gray-700 font-medium mb-1">{formData.no_telepon}</p>
                       <p className="text-sm text-gray-600">
