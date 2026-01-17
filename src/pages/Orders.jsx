@@ -237,6 +237,10 @@ const Orders = () => {
             dibatalkan: {
                 text: 'Dibatalkan',
                 color: 'bg-red-100 text-red-800 border border-red-200'
+            },
+            cancelled: {
+                text: 'Dibatalkan',
+                color: 'bg-red-100 text-red-800 border border-red-200'
             }
         };
 
@@ -296,8 +300,9 @@ const Orders = () => {
 
     const getDisplayStatus = (order) => {
         // Jika sudah dibatalkan, prioritaskan status pembatalan
-        if (order.status_pembayaran === 'dibatalkan' || order.status_pengiriman === 'dibatalkan') {
-            return { type: 'payment', value: 'dibatalkan' };
+        if (order.status_pembayaran === 'dibatalkan' || order.status_pengiriman === 'dibatalkan' ||
+            order.status_pembayaran === 'cancelled' || order.status_pengiriman === 'cancelled') {
+            return { type: 'payment', value: 'cancelled' };
         }
 
         // Prioritas utama adalah status pengiriman jika sudah diproses
@@ -358,13 +363,16 @@ const Orders = () => {
             const { error: updateError } = await supabase
                 .from('orders')
                 .update({
-                    status_pembayaran: 'dibatalkan',
-                    status_pengiriman: 'dibatalkan',
+                    status_pembayaran: 'cancelled',
+                    status_pengiriman: 'cancelled',
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', order.id);
 
-            if (updateError) throw updateError;
+            if (updateError) {
+                console.error('❌ Supabase Update Error:', updateError);
+                throw new Error(updateError.message || JSON.stringify(updateError));
+            }
 
             // Kembalikan stok produk jika ada
             if (order.order_items && order.order_items.length > 0) {
@@ -433,34 +441,6 @@ const Orders = () => {
     // ✅ Fungsi untuk remove file
     const removeFile = (index) => {
         setUploadedFiles(prev => prev.filter((_, i) => i !== index));
-    };
-
-    // ✅ Fungsi untuk konfirmasi pesanan diterima
-    const handleConfirmReceipt = async (orderId) => {
-        if (!window.confirm('Apakah Anda yakin sudah menerima pesanan ini? Status akan diubah menjadi Selesai.')) {
-            return;
-        }
-
-        try {
-            setLoading(true);
-            const { error } = await supabase
-                .from('orders')
-                .update({
-                    status_pengiriman: 'selesai',
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', orderId);
-
-            if (error) throw error;
-
-            toast.success('Pesanan telah diselesaikan. Terima kasih!');
-            await fetchOrders();
-        } catch (error) {
-            console.error('Error confirming receipt:', error);
-            toast.error('Gagal mengonfirmasi penerimaan: ' + error.message);
-        } finally {
-            setLoading(false);
-        }
     };
 
     // ✅ Fungsi untuk upload files ke Supabase Storage
@@ -574,15 +554,6 @@ const Orders = () => {
 
                                     {order.status_pembayaran === 'paid' && (
                                         <>
-                                            {(order.status_pengiriman === 'shipped' || order.status_pengiriman === 'dikirim') && (
-                                                <button
-                                                    onClick={() => handleConfirmReceipt(order.id)}
-                                                    className="px-4 py-3 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 shadow-md transition-all"
-                                                >
-                                                    Pesanan Diterima
-                                                </button>
-                                            )}
-
                                             {(order.status_pengiriman === 'delivered' || order.status_pengiriman === 'selesai' || order.status_pengiriman === 'completed') && (
                                                 <>
                                                     <button

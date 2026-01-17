@@ -217,6 +217,7 @@ const AdminOrders = () => {
             dikirim: 'Dikirim',
             selesai: 'Selesai',
             dibatalkan: 'Dibatalkan',
+            cancelled: 'Dibatalkan',
             diproses: 'Sedang Diproses',
             dikemas: 'Dikemas',
             terkirim: 'Terkirim',
@@ -243,6 +244,7 @@ const AdminOrders = () => {
             dikirim: 'bg-purple-100 text-purple-800 border border-purple-200',
             selesai: 'bg-green-100 text-green-800 border border-green-200',
             dibatalkan: 'bg-red-100 text-red-800 border border-red-200',
+            cancelled: 'bg-red-100 text-red-800 border border-red-200',
             diproses: 'bg-blue-100 text-blue-800 border border-blue-200',
             dikemas: 'bg-blue-100 text-blue-800 border border-blue-200',
             terkirim: 'bg-purple-100 text-purple-800 border border-purple-200',
@@ -407,161 +409,210 @@ const AdminOrders = () => {
 
             {/* Order Detail Modal */}
             {selectedOrder && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-4 flex justify-between items-center">
-                            <h2 className="text-xl font-bold text-white">Detail Pesanan #{selectedOrder.id}</h2>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                    <div
+                        className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Sticky Header */}
+                        <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4 flex justify-between items-center shadow-md z-10">
+                            <div>
+                                <h2 className="text-xl font-bold text-white">Detail Pesanan #{selectedOrder.id}</h2>
+                                <p className="text-green-50 text-xs">
+                                    Dibuat pada: {new Date(selectedOrder.created_at).toLocaleString('id-ID')}
+                                </p>
+                            </div>
                             <button
                                 onClick={() => setSelectedOrder(null)}
-                                className="text-white hover:text-gray-200 text-2xl"
+                                className="w-10 h-10 flex items-center justify-center text-white hover:bg-white/20 rounded-full transition-colors text-2xl"
                             >
                                 ×
                             </button>
                         </div>
 
-                        <div className="p-6 space-y-6">
-                            {/* Customer Info */}
+                        {/* Scrollable Content */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+                            {/* Customer & Notes Info */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <h3 className="font-bold text-gray-800 mb-2">Informasi Customer</h3>
-                                    <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-                                        <p><span className="font-semibold">Nama:</span> {selectedOrder.customer_name || '-'}</p>
-                                        <p><span className="font-semibold">Email:</span> {selectedOrder.customer_email || '-'}</p>
-                                        <p><span className="font-semibold">Telepon:</span> {selectedOrder.customer_phone || '-'}</p>
-                                        <p><span className="font-semibold">Alamat:</span> {selectedOrder.alamat_pengiriman || '-'}</p>
+                                <section>
+                                    <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                        <span>👤</span> Informasi Customer
+                                    </h3>
+                                    <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 space-y-3 text-sm">
+                                        <div className="flex justify-between border-b border-gray-100 pb-2">
+                                            <span className="text-gray-500">Nama</span>
+                                            <span className="font-semibold text-gray-900">{selectedOrder.customer_name || '-'}</span>
+                                        </div>
+                                        <div className="flex justify-between border-b border-gray-100 pb-2">
+                                            <span className="text-gray-500">Email</span>
+                                            <span className="font-semibold text-gray-900">{selectedOrder.customer_email || '-'}</span>
+                                        </div>
+                                        <div className="flex justify-between border-b border-gray-100 pb-2">
+                                            <span className="text-gray-500">Telepon</span>
+                                            <span className="font-semibold text-gray-900">{selectedOrder.customer_phone || '-'}</span>
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-gray-500">Alamat</span>
+                                            <span className="font-semibold text-gray-900 leading-relaxed">{selectedOrder.alamat_pengiriman || '-'}</span>
+                                        </div>
                                     </div>
-                                </div>
-                                <div>
-                                    <h3 className="font-bold text-gray-800 mb-2">Catatan Customer</h3>
-                                    <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-4 h-full">
-                                        <p className="text-gray-700 italic text-sm">
-                                            {selectedOrder.catatan ? `"${selectedOrder.catatan}"` : 'Tidak ada catatan dari customer.'}
+                                </section>
+                                <section>
+                                    <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                        <span>💬</span> Catatan Customer
+                                    </h3>
+                                    <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 h-full min-h-[120px]">
+                                        <p className="text-amber-900 italic text-sm leading-relaxed">
+                                            {selectedOrder.catatan ? `"${selectedOrder.catatan}"` : 'Tidak ada catatan khusus dari customer.'}
                                         </p>
                                     </div>
-                                </div>
+                                </section>
                             </div>
 
                             {/* Order Items */}
-                            <div>
-                                <h3 className="font-bold text-gray-800 mb-2">Item Pesanan</h3>
-                                <div className="space-y-2">
+                            <section>
+                                <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                    <span>📦</span> Item Pesanan
+                                </h3>
+                                <div className="space-y-3">
                                     {selectedOrder.order_items?.map((item, idx) => (
-                                        <div key={idx} className="flex items-center gap-4 bg-gray-50 rounded-lg p-4">
-                                            <img
-                                                src={item.products?.gambar_url || '🌱'}
-                                                alt={item.nama_produk}
-                                                className="w-16 h-16 object-cover rounded-lg"
-                                            />
-                                            <div className="flex-1">
-                                                <p className="font-semibold text-gray-800">{item.nama_produk}</p>
-                                                <p className="text-sm text-gray-600">
+                                        <div key={idx} className="flex items-center gap-4 bg-white border border-gray-100 hover:border-green-200 rounded-xl p-4 transition-colors shadow-sm">
+                                            <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-100">
+                                                <img
+                                                    src={item.products?.gambar_url || 'https://via.placeholder.com/150'}
+                                                    alt={item.nama_produk}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-bold text-gray-900 truncate">{item.nama_produk}</p>
+                                                <p className="text-sm text-gray-500">
                                                     {formatCurrency(item.harga_satuan)} × {item.quantity}
                                                 </p>
                                             </div>
-                                            <p className="font-bold text-green-600">
-                                                {formatCurrency(item.harga_satuan * item.quantity)}
-                                            </p>
+                                            <div className="text-right">
+                                                <p className="font-bold text-green-600">
+                                                    {formatCurrency(item.harga_satuan * item.quantity)}
+                                                </p>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
-                            </div>
+                            </section>
 
-                            {/* Order Summary */}
-                            <div>
-                                <h3 className="font-bold text-gray-800 mb-2">Ringkasan</h3>
-                                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                                    <div className="flex justify-between">
-                                        <span>Subtotal Produk:</span>
-                                        <span>{formatCurrency(selectedOrder.order_items?.reduce((sum, item) => sum + (item.harga_satuan * item.quantity), 0) || 0)}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span>Biaya Pengiriman:</span>
-                                        <span>{formatCurrency(selectedOrder.biaya_pengiriman || 0)}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span>Biaya Admin:</span>
-                                        <span>{formatCurrency(selectedOrder.biaya_admin || 0)}</span>
-                                    </div>
-                                    {selectedOrder.discount_amount > 0 && (
-                                        <div className="flex justify-between text-green-600 font-medium">
-                                            <span>Voucher ({selectedOrder.voucher_code}):</span>
-                                            <span>-{formatCurrency(selectedOrder.discount_amount)}</span>
+                            {/* Order Summary & Payment Info */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <section>
+                                    <h3 className="font-bold text-gray-900 mb-3">💰 Ringkasan Pembayaran</h3>
+                                    <div className="bg-gray-50 border border-gray-100 rounded-xl p-5 space-y-3">
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-500">Subtotal Produk</span>
+                                            <span className="font-medium">{formatCurrency(selectedOrder.order_items?.reduce((sum, item) => sum + (item.harga_satuan * item.quantity), 0) || 0)}</span>
                                         </div>
-                                    )}
-                                    <div className="flex justify-between font-bold text-lg border-t pt-2">
-                                        <span>Total Tagihan:</span>
-                                        <span className="text-green-600">
-                                            {formatCurrency(selectedOrder.total_harga || 0)}
-                                        </span>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-500">Biaya Pengiriman</span>
+                                            <span className="font-medium">{formatCurrency(selectedOrder.biaya_pengiriman || 0)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-500">Biaya Layanan</span>
+                                            <span className="font-medium">{formatCurrency(selectedOrder.biaya_admin || 0)}</span>
+                                        </div>
+                                        {selectedOrder.discount_amount > 0 && (
+                                            <div className="flex justify-between text-sm text-green-600 font-semibold bg-green-50 p-2 rounded">
+                                                <span>Promo ({selectedOrder.voucher_code})</span>
+                                                <span>-{formatCurrency(selectedOrder.discount_amount)}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between font-bold text-lg border-t border-gray-200 pt-3 mt-2 text-gray-900">
+                                            <span>Total Akhr</span>
+                                            <span className="text-green-600">
+                                                {formatCurrency(selectedOrder.total_harga || 0)}
+                                            </span>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
+                                </section>
 
-                            {/* Payment Info */}
-                            {selectedOrder.tripay_reference && (
-                                <div>
-                                    <h3 className="font-bold text-gray-800 mb-2">Informasi Pembayaran</h3>
-                                    <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                                        <p><span className="font-semibold">Tripay Reference:</span> {selectedOrder.tripay_reference}</p>
-                                        <p><span className="font-semibold">Metode Pembayaran:</span> {selectedOrder.metode_pembayaran || '-'}</p>
+                                <section>
+                                    <h3 className="font-bold text-gray-900 mb-3">💳 Informasi Transaksi</h3>
+                                    <div className="bg-gray-50 border border-gray-100 rounded-xl p-5 space-y-4">
+                                        <div className="space-y-1">
+                                            <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Metode Pembayaran</p>
+                                            <p className="font-semibold text-gray-800">{selectedOrder.metode_pembayaran || '-'}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Tripay Reference</p>
+                                            <p className="font-mono text-sm text-gray-700 bg-white p-2 border border-gray-100 rounded">{selectedOrder.tripay_reference || 'N/A'}</p>
+                                        </div>
                                         {selectedOrder.tripay_checkout_url && (
                                             <a
                                                 href={selectedOrder.tripay_checkout_url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="text-blue-600 hover:underline"
+                                                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
                                             >
-                                                Lihat di Tripay →
+                                                Cek Detail Tripay ↗
                                             </a>
                                         )}
                                     </div>
-                                </div>
-                            )}
+                                </section>
+                            </div>
 
-                            {/* Status Update */}
-                            <div>
-                                <h3 className="font-bold text-gray-800 mb-4">Update Status</h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            {/* Status Update Control */}
+                            <section className="bg-white border-2 border-green-100 rounded-2xl p-6 shadow-sm">
+                                <h3 className="font-extrabold text-gray-900 mb-6 flex items-center gap-2 text-lg">
+                                    Manajemen Status Pesanan
+                                </h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                                    <div className="space-y-3">
+                                        <label className="block text-sm font-bold text-gray-700">
                                             Status Pembayaran
                                         </label>
                                         <select
                                             value={selectedOrder.status_pembayaran || 'pending'}
                                             onChange={(e) => updateOrderStatus(selectedOrder.id, 'status_pembayaran', e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl bg-white text-gray-900 font-semibold focus:border-green-500 transition-colors outline-none cursor-pointer"
                                         >
-                                            <option value="pending">Menunggu Pembayaran</option>
-                                            <option value="unpaid">Belum Bayar</option>
-                                            <option value="paid">Sudah Bayar</option>
-                                            <option value="expired">Kedaluwarsa</option>
-                                            <option value="failed">Gagal</option>
+                                            <option value="pending"> Menunggu Pembayaran</option>
+                                            <option value="unpaid"> Belum Bayar</option>
+                                            <option value="paid"> Sudah Bayar</option>
+                                            <option value="expired"> Kedaluwarsa</option>
+                                            <option value="failed"> Gagal</option>
                                             <option value="lunas">Lunas</option>
                                         </select>
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <div className="space-y-3">
+                                        <label className="block text-sm font-bold text-gray-700">
                                             Status Pengiriman
                                         </label>
                                         <select
                                             value={selectedOrder.status_pengiriman || 'pending'}
                                             onChange={(e) => updateOrderStatus(selectedOrder.id, 'status_pengiriman', e.target.value)}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl bg-white text-gray-900 font-semibold focus:border-green-500 transition-colors outline-none cursor-pointer"
                                         >
-                                            <option value="pending">Menunggu - Belum Diproses</option>
-                                            <option value="processing">Diproses - Sedang Disiapkan</option>
-                                            <option value="shipped">Dikirim - Dalam Perjalanan</option>
-                                            <option value="delivered">Sudah Sampai/Selesai</option>
-                                            <option value="cancelled">Dibatalkan</option>
+                                            <option value="pending"> Belum Diproses</option>
+                                            <option value="processing"> Sedang Disiapkan</option>
+                                            <option value="shipped">Dalam Perjalanan</option>
+                                            <option value="delivered"> Selesai Sampai Tujuan</option>
+                                            <option value="cancelled"> Dibatalkan</option>
                                         </select>
                                     </div>
                                 </div>
-                            </div>
+
+                            </section>
+                        </div>
+
+                        {/* Footer / Action (Optional if needed) */}
+                        <div className="bg-gray-50 px-6 py-4 flex justify-end border-t border-gray-100">
+                            <button
+                                onClick={() => setSelectedOrder(null)}
+                                className="px-6 py-2 bg-gray-200 text-gray-700 font-bold rounded-lg hover:bg-gray-300 transition-colors"
+                            >
+                                Tutup
+                            </button>
                         </div>
                     </div>
                 </div>
-            )
-            }
+            )}
         </div>
     );
 };
