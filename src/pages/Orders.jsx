@@ -435,31 +435,35 @@ const Orders = () => {
         setUploadedFiles(prev => prev.filter((_, i) => i !== index));
     };
 
-    // ✅ Fungsi untuk upload files ke Supabase Storage
-    const uploadFilesToSupabase = async () => {
-        if (uploadedFiles.length === 0) return [];
+    // ✅ Fungsi untuk konfirmasi pesanan diterima
+    const handleConfirmReceipt = async (orderId) => {
+        if (!window.confirm('Apakah Anda yakin sudah menerima pesanan ini? Status akan diubah menjadi Selesai.')) {
+            return;
+        }
 
-        const uploadPromises = uploadedFiles.map(async (file) => {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-            const filePath = `${user.id}/${fileName}`;
-
-            const { data, error } = await supabase.storage
-                .from('refund-proofs')
-                .upload(filePath, file);
+        try {
+            setLoading(true);
+            const { error } = await supabase
+                .from('orders')
+                .update({
+                    status_pengiriman: 'selesai',
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', orderId);
 
             if (error) throw error;
 
-            // Get public URL
-            const { data: urlData } = supabase.storage
-                .from('refund-proofs')
-                .getPublicUrl(filePath);
-
-            return urlData.publicUrl;
-        });
-
-        return await Promise.all(uploadPromises);
+            toast.success('Pesanan telah diselesaikan. Terima kasih!');
+            await fetchOrders();
+        } catch (error) {
+            console.error('Error confirming receipt:', error);
+            toast.error('Gagal mengonfirmasi penerimaan: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
     };
+
+    // ✅ Fungsi untuk upload files ke Supabase Storage
 
     const handleImageError = (e) => {
         e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik01MCAzM0M0MS4xNjM0IDMzIDM0IDQwLjE2MzQgMzQgNTBDMzQgNTkuODM2NiA0MS4xNjM0IDY3IDUwIDY3QzU4LjgzNjYgNjcgNjYgNTkuODM2NiA2NiA1MEM2NiA0MC4xNjM0IDU4LjgzNjYgMzMgNTAgMzNaIiBmaWxsPSIjMDlCOEI2Ii8+CjxwYXRoIGQ9Ik01MCA0MEM1NC40MTgzIDQwIDU4IDQzLjU4MTcgNTggNDhDNTggNTIuNDE4MyA1NC40MTgzIDU2IDUwIDU2QzQ1LjU4MTcgNTYgNDIgNTIuNDE4MyA0MiA0OEM0MiA0My41ODE3IDQ1LjU4MTcgNDAgNTAgNDBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K';
@@ -568,26 +572,39 @@ const Orders = () => {
                                         </button>
                                     )}
 
-                                    {(order.status_pengiriman === 'delivered' || order.status_pengiriman === 'shipped') && order.status_pembayaran === 'paid' && (
+                                    {order.status_pembayaran === 'paid' && (
                                         <>
-                                            <button
-                                                className="px-4 py-3 bg-yellow-500 text-white rounded-lg text-sm font-semibold hover:bg-yellow-600 shadow-md transition-all"
-                                                onClick={() => {
-                                                    setSelectedOrder(order);
-                                                    setShowReviewModal(true);
-                                                }}
-                                            >
-                                                Beri Ulasan
-                                            </button>
-                                            <button
-                                                className="px-4 py-3 border border-red-500 text-red-500 rounded-lg text-sm font-semibold hover:bg-red-50 transition-all"
-                                                onClick={() => {
-                                                    setSelectedOrder(order);
-                                                    setShowRefundModal(true);
-                                                }}
-                                            >
-                                                Retur/Refund
-                                            </button>
+                                            {(order.status_pengiriman === 'shipped' || order.status_pengiriman === 'dikirim') && (
+                                                <button
+                                                    onClick={() => handleConfirmReceipt(order.id)}
+                                                    className="px-4 py-3 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 shadow-md transition-all"
+                                                >
+                                                    Pesanan Diterima
+                                                </button>
+                                            )}
+
+                                            {(order.status_pengiriman === 'delivered' || order.status_pengiriman === 'selesai' || order.status_pengiriman === 'completed') && (
+                                                <>
+                                                    <button
+                                                        className="px-4 py-3 bg-yellow-500 text-white rounded-lg text-sm font-semibold hover:bg-yellow-600 shadow-md transition-all"
+                                                        onClick={() => {
+                                                            setSelectedOrder(order);
+                                                            setShowReviewModal(true);
+                                                        }}
+                                                    >
+                                                        Beri Ulasan
+                                                    </button>
+                                                    <button
+                                                        className="px-4 py-3 border border-red-500 text-red-500 rounded-lg text-sm font-semibold hover:bg-red-50 transition-all"
+                                                        onClick={() => {
+                                                            setSelectedOrder(order);
+                                                            setShowRefundModal(true);
+                                                        }}
+                                                    >
+                                                        Retur/Refund
+                                                    </button>
+                                                </>
+                                            )}
                                         </>
                                     )}
 
