@@ -7,6 +7,49 @@ import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { supabase } from '../lib/supabase';
 
+const TrackingTimeline = ({ status }) => {
+    const steps = [
+        { id: 'pending', label: 'Pesanan Dibuat', icon: '📝' },
+        { id: 'processing', label: 'Diproses', icon: '📦' },
+        { id: 'shipped', label: 'Dalam Perjalanan', icon: '🚚' },
+        { id: 'delivered', label: 'Sampai Tujuan', icon: '✅' }
+    ];
+
+    const currentIdx = steps.findIndex(s => s.id === (status || 'pending').toLowerCase()) === -1
+        ? (status.toLowerCase() === 'selesai' || status.toLowerCase() === 'completed' ? 3 : 0)
+        : steps.findIndex(s => s.id === (status || 'pending').toLowerCase());
+
+    return (
+        <div className="py-8 px-2">
+            <div className="relative flex justify-between">
+                {/* Progress Bar Background */}
+                <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-200 -translate-y-1/2 z-0"></div>
+                {/* Progress Bar Active */}
+                <div
+                    className="absolute top-1/2 left-0 h-1 bg-emerald-500 -translate-y-1/2 z-0 transition-all duration-1000"
+                    style={{ width: `${(currentIdx / (steps.length - 1)) * 100}%` }}
+                ></div>
+
+                {steps.map((step, idx) => {
+                    const isActive = idx <= currentIdx;
+                    return (
+                        <div key={step.id} className="relative z-10 flex flex-col items-center">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg transition-all duration-500 ${isActive ? 'bg-emerald-500 text-white scale-110 shadow-lg' : 'bg-white border-2 border-gray-300 text-gray-400'
+                                }`}>
+                                {step.icon}
+                            </div>
+                            <span className={`text-[10px] sm:text-xs mt-2 font-bold text-center w-16 sm:w-20 ${isActive ? 'text-emerald-600' : 'text-gray-400'
+                                }`}>
+                                {step.label}
+                            </span>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
 const Orders = () => {
     const { user, isAuthenticated } = useAuth();
     const navigate = useNavigate();
@@ -540,6 +583,17 @@ const Orders = () => {
                                         Lihat Detail
                                     </button>
 
+                                    <button
+                                        onClick={() => {
+                                            const year = new Date(order.created_at).getFullYear();
+                                            const id = order.id.toString().padStart(5, '0');
+                                            navigate(`/track?id=GH-${year}-${id}`);
+                                        }}
+                                        className="px-6 py-3 rounded-lg text-sm font-semibold border-2 border-blue-500 text-blue-600 hover:bg-blue-50 transition-all flex items-center gap-2"
+                                    >
+                                        <span>🚚</span> Lacak
+                                    </button>
+
                                     {order.status_pembayaran === 'paid' && (
                                         <button
                                             onClick={() => navigate(`/invoice/${order.id}`)}
@@ -616,6 +670,30 @@ const Orders = () => {
                             </div>
 
                             <div className="p-6 space-y-6">
+                                {/* Status Tracking Timeline */}
+                                <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                                    <div className="flex justify-between items-center mb-2 px-2">
+                                        <h3 className="text-sm font-bold text-gray-700">Pelacakan Pesanan</h3>
+                                        <span className="text-[10px] bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-mono flex items-center gap-2 border border-emerald-200 shadow-sm">
+                                            <span className="opacity-70">ID TRACK:</span>
+                                            <span className="font-bold uppercase">
+                                                {`GH-${new Date(selectedOrder.created_at).getFullYear()}-${(selectedOrder.id).toString().padStart(5, '0')}`}
+                                            </span>
+                                            <button
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(`GH-${new Date(selectedOrder.created_at).getFullYear()}-${(selectedOrder.id).toString().padStart(5, '0')}`);
+                                                    toast.success('ID Lacak disalin!');
+                                                }}
+                                                className="hover:text-emerald-900 transition-colors ml-1"
+                                                title="Salin ID"
+                                            >
+                                                📋
+                                            </button>
+                                        </span>
+                                    </div>
+                                    <TrackingTimeline status={selectedOrder.status_pengiriman} />
+                                </div>
+
                                 {/* Status Section */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">

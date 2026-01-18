@@ -24,11 +24,12 @@ import ProductForm from './components/ProductForm'
 import DebugPage from './pages/DebugPage'
 import OrderSuccess from './pages/OrderSuccess'
 import Invoice from './pages/Invoice'
+import TrackOrder from './pages/TrackOrder'
 
 const AppContent = () => {
   const location = useLocation();
   const isAdminPath = location.pathname.startsWith('/admin');
-  const isNoFooterPage = ['/cart', '/checkout', '/order-success', '/orders', '/profile', '/contact'].includes(location.pathname);
+  const isNoFooterPage = ['/cart', '/checkout', '/order-success', '/orders', '/profile', '/contact', '/track'].includes(location.pathname);
 
   return (
     <div className="App">
@@ -53,6 +54,7 @@ const AppContent = () => {
           <Route path="/debug" element={<DebugPage />} />
           <Route path="/order-success" element={<OrderSuccess />} />
           <Route path="/invoice/:orderId" element={<Invoice />} />
+          <Route path="/track" element={<TrackOrder />} />
         </Routes>
       </main>
       {!isAdminPath && !isNoFooterPage && <Footer />}

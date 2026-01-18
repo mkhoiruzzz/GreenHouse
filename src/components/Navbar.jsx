@@ -164,6 +164,7 @@ const Navbar = () => {
                 <span className="text-lg">Beranda</span>
               </Link>
 
+
               <Link
                 to="/products"
                 className="flex items-center py-3 px-4 hover:text-yellow-300 hover:bg-green-700 rounded-lg transition duration-200"
