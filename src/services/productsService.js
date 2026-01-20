@@ -74,16 +74,44 @@ export const productsService = {
     try {
       const data = await fetchWithFallback();
 
-      console.log('✅ [getAllProducts] Data received:', data?.length || 0);
+      console.log('🔄 [getAllProducts] Processing data for reviews and sold counts...');
 
-      // Normalize image field
-      const normalizedData = (data || []).map((product, index) => {
+      // Bulk fetch reviews and paid order items for aggregation
+      const [{ data: allReviews }, { data: allSold }] = await Promise.all([
+        supabase.from('reviews').select('product_id, rating'),
+        supabase.from('order_items')
+          .select('product_id, quantity, orders!inner(status_pembayaran)')
+          .eq('orders.status_pembayaran', 'paid')
+      ]);
+
+      // Create aggregation maps
+      const ratingMap = {};
+      const soldMap = {};
+
+      allReviews?.forEach(rev => {
+        if (!ratingMap[rev.product_id]) ratingMap[rev.product_id] = { sum: 0, count: 0 };
+        ratingMap[rev.product_id].sum += rev.rating;
+        ratingMap[rev.product_id].count++;
+      });
+
+      allSold?.forEach(item => {
+        const pid = item.product_id;
+        soldMap[pid] = (soldMap[pid] || 0) + (item.quantity || 0);
+      });
+
+      // Normalize and join data
+      const normalizedData = (data || []).map((product) => {
+        const ratingInfo = ratingMap[product.id] || { sum: 0, count: 0 };
         return {
           ...product,
-          gambar_url: product.gambar_url || 'https://placehold.co/400x300/4ade80/white?text=Gambar+Tidak+Tersedia'
+          gambar_url: product.gambar_url || 'https://placehold.co/400x300/4ade80/white?text=Gambar+Tidak+Tersedia',
+          avg_rating: ratingInfo.count > 0 ? ratingInfo.sum / ratingInfo.count : 0,
+          total_reviews: ratingInfo.count,
+          total_sold: soldMap[product.id] || 0
         };
       });
 
+      console.log('✅ [getAllProducts] Data processed successfully');
       return normalizedData;
     } catch (error) {
       console.error('❌ [getAllProducts] All fetch methods failed:', error);
@@ -198,13 +226,36 @@ export const productsService = {
         categories: data.categories ? '✅ Has category' : '❌ No category'
       });
 
-      // Normalize image field
+      // Fetch reviews for rating
+      const { data: reviewsData } = await supabase
+        .from('reviews')
+        .select('*')
+        .eq('product_id', id);
+
+      // Fetch sold count
+      const { data: soldData } = await supabase
+        .from('order_items')
+        .select('quantity, orders!inner(status_pembayaran)')
+        .eq('product_id', id)
+        .eq('orders.status_pembayaran', 'paid');
+
+      const avgRating = reviewsData?.length > 0
+        ? reviewsData.reduce((acc, rev) => acc + rev.rating, 0) / reviewsData.length
+        : 0;
+
+      const totalSold = soldData?.reduce((acc, item) => acc + (item.quantity || 0), 0) || 0;
+
+      // Normalize product data
       const normalizedProduct = {
         ...data,
-        gambar_url: data.gambar_url || 'https://placehold.co/600x400/4ade80/white?text=Gambar+Tidak+Tersedia'
+        gambar_url: data.gambar_url || 'https://placehold.co/600x400/4ade80/white?text=Gambar+Tidak+Tersedia',
+        avg_rating: avgRating,
+        total_reviews: reviewsData?.length || 0,
+        total_sold: totalSold,
+        reviews: reviewsData || []
       };
 
-      console.log('✅ [getProductById] Product normalized successfully');
+      console.log('✅ [getProductById] Product normalized successfully with reviews and sold count');
       return normalizedProduct;
     } catch (error) {
       console.error('❌ [getProductById] Error fetching product:', error);

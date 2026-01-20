@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/formatCurrency';
@@ -9,10 +9,19 @@ import { tripayService } from '../services/tripay';
 
 const Checkout = () => {
   const navigate = useNavigate();
+  const location = useLocation(); // ✅ Added useLocation
   const { cartItems, clearCart } = useCart();
   const { user } = useAuth();
 
+  // ✅ NEW: Handle Buy Now item from state
+  const buyNowItem = location.state?.buyNowItem;
+  const isBuyNow = !!buyNowItem;
+
+  // Use either buyNowItem (wrapped in array) or cartItems
+  const itemsToCheckout = isBuyNow ? [buyNowItem] : cartItems;
+
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // ... existing states ...
   const [paymentChannels, setPaymentChannels] = useState([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
   const [paymentFee, setPaymentFee] = useState(0);
@@ -151,7 +160,7 @@ const Checkout = () => {
   };
 
   const calculateSubtotal = () => {
-    return cartItems.reduce((total, item) => total + (item.harga * item.quantity), 0);
+    return itemsToCheckout.reduce((total, item) => total + (item.harga * item.quantity), 0);
   };
 
   const handleApplyVoucher = async () => {
@@ -279,7 +288,7 @@ const Checkout = () => {
       }
 
       // Create order items
-      const orderItems = cartItems.map(item => ({
+      const orderItems = itemsToCheckout.map(item => ({
         order_id: order.id,
         product_id: item.id,
         quantity: item.quantity,
@@ -310,7 +319,7 @@ const Checkout = () => {
 
       // Create Tripay transaction
       const tripayItems = [
-        ...cartItems.map(item => ({
+        ...itemsToCheckout.map(item => ({
           sku: `PROD-${item.id}`,
           name: item.nama_produk,
           price: Math.round(item.total_harga_diskon || item.harga),
@@ -359,8 +368,10 @@ const Checkout = () => {
           .update({ tripay_reference: paymentResponse.data.reference })
           .eq('id', order.id);
 
-        // Clear cart
-        clearCart();
+        // Clear cart ONLY if not Buy Now
+        if (!isBuyNow) {
+          clearCart();
+        }
 
         // Redirect to payment (or handle mock checkout_url '#')
         if (paymentResponse.data.checkout_url && paymentResponse.data.checkout_url !== '#') {
@@ -381,12 +392,14 @@ const Checkout = () => {
     }
   };
 
-  if (!cartItems || cartItems.length === 0) {
+  if (!itemsToCheckout || itemsToCheckout.length === 0) {
     return (
       <div className="min-h-screen mt-16 flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="text-6xl mb-4">🛒</div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Keranjang Kosong</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">
+            {isBuyNow ? 'Item Tidak Ditemukan' : 'Keranjang Kosong'}
+          </h2>
           <button
             onClick={() => navigate('/products')}
             className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700"
@@ -544,10 +557,10 @@ const Checkout = () => {
 
               {/* Product Items */}
               <div className="space-y-4 mb-4">
-                {cartItems.map((item) => (
+                {itemsToCheckout.map((item) => (
                   <div key={item.id} className="flex gap-4">
                     <img
-                      src={item.gambar_url}
+                      src={item.gambar_url || item.gambar}
                       alt={item.nama_produk}
                       className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
                     />
@@ -860,7 +873,7 @@ const Checkout = () => {
 
                 <div className="space-y-2 mb-4">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Total Harga ({cartItems.length} barang)</span>
+                    <span className="text-gray-600">Total Harga ({itemsToCheckout.length} barang)</span>
                     <span className="font-medium">{formatCurrency(calculateSubtotal())}</span>
                   </div>
                   <div className="flex justify-between text-sm">

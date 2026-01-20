@@ -212,9 +212,28 @@ const ProductCard = ({ product, viewMode }) => {
             </div>
 
             <div className="flex-1 min-w-0">
-              <h3 className="text-xl font-bold text-gray-900 mb-2 line-clamp-2">
+              <h3 className="text-xl font-bold text-gray-900 mb-1 line-clamp-2">
                 {product.nama_produk || 'Nama produk tidak tersedia'}
               </h3>
+
+              <div className="flex items-center gap-3 mb-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/product/${product.id}#customer-reviews`);
+                  }}
+                  className="flex items-center gap-0.5 hover:bg-yellow-50 px-1 rounded transition-colors"
+                >
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <span key={star} className={`text-sm ${star <= (product.avg_rating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}>
+                      ★
+                    </span>
+                  ))}
+                  <span className="text-xs text-emerald-600 font-medium ml-1">({product.total_reviews || 0})</span>
+                </button>
+                <div className="h-3 w-[1px] bg-gray-300"></div>
+                <span className="text-xs text-gray-500">Terjual {product.total_sold || 0}</span>
+              </div>
               <p className="text-gray-600 mb-3 line-clamp-2 text-sm">
                 {product.deskripsi || 'Deskripsi tidak tersedia'}
               </p>
@@ -291,9 +310,27 @@ const ProductCard = ({ product, viewMode }) => {
             )}
           </div>
 
-          <h3 className="font-bold text-gray-900 mb-2 line-clamp-2 text-sm">
+          <h3 className="font-bold text-gray-900 mb-1 line-clamp-2 text-sm">
             {product.nama_produk || 'Nama produk tidak tersedia'}
           </h3>
+
+          <div className="flex items-center justify-between mb-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/product/${product.id}#customer-reviews`);
+              }}
+              className="flex items-center gap-0.5 hover:bg-yellow-50 px-0.5 rounded transition-colors"
+            >
+              {[1, 2, 3, 4, 5].map((star) => (
+                <span key={star} className={`text-[10px] ${star <= (product.avg_rating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}>
+                  ★
+                </span>
+              ))}
+              <span className="text-[10px] text-emerald-600 font-medium ml-1">({product.total_reviews || 0})</span>
+            </button>
+            <span className="text-[10px] text-gray-500">Terjual {product.total_sold || 0}</span>
+          </div>
           <p className="text-gray-600 text-xs mb-3 line-clamp-2">
             {product.deskripsi || 'Deskripsi tidak tersedia'}
           </p>

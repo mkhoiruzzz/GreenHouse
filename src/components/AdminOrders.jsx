@@ -75,13 +75,20 @@ const AdminOrders = () => {
 
     const updateOrderStatus = async (orderId, field, value) => {
         try {
+            // ✅ Security/Policy: Admin is NOT allowed to manually set an order to PAID
+            // Payment status must ONLY be updated via Tripay Webhook for data integrity.
+            if (field === 'status_pembayaran' && (value === 'paid' || value === 'lunas')) {
+                toast.error('Admin tidak diperbolehkan mengubah status pembayaran ke LUNAS secara manual. Status ini akan terupdate otomatis via Tripay.');
+                return;
+            }
+
             // ✅ Validasi: Jika merubah status pengiriman ke Selesai/Delivered, cek apakah sudah bayar
             if (field === 'status_pengiriman' && (value === 'delivered' || value === 'selesai' || value === 'terima' || value === 'Selesai')) {
                 const orderToUpdate = orders.find(o => o.id === orderId) || selectedOrder;
 
                 if (orderToUpdate && orderToUpdate.status_pembayaran !== 'paid' && orderToUpdate.status_pembayaran !== 'lunas') {
-                    const confirmMsg = `⚠️ PERINGATAN: Pesanan #${orderId} BELUM DIBAYAR (Status: ${orderToUpdate.status_pembayaran}).\n\nPenjual biasanya tidak mengirim barang sebelum dibayar.\n\nApakah Anda yakin ingin merubah status pengiriman menjadi "Selesai"?`;
-                    if (!window.confirm(confirmMsg)) return;
+                    toast.warning('Pesanan ini belum dibayar. Harap verifikasi pembayaran sebelum menyelesa ikan pengiriman.');
+                    return;
                 }
             }
 
@@ -567,37 +574,45 @@ const AdminOrders = () => {
                                         <label className="block text-sm font-bold text-gray-700">
                                             Status Pembayaran
                                         </label>
-                                        <select
-                                            value={selectedOrder.status_pembayaran || 'pending'}
-                                            onChange={(e) => updateOrderStatus(selectedOrder.id, 'status_pembayaran', e.target.value)}
-                                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl bg-white text-gray-900 font-semibold focus:border-green-500 transition-colors outline-none cursor-pointer"
-                                        >
-                                            <option value="pending"> Menunggu Pembayaran</option>
-                                            <option value="unpaid"> Belum Bayar</option>
-                                            <option value="paid"> Sudah Bayar</option>
-                                            <option value="expired"> Kedaluwarsa</option>
-                                            <option value="failed"> Gagal</option>
-                                            <option value="lunas">Lunas</option>
-                                        </select>
+                                        <div className={`w-full px-4 py-3 border-2 border-gray-100 rounded-xl bg-gray-50 flex items-center justify-between`}>
+                                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusBadge(selectedOrder.status_pembayaran)}`}>
+                                                {getStatusLabel(selectedOrder.status_pembayaran)}
+                                            </span>
+                                            <span className="text-[10px] text-gray-400 font-medium uppercase italic">Dikelola Tripay</span>
+                                        </div>
+                                        <p className="text-[10px] text-amber-600 font-medium leading-tight">
+                                            ⚠️ Status ini terkunci. Hanya bisa berubah melalui sistem pembayaran otomatis.
+                                        </p>
                                     </div>
                                     <div className="space-y-3">
                                         <label className="block text-sm font-bold text-gray-700">
                                             Status Pengiriman
                                         </label>
-                                        <select
-                                            value={selectedOrder.status_pengiriman || 'pending'}
-                                            onChange={(e) => updateOrderStatus(selectedOrder.id, 'status_pengiriman', e.target.value)}
-                                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl bg-white text-gray-900 font-semibold focus:border-green-500 transition-colors outline-none cursor-pointer"
-                                        >
-                                            <option value="pending"> Belum Diproses</option>
-                                            <option value="processing"> Sedang Disiapkan</option>
-                                            <option value="shipped">Dalam Perjalanan</option>
-                                            <option value="delivered"> Selesai Sampai Tujuan</option>
-                                            <option value="cancelled"> Dibatalkan</option>
-                                        </select>
+                                        {selectedOrder.status_pembayaran === 'paid' || selectedOrder.status_pembayaran === 'lunas' ? (
+                                            <select
+                                                value={selectedOrder.status_pengiriman || 'pending'}
+                                                onChange={(e) => updateOrderStatus(selectedOrder.id, 'status_pengiriman', e.target.value)}
+                                                className="w-full px-4 py-3 border-2 border-green-500 rounded-xl bg-white text-gray-900 font-semibold focus:border-green-600 transition-colors outline-none cursor-pointer shadow-sm"
+                                            >
+                                                <option value="pending"> Belum Diproses</option>
+                                                <option value="processing"> Sedang Disiapkan</option>
+                                                <option value="shipped">Dalam Perjalanan</option>
+                                                <option value="delivered"> Selesai Sampai Tujuan</option>
+                                                <option value="cancelled"> Dibatalkan</option>
+                                            </select>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                <div className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl bg-gray-100 text-gray-400 font-semibold cursor-not-allowed flex items-center justify-between">
+                                                    <span>Pesanan Belum Lunas</span>
+                                                    <span>🔒</span>
+                                                </div>
+                                                <p className="text-[10px] text-red-500 font-bold bg-red-50 p-2 rounded border border-red-100 italic">
+                                                    * Selesaikan pembayaran untuk memproses pengiriman.
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
-
                             </section>
                         </div>
 
