@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 const timeLabels = {
     today: "Hari Ini",
@@ -355,6 +356,35 @@ const AdminAnalytics = () => {
         }
     };
 
+    const exportToExcel = () => {
+        try {
+            const now = new Date().toLocaleString('id-ID');
+
+            // 1. Prepare Data for Excel
+            const dataToExport = analytics.rawOrders.map(order => ({
+                'Tanggal': new Date(order.created_at).toLocaleDateString('id-ID'),
+                'ID Pesanan': order.id,
+                'Pembeli': order.customer_name || order.customer_email,
+                'Total Harga': parseFloat(order.total_harga || 0),
+                'Status Pembayaran': order.status_pembayaran === 'paid' ? 'LUNAS' : order.status_pembayaran,
+                'Status Pengiriman': order.status_pengiriman,
+                'Metode Bayar': order.payment_name || '-'
+            }));
+
+            // 2. Create Workbook and Worksheet
+            const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Penjualan");
+
+            // 3. Save File
+            XLSX.writeFile(workbook, `Laporan_GreenHouse_${timeRange}_${new Date().toISOString().split('T')[0]}.xlsx`);
+            toast.success('Laporan Excel berhasil didownload!');
+        } catch (error) {
+            console.error('Export Excel error:', error);
+            toast.error('Gagal export ke Excel');
+        }
+    };
+
     const todayISO = () => new Date().toISOString().split('T')[0];
 
     if (loading) {
@@ -420,16 +450,27 @@ const AdminAnalytics = () => {
                         </div>
                     </div>
 
-                    {/* Export Button */}
-                    <button
-                        onClick={exportToPDF}
-                        className="ml-auto flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-green-700 transition shadow-md shadow-green-100 text-sm"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        Export
-                    </button>
+                    {/* Export Buttons */}
+                    <div className="ml-auto flex gap-2">
+                        <button
+                            onClick={exportToExcel}
+                            className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-700 transition shadow-md shadow-emerald-100 text-sm"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Excel
+                        </button>
+                        <button
+                            onClick={exportToPDF}
+                            className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-red-700 transition shadow-md shadow-red-100 text-sm"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                            PDF
+                        </button>
+                    </div>
                 </div>
             </div>
 
