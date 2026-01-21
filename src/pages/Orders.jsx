@@ -461,6 +461,52 @@ const Orders = () => {
         }
     };
 
+    // ✅ Fungsi untuk menyelesaikan pesanan (Konfirmasi Pesanan Diterima)
+    const handleCompleteOrder = async (orderId) => {
+        if (!window.confirm('Apakah Anda yakin sudah menerima pesanan ini dengan baik? Tindakan ini akan menyelesaikan transaksi.')) {
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const { error } = await supabase
+                .from('orders')
+                .update({
+                    status_pengiriman: 'delivered',
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', orderId);
+
+            if (error) throw error;
+
+            toast.success('Terima kasih! Pesanan telah selesai.');
+
+            // ✅ Kirim notifikasi konfirmasi sukses
+            try {
+                await supabase.from('notifications').insert({
+                    user_id: user.id,
+                    type: 'shipping',
+                    title: 'Pesanan Selesai 🎉',
+                    message: `Terima kasih! Transaksi pesanan #${orderId} telah selesai.`,
+                    order_id: orderId,
+                    link: '/orders'
+                });
+            } catch (nErr) {
+                console.warn('Gagal kirim notif konfirmasi:', nErr);
+            }
+
+            await fetchOrders();
+            if (selectedOrder?.id === orderId) {
+                setSelectedOrder(null);
+            }
+        } catch (error) {
+            console.error('Error completing order:', error);
+            toast.error('Gagal menyelesaikan pesanan: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // ✅ Fungsi untuk handle upload file
     const handleFileUpload = (files) => {
         const maxSize = 10 * 1024 * 1024; // 10MB
@@ -631,6 +677,16 @@ const Orders = () => {
                                                 </>
                                             )}
                                         </>
+                                    )}
+
+                                    {order.status_pembayaran === 'paid' && (order.status_pengiriman === 'shipped' || order.status_pengiriman === 'dikirim') && (
+                                        <button
+                                            onClick={() => handleCompleteOrder(order.id)}
+                                            disabled={loading}
+                                            className="px-6 py-3 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-500/25 transition-all animate-pulse"
+                                        >
+                                            Pesanan Diterima ✅
+                                        </button>
                                     )}
 
                                     {canCancelOrder(order) && (

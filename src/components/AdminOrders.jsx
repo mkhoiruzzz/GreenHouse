@@ -73,12 +73,12 @@ const AdminOrders = () => {
         }
     };
 
-    const updateOrderStatus = async (orderId, field, value) => {
+    const updateOrderStatus = async (orderId, field, value, isSystemUpdate = false) => {
         try {
-            // ✅ Security/Policy: Admin is NOT allowed to manually set an order to PAID
-            // Payment status must ONLY be updated via Tripay Webhook for data integrity.
-            if (field === 'status_pembayaran' && (value === 'paid' || value === 'lunas')) {
-                toast.error('Admin tidak diperbolehkan mengubah status pembayaran ke LUNAS secara manual. Status ini akan terupdate otomatis via Tripay.');
+            // ✅ Security: Block manual payment updates to 'paid' via dropdown (though dropdown is removed)
+            // But allow it if it's a 'System Update' from the Cek Tripay button
+            if (field === 'status_pembayaran' && (value === 'paid' || value === 'lunas') && !isSystemUpdate) {
+                toast.error('Gagal: Status pembayaran hanya bisa diubah otomatis oleh sistem Tripay.');
                 return;
             }
 
@@ -181,14 +181,14 @@ const AdminOrders = () => {
 
                 // Update order status based on Tripay status
                 if (tripayStatus === 'PAID') {
-                    await updateOrderStatus(order.id, 'status_pembayaran', 'paid');
-                    toast.success('Pembayaran sudah lunas di Tripay');
+                    await updateOrderStatus(order.id, 'status_pembayaran', 'paid', true);
+                    toast.success('Pembayaran terverifikasi LUNAS di Tripay');
                 } else if (tripayStatus === 'UNPAID') {
-                    await updateOrderStatus(order.id, 'status_pembayaran', 'unpaid');
-                    toast.info('Pembayaran belum lunas');
+                    await updateOrderStatus(order.id, 'status_pembayaran', 'unpaid', true);
+                    toast.info('Pembayaran terdeteksi BELUM BAYAR');
                 } else if (tripayStatus === 'EXPIRED') {
-                    await updateOrderStatus(order.id, 'status_pembayaran', 'expired');
-                    toast.warning('Pembayaran sudah expired');
+                    await updateOrderStatus(order.id, 'status_pembayaran', 'expired', true);
+                    toast.warning('Pembayaran terdeteksi KADALUWARSA');
                 }
             } else {
                 toast.error('Gagal memeriksa status Tripay');
@@ -580,9 +580,7 @@ const AdminOrders = () => {
                                             </span>
                                             <span className="text-[10px] text-gray-400 font-medium uppercase italic">Dikelola Tripay</span>
                                         </div>
-                                        <p className="text-[10px] text-amber-600 font-medium leading-tight">
-                                            ⚠️ Status ini terkunci. Hanya bisa berubah melalui sistem pembayaran otomatis.
-                                        </p>
+
                                     </div>
                                     <div className="space-y-3">
                                         <label className="block text-sm font-bold text-gray-700">
@@ -597,7 +595,6 @@ const AdminOrders = () => {
                                                 <option value="pending"> Belum Diproses</option>
                                                 <option value="processing"> Sedang Disiapkan</option>
                                                 <option value="shipped">Dalam Perjalanan</option>
-                                                <option value="delivered"> Selesai Sampai Tujuan</option>
                                                 <option value="cancelled"> Dibatalkan</option>
                                             </select>
                                         ) : (
@@ -606,9 +603,7 @@ const AdminOrders = () => {
                                                     <span>Pesanan Belum Lunas</span>
                                                     <span>🔒</span>
                                                 </div>
-                                                <p className="text-[10px] text-red-500 font-bold bg-red-50 p-2 rounded border border-red-100 italic">
-                                                    * Selesaikan pembayaran untuk memproses pengiriman.
-                                                </p>
+
                                             </div>
                                         )}
                                     </div>

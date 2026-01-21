@@ -245,6 +245,11 @@ const Checkout = () => {
     try {
       setIsSubmitting(true);
 
+      // Normalize city name (Title Case)
+      const normalizedCity = formData.kota.trim().toLowerCase().split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+
       // Create order in Supabase
       const orderData = {
         user_id: user.id,
@@ -256,11 +261,11 @@ const Checkout = () => {
         status_pembayaran: 'unpaid',
         status_pengiriman: 'pending',
         metode_pembayaran: `tripay_${selectedPaymentMethod}`,
-        alamat_pengiriman: `${formData.alamat_pengiriman}, ${formData.kota} ${formData.kode_pos}`,
+        alamat_pengiriman: `${formData.alamat_pengiriman}, ${normalizedCity} ${formData.kode_pos}`,
         customer_name: formData.nama_lengkap,
         customer_email: formData.email,
         customer_phone: formData.no_telepon,
-        kota: formData.kota,
+        kota: normalizedCity,
         provinsi: formData.provinsi,
         catatan: formData.catatan || ''
       };
