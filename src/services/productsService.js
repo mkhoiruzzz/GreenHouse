@@ -229,7 +229,12 @@ export const productsService = {
       // Fetch reviews for rating
       const { data: reviewsData } = await supabase
         .from('reviews')
-        .select('*')
+        .select(`
+          *,
+          profiles:user_id (
+            username
+          )
+        `)
         .eq('product_id', id);
 
       // Fetch sold count

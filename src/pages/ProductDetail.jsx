@@ -504,10 +504,10 @@ const ProductDetail = () => {
                       {product.reviews.map((review, index) => (
                         <div key={review.id || index} className="border-b border-gray-100 pb-8 last:border-0">
                           <div className="flex items-center gap-4 mb-3">
-                            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold">{review.user_name?.[0]?.toUpperCase() || 'U'}</div>
+                            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold">{(review.profiles?.username || review.user_name || 'U')[0]?.toUpperCase()}</div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className="font-bold text-gray-900">{review.user_name || 'Pembeli'}</span>
+                                <span className="font-bold text-gray-900">{review.profiles?.username || review.user_name || 'Pembeli'}</span>
                                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Pembeli Terverifikasi</span>
                               </div>
                               <div className="flex items-center gap-2">

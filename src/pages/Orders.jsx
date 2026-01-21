@@ -61,7 +61,9 @@ const Orders = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [uploadedFiles, setUploadedFiles] = useState([]);
     const [reviewRating, setReviewRating] = useState(0);
+    const [reviewComment, setReviewComment] = useState(''); // NEW state
     const [hoverRating, setHoverRating] = useState(0);
+    const [isEditingReview, setIsEditingReview] = useState(false); // Track if editing
 
 
 
@@ -462,6 +464,34 @@ const Orders = () => {
     };
 
     // ✅ Fungsi untuk menyelesaikan pesanan (Konfirmasi Pesanan Diterima)
+    const handleReviewClick = async (order) => {
+        setSelectedOrder(order);
+        setReviewRating(0);
+        setReviewComment('');
+        setIsEditingReview(false);
+        setShowReviewModal(true);
+
+        try {
+            // Check if review exists for this order
+            const { data, error } = await supabase
+                .from('reviews')
+                .select('*')
+                .eq('order_id', order.id)
+                .eq('user_id', user.id)
+                .limit(1);
+
+            if (data && data.length > 0) {
+                // Found existing review
+                const review = data[0];
+                setReviewRating(review.rating);
+                setReviewComment(review.comment || '');
+                setIsEditingReview(true);
+            }
+        } catch (error) {
+            console.error('Error checking existing review:', error);
+        }
+    };
+
     const handleCompleteOrder = async (orderId) => {
         if (!window.confirm('Apakah Anda yakin sudah menerima pesanan ini dengan baik? Tindakan ini akan menyelesaikan transaksi.')) {
             return;
@@ -690,12 +720,10 @@ const Orders = () => {
                                                 <>
                                                     <button
                                                         className="px-4 py-3 bg-yellow-500 text-white rounded-lg text-sm font-semibold hover:bg-yellow-600 shadow-md transition-all"
-                                                        onClick={() => {
-                                                            setSelectedOrder(order);
-                                                            setShowReviewModal(true);
-                                                        }}
+                                                        onClick={() => handleReviewClick(order)}
                                                     >
-                                                        Beri Ulasan
+                                                        {/* Check manually if reviewed? logic handled in click */}
+                                                        Edit Ulasan
                                                     </button>
                                                     <button
                                                         className="px-4 py-3 border border-red-500 text-red-500 rounded-lg text-sm font-semibold hover:bg-red-50 transition-all"
@@ -717,7 +745,7 @@ const Orders = () => {
                                             disabled={loading}
                                             className="px-6 py-3 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-500/25 transition-all animate-pulse"
                                         >
-                                            Pesanan Diterima ✅
+                                            Pesanan Diterima
                                         </button>
                                     )}
 
@@ -923,8 +951,7 @@ const Orders = () => {
                             <form onSubmit={async (e) => {
                                 e.preventDefault();
                                 const formData = new FormData(e.target);
-                                const rating = formData.get('rating');
-                                const comment = formData.get('comment');
+                                // const comment = formData.get('comment'); // Use state instead
 
                                 try {
                                     setIsSubmitting(true);
@@ -934,20 +961,31 @@ const Orders = () => {
                                         return;
                                     }
 
+                                    // Delete existing reviews for this order if editing (simplest way to update all items)
+                                    // OR use upsert. Since we loop items, let's delete first to be safe or upsert each.
+                                    // Upsert requires conflict constraint. Safe bet: Delete all for order then Insert.
+
+                                    // Strategy: Delete all reviews for this order by this user, then re-insert.
+                                    // This ensures clean slate for all items in the order.
+                                    if (isEditingReview) {
+                                        await supabase.from('reviews').delete().match({ order_id: selectedOrder.id, user_id: user.id });
+                                    }
+
                                     for (const item of selectedOrder.order_items) {
                                         const { error } = await supabase.from('reviews').insert({
                                             user_id: user.id,
                                             product_id: item.product_id,
                                             order_id: selectedOrder.id,
                                             rating: reviewRating,
-                                            comment
+                                            comment: reviewComment
                                         });
                                         if (error) throw error;
                                     }
-                                    toast.success('Terima kasih atas ulasannya!');
+                                    toast.success(isEditingReview ? 'Ulasan berhasil diperbarui!' : 'Terima kasih atas ulasannya!');
                                     setShowReviewModal(false);
                                     setSelectedOrder(null);
-                                    setReviewRating(0); // Reset rating
+                                    setReviewRating(0);
+                                    setReviewComment('');
                                 } catch (error) {
                                     console.error('Error submitting review:', error);
                                     toast.error('Gagal mengirim ulasan');
@@ -988,7 +1026,13 @@ const Orders = () => {
                                 </div>
                                 <div className="mb-6">
                                     <label className="block text-sm font-medium mb-2 text-gray-700">Komentar</label>
-                                    <textarea name="comment" className="w-full border border-gray-200 rounded-xl p-3 h-32 focus:ring-2 focus:ring-emerald-500 transition-all outline-none text-gray-800" placeholder="Apa pendapatmu tentang produk ini?" required></textarea>
+                                    <textarea
+                                        name="comment"
+                                        value={reviewComment}
+                                        onChange={(e) => setReviewComment(e.target.value)}
+                                        className="w-full border border-gray-200 rounded-xl p-3 h-32 focus:ring-2 focus:ring-emerald-500 transition-all outline-none text-gray-800"
+                                        placeholder="Apa pendapatmu tentang produk ini? (Opsional)"
+                                    ></textarea>
                                 </div>
                                 <div className="flex gap-3">
                                     <button type="button" onClick={() => setShowReviewModal(false)} className="flex-1 py-3 border border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-all">Batal</button>
