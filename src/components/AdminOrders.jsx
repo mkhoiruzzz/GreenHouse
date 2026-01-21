@@ -187,7 +187,7 @@ const AdminOrders = () => {
             diterima: 'Diterima',
             delivered: 'Sudah Sampai',
             lunas: 'Lunas',
-            returned: 'Retur/Dikembalikan'
+            returned: 'Dikembalikan'
         };
         return labels[s] || (status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Menunggu');
     };
@@ -497,15 +497,18 @@ const AdminOrders = () => {
                                             <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Tripay Reference</p>
                                             <p className="font-mono text-sm text-gray-700 bg-white p-2 border border-gray-100 rounded">{selectedOrder.tripay_reference || 'N/A'}</p>
                                         </div>
-                                        {selectedOrder.tripay_checkout_url && (
-                                            <a
-                                                href={selectedOrder.tripay_checkout_url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-                                            >
-                                                Cek Detail Tripay ↗
-                                            </a>
+                                        {selectedOrder.tripay_reference && (
+                                            <div className="space-y-1">
+                                                <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Link Pembayaran</p>
+                                                <a
+                                                    href={selectedOrder.tripay_checkout_url || `https://tripay.co.id/checkout/${selectedOrder.tripay_reference}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-blue-600 hover:text-blue-800 underline text-sm break-all"
+                                                >
+                                                    {selectedOrder.tripay_checkout_url || `https://tripay.co.id/checkout/${selectedOrder.tripay_reference}`}
+                                                </a>
+                                            </div>
                                         )}
                                     </div>
                                 </section>
@@ -545,7 +548,7 @@ const AdminOrders = () => {
                                                 <option value="processing"> Sedang Disiapkan</option>
                                                 <option value="shipped">Dalam Perjalanan</option>
                                                 <option value="cancelled"> Dibatalkan</option>
-                                                <option value="returned">Retur/Dikembalikan</option>
+                                                <option value="returned">Dikembalikan</option>
                                             </select>
                                         ) : (
                                             <div className="space-y-2">
