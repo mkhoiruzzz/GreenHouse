@@ -533,6 +533,38 @@ const Orders = () => {
     };
 
     // ✅ Fungsi untuk upload files ke Supabase Storage
+    const uploadFilesToSupabase = async () => {
+        const uploadedUrls = [];
+
+        for (const file of uploadedFiles) {
+            try {
+                const fileExt = file.name.split('.').pop();
+                const fileName = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+                const filePath = `refund-proofs/${fileName}`;
+
+                const { data, error } = await supabase.storage
+                    .from('refund-proofs')
+                    .upload(filePath, file);
+
+                if (error) {
+                    console.error('Upload error:', error);
+                    throw error;
+                }
+
+                const { data: urlData } = supabase.storage
+                    .from('refund-proofs')
+                    .getPublicUrl(filePath);
+
+                uploadedUrls.push(urlData.publicUrl);
+            } catch (error) {
+                console.error('Error uploading file:', error);
+                toast.error(`Gagal upload ${file.name}: ${error.message}`);
+                throw error;
+            }
+        }
+
+        return uploadedUrls;
+    };
 
     const handleImageError = (e) => {
         e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik01MCAzM0M0MS4xNjM0IDMzIDM0IDQwLjE2MzQgMzQgNTBDMzQgNTkuODM2NiA0MS4xNjM0IDY3IDUwIDY3QzU4LjgzNjYgNjcgNjYgNTkuODM2NiA2NiA1MEM2NiA0MC4xNjM0IDU4LjgzNjYgMzMgNTAgMzNaIiBmaWxsPSIjMDlCOEI2Ii8+CjxwYXRoIGQ9Ik01MCA0MEM1NC40MTgzIDQwIDU4IDQzLjU4MTcgNTggNDhDNTggNTIuNDE4MyA1NC40MTgzIDU2IDUwIDU2QzQ1LjU4MTcgNTYgNDIgNTIuNDE4MyA0MiA0OEM0MiA0My41ODE3IDQ1LjU4MTcgNDAgNTAgNDBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K';
