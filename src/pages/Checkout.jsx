@@ -307,7 +307,7 @@ const Checkout = () => {
       if (itemsError) throw itemsError;
 
       // Update stock
-      for (const item of cartItems) {
+      for (const item of itemsToCheckout) {
         const { data: product } = await supabase
           .from('products')
           .select('stok')
