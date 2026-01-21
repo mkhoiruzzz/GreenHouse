@@ -704,7 +704,7 @@ const Orders = () => {
                                                             setShowRefundModal(true);
                                                         }}
                                                     >
-                                                        Retur/Refund
+                                                        Retur
                                                     </button>
                                                 </>
                                             )}

@@ -155,50 +155,6 @@ const AdminOrders = () => {
         }
     };
 
-    const checkTripayStatus = async (order) => {
-        if (!order.tripay_reference) {
-            toast.error('Tidak ada reference Tripay untuk pesanan ini');
-            return;
-        }
-
-        try {
-            toast.info('Memeriksa status pembayaran Tripay...');
-
-            // Call Tripay API to check status
-            const response = await fetch(
-                `https://tripay.co.id/api-sandbox/transaction/detail?reference=${order.tripay_reference}`,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${import.meta.env.VITE_TRIPAY_API_KEY || ''}`
-                    }
-                }
-            );
-
-            const result = await response.json();
-
-            if (result.success && result.data) {
-                const tripayStatus = result.data.status;
-
-                // Update order status based on Tripay status
-                if (tripayStatus === 'PAID') {
-                    await updateOrderStatus(order.id, 'status_pembayaran', 'paid', true);
-                    toast.success('Pembayaran terverifikasi LUNAS di Tripay');
-                } else if (tripayStatus === 'UNPAID') {
-                    await updateOrderStatus(order.id, 'status_pembayaran', 'unpaid', true);
-                    toast.info('Pembayaran terdeteksi BELUM BAYAR');
-                } else if (tripayStatus === 'EXPIRED') {
-                    await updateOrderStatus(order.id, 'status_pembayaran', 'expired', true);
-                    toast.warning('Pembayaran terdeteksi KADALUWARSA');
-                }
-            } else {
-                toast.error('Gagal memeriksa status Tripay');
-            }
-        } catch (error) {
-            console.error('Error checking Tripay status:', error);
-            toast.error('Gagal memeriksa status pembayaran');
-        }
-    };
-
     const filteredOrders = orders.filter(order => {
         const matchesSearch =
             order.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -230,7 +186,8 @@ const AdminOrders = () => {
             terkirim: 'Terkirim',
             diterima: 'Diterima',
             delivered: 'Sudah Sampai',
-            lunas: 'Lunas'
+            lunas: 'Lunas',
+            returned: 'Retur/Dikembalikan'
         };
         return labels[s] || (status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Menunggu');
     };
@@ -256,7 +213,8 @@ const AdminOrders = () => {
             dikemas: 'bg-blue-100 text-blue-800 border border-blue-200',
             terkirim: 'bg-purple-100 text-purple-800 border border-purple-200',
             diterima: 'bg-green-100 text-green-800 border border-green-200',
-            delivered: 'bg-green-100 text-green-800 border border-green-200'
+            delivered: 'bg-green-100 text-green-800 border border-green-200',
+            returned: 'bg-orange-100 text-orange-800 border border-orange-200'
         };
         return badges[s] || 'bg-gray-100 text-gray-800 border border-gray-200';
     };
@@ -393,17 +351,6 @@ const AdminOrders = () => {
                                                 >
                                                     Detail
                                                 </button>
-                                                {order.tripay_reference && (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            checkTripayStatus(order);
-                                                        }}
-                                                        className="px-3 py-1 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-sm"
-                                                    >
-                                                        Cek Tripay
-                                                    </button>
-                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -580,7 +527,9 @@ const AdminOrders = () => {
                                             </span>
                                             <span className="text-[10px] text-gray-400 font-medium uppercase italic">Dikelola Tripay</span>
                                         </div>
-
+                                        <p className="text-[10px] text-blue-600 font-medium leading-tight mt-2">
+                                            ℹ️ Status pembayaran akan otomatis terupdate saat customer melakukan pembayaran via Tripay.
+                                        </p>
                                     </div>
                                     <div className="space-y-3">
                                         <label className="block text-sm font-bold text-gray-700">
@@ -596,6 +545,7 @@ const AdminOrders = () => {
                                                 <option value="processing"> Sedang Disiapkan</option>
                                                 <option value="shipped">Dalam Perjalanan</option>
                                                 <option value="cancelled"> Dibatalkan</option>
+                                                <option value="returned">Retur/Dikembalikan</option>
                                             </select>
                                         ) : (
                                             <div className="space-y-2">

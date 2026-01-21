@@ -367,10 +367,13 @@ const Checkout = () => {
       const paymentResponse = await tripayService.createTransaction(tripayData);
 
       if (paymentResponse && paymentResponse.success && paymentResponse.data) {
-        // Update order with Tripay reference
+        // Update order with Tripay reference and checkout URL
         await supabase
           .from('orders')
-          .update({ tripay_reference: paymentResponse.data.reference })
+          .update({
+            tripay_reference: paymentResponse.data.reference,
+            tripay_checkout_url: paymentResponse.data.checkout_url
+          })
           .eq('id', order.id);
 
         // Clear cart ONLY if not Buy Now
