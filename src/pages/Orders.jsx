@@ -743,7 +743,7 @@ const Orders = () => {
                                         <button
                                             onClick={() => handleCompleteOrder(order.id)}
                                             disabled={loading}
-                                            className="px-6 py-3 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-500/25 transition-all animate-pulse"
+                                            className="px-6 py-3 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-500/25"
                                         >
                                             Pesanan Diterima
                                         </button>
