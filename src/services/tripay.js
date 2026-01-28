@@ -16,8 +16,8 @@ export const tripayService = {
   getPaymentChannels: async () => {
     try {
       console.log('📋 Fetching payment channels via API route...');
-      
-      // Check if running on localhost - use fallback immediately
+
+      /* Komentari untuk menggunakan API asli di localhost
       if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         console.log('🏠 Running on localhost - using fallback channels');
         return {
@@ -26,41 +26,49 @@ export const tripayService = {
           message: 'Using fallback payment channels (localhost)'
         };
       }
-      
+      */
+
       const response = await axios.get(`${API_BASE_URL}/payment-channels`, {
-        timeout: 5000, // Reduced timeout
+        timeout: 8000,
         headers: {
           'Content-Type': 'application/json'
         }
       });
-      
-      console.log('✅ Payment channels loaded:', response.data.data?.length || 0);
-      
+
+      console.log('✅ Payment response received');
+
+      // Verifikasi jika response adalah JSON yang valid
+      if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
+        throw new Error('Server returned HTML instead of JSON (proxy issue?)');
+      }
+
+      const channels = response.data.data || [];
+      console.log('✅ Payment channels loaded:', channels.length);
+
       // Fix icon URLs
-      const channelsWithFixedIcons = (response.data.data || []).map(channel => {
+      const channelsWithFixedIcons = channels.map(channel => {
         const fixedIconUrl = channel.icon_url && channel.icon_url.includes('tripay.co.id')
           ? channel.icon_url
           : getPaymentIconUrl(channel.code);
-          
+
         return {
           ...channel,
           icon_url: fixedIconUrl
         };
       });
-      
+
       return {
-        success: response.data.success || true,
+        success: true,
         data: channelsWithFixedIcons
       };
     } catch (error) {
-      console.error('❌ Error fetching payment channels:', error.response?.data || error.message);
+      console.error('❌ Error fetching payment channels:', error.message);
       console.log('🔄 Using fallback payment channels...');
-      
-      // Return fallback channels instead of failing
+
       return {
         success: true,
         data: getFallbackChannels(),
-        message: 'Using fallback payment channels'
+        message: 'Using fallback payment channels (API error)'
       };
     }
   },
@@ -75,7 +83,7 @@ export const tripayService = {
         items: transactionData.order_items?.length || 0
       });
 
-      // ✅ FIX: Check if running on localhost - use mock payment
+      /* Komentari untuk menggunakan API asli di localhost
       const isLocalhost = window.location.hostname === 'localhost' || 
                          window.location.hostname === '127.0.0.1' ||
                          window.location.port === '3000' ||
@@ -106,6 +114,7 @@ export const tripayService = {
           message: 'Mock payment created (localhost mode)'
         };
       }
+      */
 
       // Real API call for production
       const response = await axios.post(
@@ -136,13 +145,13 @@ export const tripayService = {
         status: error.response?.status,
         data: error.response?.data
       });
-      
+
       // If not localhost and API fails, return error
-      const isLocalhost = window.location.hostname === 'localhost' || 
-                         window.location.hostname === '127.0.0.1' ||
-                         window.location.port === '3000' ||
-                         window.location.port === '5173';
-      
+      const isLocalhost = window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.port === '3000' ||
+        window.location.port === '5173';
+
       if (!isLocalhost) {
         return {
           success: false,
@@ -150,11 +159,11 @@ export const tripayService = {
           message: error.response?.data?.message || 'Gagal membuat transaksi pembayaran'
         };
       }
-      
+
       // Fallback mock for localhost if error occurs
       console.log('⚠️ Error occurred, using fallback mock payment');
       const mockReference = `MOCK-FALLBACK-${Date.now()}`;
-      
+
       return {
         success: true,
         data: {
@@ -174,7 +183,7 @@ export const tripayService = {
   checkTransaction: async (reference) => {
     try {
       console.log('🔍 Checking transaction via API route:', reference);
-      
+
       const response = await axios.get(
         `${API_BASE_URL}/check-transaction?reference=${reference}`,
         {
@@ -198,7 +207,7 @@ export const tripayService = {
 
     } catch (error) {
       console.error('❌ Error checking transaction:', error.response?.data || error.message);
-      
+
       return {
         success: false,
         error: error.response?.data || error.message,
@@ -212,25 +221,25 @@ export const tripayService = {
 function getPaymentIconUrl(code) {
   const iconMap = {
     // Virtual Accounts
-     'BRIVA': '/images/products/bri.png',
+    'BRIVA': '/images/products/bri.png',
     'BNIVA': '/images/products/bni.png',
     'BCAVA': '/images/products/bca.png',
     'MANDIRIVA': '/images/products/mandiri.png',
     'PERMATAVA': '/images/products/permata.png',
-    
+
     // E-Wallets
-      'OVO': '/images/products/ovo.png',
+    'OVO': '/images/products/ovo.png',
     'DANA': '/images/products/dana.png',
     'SHOPEEPAY': '/images/products/shopeepay.png',
     'LINKAJA': '/images/products/linkaja.png',
     'GOPAY': '/images/products/gopay.png',
     // QRIS
     'QRIS': '/images/products/qris.png',
-    
+
     // Convenience Store
     'ALFAMART': '/images/products/alfamart.png',
     'INDOMARET': '/images/products/indomaret.png',
-    
+
     // Default fallback
     'default': `${PAYMENT_ICON_BASE_URL}/default.png`
   };

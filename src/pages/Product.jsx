@@ -66,7 +66,7 @@ const Product = () => {
 
     fetchCategories();
     prevCartCountRef.current = cartItems.length;
-  }, []);
+  }, [searchParams]);
 
   // ✅ Konversi category name ke ID setelah categories loaded (hanya sekali)
   useEffect(() => {
@@ -278,45 +278,6 @@ const Product = () => {
 
   return (
     <div className="min-h-screen mt-16 bg-gradient-to-br from-green-50 via-white to-gray-50">
-      {/* Modern Hero Section */}
-      <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white py-8 sm:py-12 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center mb-6">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-3 drop-shadow-lg">
-              🌱 Green House
-            </h1>
-            <p className="text-green-100 text-sm sm:text-base max-w-2xl mx-auto">
-              Temukan tanaman hias dan aksesoris berkualitas untuk menghiasi rumah Anda
-            </p>
-          </div>
-
-          {/* Enhanced Search Bar */}
-          <div className="relative max-w-2xl mx-auto">
-            <input
-              type="text"
-              placeholder="Cari produk... (contoh: Monstera, Pot, Pupuk)"
-              value={filters.search}
-              onChange={(e) => handleFilterChange('search', e.target.value)}
-              className="w-full p-4 pl-14 pr-4 bg-white text-gray-900 rounded-xl shadow-lg focus:outline-none focus:ring-4 focus:ring-green-300 transition-all duration-300 placeholder-gray-400"
-            />
-            <div className="absolute left-5 top-1/2 transform -translate-y-1/2 text-green-600">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            {filters.search && (
-              <button
-                onClick={() => handleFilterChange('search', '')}
-                className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6 sm:py-8">
         <div className="flex gap-6">
