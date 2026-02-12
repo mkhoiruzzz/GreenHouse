@@ -93,10 +93,17 @@ const ProductCard = ({ product, viewMode }) => {
         e.nativeEvent.stopImmediatePropagation();
       }
 
-      navigate(`/product/${product.id}`);
+      // Logic Add to Cart Langsung
+      if (product.stok > 0) {
+        addToCart(product, 1);
+        toast.success('Produk berhasil masuk keranjang! 🛒');
+      } else {
+        toast.error('Maaf, stok produk habis.');
+      }
+
     } catch (error) {
-      console.error('❌ Error navigating:', error);
-      toast.error('Gagal membuka detail produk');
+      console.error('❌ Error adding to cart:', error);
+      toast.error('Gagal menambahkan ke keranjang');
     }
   };
 
@@ -140,25 +147,23 @@ const ProductCard = ({ product, viewMode }) => {
   const renderImage = () => {
     if (imageError) {
       return (
-        <div className="w-full h-full bg-gradient-to-br from-emerald-100 to-emerald-200 flex items-center justify-center rounded-lg">
-          <span className="text-5xl">🌿</span>
+        <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center rounded-lg">
+          <span className="text-4xl grayscale opacity-50">🌿</span>
         </div>
       );
     }
 
-    const imageUrl = currentImageUrl || 'https://placehold.co/400x300/4ade80/white?text=Gambar+Tidak+Tersedia';
+    const imageUrl = currentImageUrl || 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image';
 
     return (
-      <div className="relative w-full h-full">
-        {/* ✅ IMAGE: Selalu render, atur opacity untuk transisi smooth */}
+      <div className="relative w-full h-full overflow-hidden rounded-lg group">
         <img
           src={imageUrl}
           alt={product.nama_produk || 'Gambar produk'}
-          className={`w-full h-full object-cover rounded-lg transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-70'
-            } hover:scale-105`}
+          className={`w-full h-full object-cover transition-transform duration-700 ease-in-out transform group-hover:scale-110 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
           onLoad={handleImageLoad}
           onError={handleImageError}
-          loading="eager"
+          loading="lazy"
         />
       </div>
     );
@@ -258,81 +263,59 @@ const ProductCard = ({ product, viewMode }) => {
 
   // Grid View
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+    <div className="group bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-500 hover:-translate-y-1 flex flex-col h-full">
       <div
-        className="cursor-pointer hover:bg-gray-50 transition-colors duration-300"
+        className="cursor-pointer bg-gray-50 overflow-hidden relative"
         onClick={handleCardClick}
       >
-        <div className="p-4">
-          <div
-            className="relative rounded-xl overflow-hidden border-4 border-gray-200 bg-gray-50 p-2 mb-4 h-48 flex items-center justify-center"
-            onClick={handleImageClick}
-          >
-            {renderImage()}
-          </div>
-
-          <div className="flex justify-between items-start mb-3">
-            {product.categories && (
-              <div className="bg-emerald-100 px-3 py-1 rounded-full">
-                <span className="text-xs text-emerald-700 font-medium">
-                  {product.categories.name_kategori || product.categories.nama_kategori || 'Kategori'}
-                </span>
-              </div>
-            )}
-          </div>
-
-          <h3 className="font-bold text-gray-900 mb-1 line-clamp-2 text-sm">
-            {product.nama_produk || 'Nama produk tidak tersedia'}
-          </h3>
-
-          <div className="flex items-center justify-between mb-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/product/${product.id}#customer-reviews`);
-              }}
-              className="flex items-center gap-0.5 hover:bg-yellow-50 px-0.5 rounded transition-colors"
-            >
-              {[1, 2, 3, 4, 5].map((star) => (
-                <span key={star} className={`text-[10px] ${star <= (product.avg_rating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}>
-                  ★
-                </span>
-              ))}
-              <span className="text-[10px] text-emerald-600 font-medium ml-1">({product.total_reviews || 0})</span>
-            </button>
-            <span className="text-[10px] text-gray-500">Terjual {product.total_sold || 0}</span>
-          </div>
-          <p className="text-gray-600 text-xs mb-3 line-clamp-2">
-            {product.deskripsi || 'Deskripsi tidak tersedia'}
-          </p>
-
-          <div className="flex justify-between items-center">
-            <div className="text-left">
-              <div className="text-lg font-bold text-emerald-600">
-                {formatPrice(product.harga)}
-              </div>
-              <div className={`text-xs font-medium ${product.stok > 0 ? 'text-green-600' : 'text-red-600'
-                }`}>
-                {product.stok > 0
-                  ? `Stok: ${product.stok}`
-                  : 'Stok Habis'
-                }
-              </div>
-            </div>
-          </div>
+        <div className="aspect-square w-full">
+          {renderImage()}
         </div>
+
+        {/* Stock Badge */}
+        {product.stok <= 0 && (
+          <div className="absolute top-3 right-3 bg-red-500 text-white px-2.5 py-1 rounded-full shadow-sm z-10">
+            <span className="text-[10px] font-bold">STOK HABIS</span>
+          </div>
+        )}
       </div>
 
-      <div className="border-t border-gray-200 px-4 pb-4 pt-3 bg-white">
-        <button
-          type="button"
-          className="w-full bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-semibold transition-all duration-200 text-sm shadow-md hover:shadow-lg flex items-center justify-center gap-2"
-          onClick={handleBuyClick}
-          onMouseDown={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
-        >
-          Beli Sekarang
-        </button>
+      <div className="p-4 flex flex-col flex-1" onClick={handleCardClick}>
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="font-bold text-gray-900 text-base leading-tight line-clamp-2 group-hover:text-green-600 transition-colors cursor-pointer">
+            {product.nama_produk || 'Tanaman Hias'}
+          </h3>
+        </div>
+
+        <div className="mb-3 flex items-center gap-1.5">
+          <div className="flex text-yellow-400 text-xs gap-0.5">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <span key={star} className={star <= (product.avg_rating || 0) ? 'text-yellow-400' : 'text-gray-200'}>★</span>
+            ))}
+          </div>
+          <span className="text-xs text-gray-400">({product.total_reviews || 0})</span>
+          <span className="text-gray-300 mx-1">•</span>
+          <span className="text-xs text-gray-500">Terjual {product.total_sold || 0}</span>
+        </div>
+
+        <div className="mt-auto pt-3 border-t border-gray-50 flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-xs text-gray-400 mb-0.5">Harga</span>
+            <span className="text-lg font-bold text-green-600">
+              {formatPrice(product.harga)}
+            </span>
+          </div>
+
+          <button
+            onClick={handleBuyClick}
+            className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center text-green-600 hover:bg-green-600 hover:text-white transition-all duration-300 transform hover:scale-105 shadow-sm hover:shadow-green-200"
+            title="Beli Sekarang"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );

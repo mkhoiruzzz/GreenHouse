@@ -465,5 +465,37 @@ export const productsService = {
       console.error('❌ [testConnection] Connection test error:', error);
       return { success: false, error };
     }
+  },
+
+  // Get latest reviews for testimonials
+  getLatestReviews: async (limit = 6) => {
+    try {
+      console.log(`🔄 [getLatestReviews] Fetching ${limit} latest reviews...`);
+      const { data, error } = await supabase
+        .from('reviews')
+        .select(`
+          id,
+          rating,
+          comment,
+          created_at,
+          profiles:user_id (
+            username,
+            avatar_url
+          ),
+          products:product_id (
+            nama_produk
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+
+      console.log(`✅ [getLatestReviews] Found ${data?.length || 0} reviews`);
+      return data || [];
+    } catch (error) {
+      console.error('❌ [getLatestReviews] Error:', error);
+      return [];
+    }
   }
 };
