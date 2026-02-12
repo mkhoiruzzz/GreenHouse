@@ -104,73 +104,83 @@ const ProductForm = ({
         {/* Kolom Kanan – Upload Gambar */}
         <div className="space-y-4">
 
-          {/* Preview */}
-          {imagePreview && (
-            <div className="mb-4 relative">
+          {/* Preview & Ganti Gambar */}
+          {imagePreview ? (
+            <div className="relative group overflow-hidden rounded-xl border-4 border-green-200 shadow-lg">
               <img
                 src={imagePreview}
                 alt="Preview"
-                className="w-full h-48 object-cover rounded-xl border-4 border-green-200 shadow-lg"
+                className="w-full h-48 object-cover transition-transform duration-500 group-hover:scale-110"
               />
-              <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <label className="bg-white text-gray-900 px-4 py-2 rounded-full font-bold cursor-pointer hover:bg-gray-100 transition shadow-lg flex items-center gap-2">
+                  Ganti Gambar
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    disabled={uploading}
+                    onChange={(e) => handleImageUpload(e, isEdit)}
+                  />
+                </label>
+              </div>
+              <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-md">
                 ✓ Siap
               </div>
             </div>
+          ) : (
+            /* Box Upload (Hanya muncul jika belum ada gambar) */
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700">
+                Gambar Produk <span className="text-red-500">*</span>
+              </label>
+
+              <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-gray-300 border-dashed rounded-xl cursor-pointer hover:bg-gray-50 transition-all duration-200">
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  {uploading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
+                      <p className="mt-3 text-sm text-gray-500 font-medium">
+                        Mengupload...
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="bg-green-100 p-3 rounded-full mb-3">
+                        <svg
+                          className="w-8 h-8 text-green-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                          />
+                        </svg>
+                      </div>
+                      <p className="mb-2 text-sm font-semibold text-gray-700">
+                        Klik untuk upload
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        PNG, JPG, JPEG (MAX. 5MB)
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  disabled={uploading}
+                  onChange={(e) => handleImageUpload(e, isEdit)}
+                />
+              </label>
+            </div>
           )}
-
-          {/* Upload */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Gambar Produk <span className="text-red-500">*</span>
-            </label>
-
-            <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-gray-300 border-dashed rounded-xl cursor-pointer hover:bg-gray-50 transition">
-              <div className="flex flex-col items-center justify-center pt-5 pb-6">
-
-                {uploading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
-                    <p className="mt-3 text-sm text-gray-500 font-medium">
-                      Mengupload...
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <div className="bg-green-100 p-3 rounded-full mb-3">
-                      <svg
-                        className="w-8 h-8 text-green-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                        />
-                      </svg>
-                    </div>
-                    <p className="mb-2 text-sm font-semibold text-gray-700">
-                      Klik untuk upload
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      PNG, JPG, JPEG (MAX. 5MB)
-                    </p>
-                  </>
-                )}
-
-              </div>
-
-              <input
-                type="file"
-                className="hidden"
-                accept="image/*"
-                disabled={uploading}
-                onChange={(e) => handleImageUpload(e, isEdit)}
-              />
-            </label>
-          </div>
 
           {/* Deskripsi Singkat */}
           <div>
@@ -220,7 +230,7 @@ const ProductForm = ({
           }
           className="w-full px-4 py-3 border border-gray-300 rounded-xl"
           rows="4"
-          placeholder="• PENYIRAMAN: ...&#10;• CAHAYA: ...&#10;• KELEMBABAN: ..."
+          placeholder="Penyiraman..."
         />
       </div>
 
@@ -229,17 +239,17 @@ const ProductForm = ({
         <button
           type="submit"
           disabled={loading || uploading}
-          className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-3 rounded-xl"
+          className="bg-green-500 text-white px-8 py-3 rounded-xl"
         >
-          {loading ? (isEdit ? "Memperbarui..." : "Menambahkan...") : isEdit ? "💾 Update Produk" : "💾 Simpan Produk"}
+          {loading ? (isEdit ? "Memperbarui..." : "Menambahkan...") : isEdit ? " Update Produk" : " Simpan Produk"}
         </button>
 
         <button
           type="button"
           onClick={onCancel}
-          className="bg-gray-500 text-white px-8 py-3 rounded-xl"
+          className="bg-red-500 text-white px-8 py-3 rounded-xl"
         >
-          ❌ Batal
+          Batal
         </button>
       </div>
 

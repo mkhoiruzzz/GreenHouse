@@ -11,7 +11,7 @@ export const productsService = {
 
         // Create a promise that rejects after 10 seconds (increased from 3s)
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Supabase Client Timeout')), 10000)
+          setTimeout(() => reject(new Error('Supabase Client Timeout')), 1000)
         );
 
         const clientPromise = supabase
@@ -73,28 +73,50 @@ export const productsService = {
 
     try {
       const data = await fetchWithFallback();
+      const productIds = (data || []).map(p => p.id);
 
-      console.log('🔄 [getAllProducts] Processing data for reviews and sold counts...');
+      if (productIds.length === 0) return [];
 
-      // Bulk fetch reviews and paid order items for aggregation
-      const [{ data: allReviews }, { data: allSold }] = await Promise.all([
-        supabase.from('reviews').select('product_id, rating'),
+      console.log(`🔄 [getAllProducts] Fetching stats for ${productIds.length} products...`);
+
+      // ✅ SILENT BLOCKER FIX: Wrap supplemental queries in a strict timeout
+      const statsTimeoutPromise = new Promise((resolve) =>
+        setTimeout(() => resolve({ timeout: true }), 1000)
+      );
+
+      const statsQueryPromise = Promise.all([
+        supabase.from('reviews').select('product_id, rating').in('product_id', productIds),
         supabase.from('order_items')
           .select('product_id, quantity, orders!inner(status_pembayaran)')
           .eq('orders.status_pembayaran', 'paid')
-      ]);
+          .in('product_id', productIds)
+      ]).then(results => ({ results }));
+
+      const statsResult = await Promise.race([statsQueryPromise, statsTimeoutPromise]);
+
+      let allReviews = [];
+      let allSold = [];
+
+      if (statsResult && !statsResult.timeout) {
+        const [reviewsRes, soldRes] = statsResult.results;
+        allReviews = reviewsRes.data || [];
+        allSold = soldRes.data || [];
+        console.log('✅ [getAllProducts] Stats fetched successfully');
+      } else {
+        console.warn('⚠️ [getAllProducts] Stats fetch timed out, returning products without stats for speed');
+      }
 
       // Create aggregation maps
       const ratingMap = {};
       const soldMap = {};
 
-      allReviews?.forEach(rev => {
+      allReviews.forEach(rev => {
         if (!ratingMap[rev.product_id]) ratingMap[rev.product_id] = { sum: 0, count: 0 };
         ratingMap[rev.product_id].sum += rev.rating;
         ratingMap[rev.product_id].count++;
       });
 
-      allSold?.forEach(item => {
+      allSold.forEach(item => {
         const pid = item.product_id;
         soldMap[pid] = (soldMap[pid] || 0) + (item.quantity || 0);
       });

@@ -6,9 +6,9 @@ const Footer = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
           <div className="text-center sm:text-left">
-            <h3 className="text-secondary text-lg md:text-xl font-bold mb-3 md:mb-4">Toko Tanaman</h3>
+            <h3 className="text-secondary text-lg md:text-xl font-bold mb-3 md:mb-4">Green House</h3>
             <p className="text-gray-300 text-sm md:text-base leading-relaxed">
-              Toko tanaman hias terlengkap dan terpercaya sejak 2025. Menyediakan berbagai jenis tanaman berkualitas tinggi.
+              Green House hias terlengkap dan terpercaya sejak 2025. Menyediakan berbagai jenis tanaman berkualitas tinggi.
             </p>
           </div>
 

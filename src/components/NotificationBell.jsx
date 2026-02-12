@@ -84,7 +84,7 @@ const NotificationBell = () => {
                 id: `vouch-${v.id}`,
                 user_id: user.id,
                 type: 'voucher',
-                title: 'Voucher Baru! 🏷️',
+                title: 'Voucher Baru! ',
                 message: `Gunakan kode ${v.code} untuk diskon ${v.discount_type === 'percentage' ? v.amount + '%' : 'Rp ' + v.amount.toLocaleString()}.`,
                 link: '/products',
                 is_read: false, // Will be calculated by timestamp
@@ -245,40 +245,52 @@ const NotificationBell = () => {
     );
 };
 
-const NotificationItem = ({ notif, formatRelatif, setIsOpen }) => (
-    <Link
-        to={notif.link || '/orders'}
-        onClick={() => setIsOpen(false)}
-        className={`flex items-start gap-3 px-4 py-3 transition-all duration-200 border-l-2 hover:bg-emerald-50/30 ${notif.is_read ? 'border-transparent' : 'border-emerald-500 bg-emerald-50/40'}`}
-    >
-        {/* Icon */}
-        <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm ${notif.type === 'payment' ? 'bg-emerald-100 text-emerald-600' :
-            notif.type === 'shipping' ? 'bg-purple-100 text-purple-600' :
-                notif.type === 'refund' ? 'bg-red-100 text-red-600' :
-                    notif.type === 'voucher' ? 'bg-amber-100 text-amber-600' :
-                        'bg-blue-100 text-blue-600'}`}>
-            {notif.type === 'payment' ? '💳' :
-                notif.type === 'shipping' ? '🚚' :
-                    notif.type === 'refund' ? '💰' :
-                        notif.type === 'voucher' ? '🏷️' :
-                            '🔔'}
-        </div>
+const NotificationItem = ({ notif, formatRelatif, setIsOpen }) => {
+    const { isAdmin } = useAuth();
 
-        {/* Text */}
-        <div className="flex-1 min-w-0">
-            <div className="flex justify-between items-start">
-                <p className={`font-bold text-[11px] leading-tight truncate ${notif.is_read ? 'text-gray-600' : 'text-gray-900'}`}>
-                    {notif.title}
-                </p>
-                <span className="text-[9px] font-medium text-gray-400 shrink-0 ml-2">
-                    {formatRelatif(new Date(notif.created_at))}
-                </span>
+    // Determine the correct link based on user role and notification type
+    let link = notif.link || '/orders';
+    if (isAdmin && (notif.title || '').toLowerCase().includes('pesanan')) {
+        link = '/admin?tab=orders';
+    } else if (isAdmin && (notif.title || '').toLowerCase().includes('refund')) {
+        link = '/admin?tab=refunds';
+    }
+
+    return (
+        <Link
+            to={link}
+            onClick={() => setIsOpen(false)}
+            className={`flex items-start gap-3 px-4 py-3 transition-all duration-200 border-l-2 hover:bg-emerald-50/30 ${notif.is_read ? 'border-transparent' : 'border-emerald-500 bg-emerald-50/40'}`}
+        >
+            {/* Icon */}
+            <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm ${notif.type === 'payment' ? '' :
+                notif.type === 'shipping' ? '' :
+                    notif.type === 'refund' ? '' :
+                        notif.type === 'voucher' ? '' :
+                            ''}`}>
+                {notif.type === 'payment' ? '💳' :
+                    notif.type === 'shipping' ? '🚚' :
+                        notif.type === 'refund' ? '💰' :
+                            notif.type === 'voucher' ? '🏷️' :
+                                '🔔'}
             </div>
-            <p className={`text-[10px] leading-snug mt-0.5 line-clamp-2 ${notif.is_read ? 'text-gray-400' : 'text-gray-700'}`}>
-                {notif.message}
-            </p>
-        </div>
-    </Link>
-);
+
+            {/* Text */}
+            <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-start">
+                    <p className={`font-bold text-[11px] leading-tight truncate ${notif.is_read ? 'text-gray-600' : 'text-gray-900'}`}>
+                        {notif.title}
+                    </p>
+                    <span className="text-[9px] font-medium text-gray-400 shrink-0 ml-2">
+                        {formatRelatif(new Date(notif.created_at))}
+                    </span>
+                </div>
+                <p className={`text-[10px] leading-snug mt-0.5 line-clamp-2 ${notif.is_read ? 'text-gray-400' : 'text-gray-700'}`}>
+                    {notif.message}
+                </p>
+            </div>
+        </Link>
+    );
+};
 
 export default NotificationBell;

@@ -1,6 +1,6 @@
 // AdminUsers.jsx - User Management untuk Admin
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseAdmin } from '../lib/supabase';
 import { toast } from 'react-toastify';
 import { formatCurrency } from '../utils/formatCurrency';
 
@@ -19,7 +19,7 @@ const AdminUsers = () => {
             setLoading(true);
 
             // Get all users from auth.users via profiles table
-            const { data: profiles, error: profilesError } = await supabase
+            const { data: profiles, error: profilesError } = await supabaseAdmin
                 .from('profiles')
                 .select('*')
                 .order('created_at', { ascending: false });
@@ -29,7 +29,7 @@ const AdminUsers = () => {
             // Get order count for each user
             const usersWithStats = await Promise.all(
                 (profiles || []).map(async (profile) => {
-                    const { data: orders } = await supabase
+                    const { data: orders } = await supabaseAdmin
                         .from('orders')
                         .select('id, total_harga, status_pembayaran')
                         .eq('user_id', profile.id);
@@ -60,7 +60,7 @@ const AdminUsers = () => {
         try {
             const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
 
-            const { error } = await supabase
+            const { error } = await supabaseAdmin
                 .from('profiles')
                 .update({ status: newStatus })
                 .eq('id', userId);
@@ -138,7 +138,7 @@ const AdminUsers = () => {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full">
+                        <table className="w-full min-w-[768px]">
                             <thead className="bg-gray-50">
                                 <tr>
                                     <th className="p-4 text-left text-sm font-bold text-gray-700">Pengguna</th>

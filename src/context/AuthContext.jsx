@@ -43,7 +43,7 @@ export const AuthProvider = ({ children }) => {
 
       // Create a specific timeout for profile fetch
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Profile Fetch Timeout')), 5000)
+        setTimeout(() => reject(new Error('Profile Fetch Timeout')), 3000)
       );
 
       const fetchPromise = supabase
@@ -61,6 +61,10 @@ export const AuthProvider = ({ children }) => {
 
       console.log('✅ Profile fetched:', data);
       setProfile(data);
+
+      // ✅ CACHE PROFILE TO LOCALSTORAGE
+      localStorage.setItem('profile', JSON.stringify(data));
+
       return data;
     } catch (error) {
       console.error('❌ Exception fetching profile (timeout/network):', error);
@@ -133,7 +137,7 @@ export const AuthProvider = ({ children }) => {
 
       // Add timeout for upsert
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Profile Ensure Timeout')), 5000)
+        setTimeout(() => reject(new Error('Profile Ensure Timeout')), 2000)
       );
 
       const upsertPromise = supabase
@@ -167,29 +171,51 @@ export const AuthProvider = ({ children }) => {
       const storedUser = localStorage.getItem('user');
       const storedToken = localStorage.getItem('token');
 
-      console.log('📦 Stored user:', storedUser ? 'Yes' : 'No');
-      console.log('📦 Stored token:', storedToken ? 'Yes' : 'No');
+      // JIKA SALAH SATU TIDAK ADA, BERSIHKAN KEDUANYA (Inkonsistensi)
+      if (!storedUser || !storedToken) {
+        if (storedUser || storedToken) {
+          console.log('⚠️ Inconsistent storage detected, clearing...');
+          localStorage.removeItem('user');
+          localStorage.removeItem('token');
+        }
+      }
 
       if (storedUser && storedToken) {
         console.log('⚡ Using cached auth data');
         const userData = JSON.parse(storedUser);
 
-        // Fetch profile dengan cached user DULU
-        await fetchProfile(userData.id, userData.email);
-        await checkAdminRole(userData.id, userData.email);
-
-        // BARU SET STATE
-        setUser(userData);
-        setIsAuthenticated(true);
-
-        // ✅ VERIFY SESSION MASIH VALID
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          console.log('⚠️ Cached session expired, refreshing...');
-          await supabase.auth.refreshSession();
+        // ✅ CEK CACHE PROFILE
+        const storedProfile = localStorage.getItem('profile');
+        if (storedProfile) {
+          console.log('⚡ Using cached profile data');
+          setProfile(JSON.parse(storedProfile));
         }
 
-        setLoading(false);
+        // Fetch profile & admin role in background (non-blocking)
+        fetchProfile(userData.id, userData.email);
+        checkAdminRole(userData.id, userData.email);
+
+        // BARU SET STATE (Instan dari cache)
+        setUser(userData);
+        setIsAuthenticated(true);
+        setLoading(false); // ✅ SET LOADING FALSE SEGERA
+
+        // ✅ VERIFY SESSION MASIH VALID DI BACKGROUND
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (!session) {
+            console.log('⚠️ Cached session expired or invalid, clearing state...');
+            setUser(null);
+            setProfile(null);
+            setIsAuthenticated(true); // Biarkan tetap true dulu agar tidak redirect mendadak, atau set false?
+            // Sebaiknya biarkan UX berjalan, jika butuh auth sungguhan nanti Supabase akan error.
+            // Tapi untuk amannya, kita bersihkan jika memang expired.
+            setIsAuthenticated(false);
+            setIsAdmin(false);
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+          }
+        });
+
         return;
       }
 
@@ -201,15 +227,13 @@ export const AuthProvider = ({ children }) => {
         throw error;
       }
 
-      console.log('🔍 Supabase session:', session ? 'Exists' : 'Null');
-
       if (session) {
         const userData = session.user;
-        console.log('✅ User authenticated:', userData.email);
+        console.log('✅ User authenticated from Supabase session:', userData.email);
 
-        // ✅ FETCH PROFILE & CHECK ROLE SEBELUM SET AUTH
-        await fetchProfile(userData.id, userData.email);
-        await checkAdminRole(userData.id, userData.email);
+        // ✅ NON-BLOCKING: Fetch profile & admin role in background
+        fetchProfile(userData.id, userData.email);
+        checkAdminRole(userData.id, userData.email);
 
         setUser(userData);
         setIsAuthenticated(true);
@@ -217,15 +241,23 @@ export const AuthProvider = ({ children }) => {
         // ✅ SIMPAN KE LOCALSTORAGE
         localStorage.setItem('token', session.access_token);
         localStorage.setItem('user', JSON.stringify(userData));
+        if (profile) localStorage.setItem('profile', JSON.stringify(profile));
         console.log('💾 Saved to localStorage');
-
       } else {
         console.log('❌ No active session');
+        setUser(null);
+        setProfile(null);
+        setIsAuthenticated(false);
+        setIsAdmin(false);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
     } catch (error) {
       console.error('❌ Auth check error:', error);
+      setUser(null);
+      setProfile(null);
+      setIsAuthenticated(false);
+      setIsAdmin(false);
       localStorage.removeItem('token');
       localStorage.removeItem('user');
     } finally {
@@ -250,6 +282,11 @@ export const AuthProvider = ({ children }) => {
           // ✅ SIMPAN SEBELUM FETCH PROFILE
           localStorage.setItem('token', session.access_token);
           localStorage.setItem('user', JSON.stringify(userData));
+
+          // ✅ JIKA ADA CACHE PROFILE, SET DULU
+          const storedProfile = localStorage.getItem('profile');
+          if (storedProfile) setProfile(JSON.parse(storedProfile));
+
           console.log('💾 Auth state saved to localStorage');
 
           // ✅ FETCH PROFILE
@@ -272,6 +309,7 @@ export const AuthProvider = ({ children }) => {
           setIsAdmin(false);
           localStorage.removeItem('token');
           localStorage.removeItem('user');
+          localStorage.removeItem('profile');
           // Jangan hapus pendingUserData di sini karena signup memicu signOut
           // yang akan menghapus data yang dibutuhkan untuk verifikasi OTP
         }
@@ -329,8 +367,8 @@ export const AuthProvider = ({ children }) => {
         console.log('💾 Login data saved to localStorage');
 
         // ✅ FETCH PROFILE & CHECK ROLE DULU SEBELUM SET AUTH
-        // Ini penting agar saat isAuthenticated = true, isAdmin sudah valid
-        await fetchProfile(userData.id, userData.email);
+        const fetchedProfile = await fetchProfile(userData.id, userData.email);
+        if (fetchedProfile) localStorage.setItem('profile', JSON.stringify(fetchedProfile));
         const isAdminUser = await checkAdminRole(userData.id, userData.email);
         console.log('👮 Admin check result:', isAdminUser);
 
@@ -570,40 +608,51 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       setLoading(true);
+      console.log('🚪 Process logout...');
 
-      // ✅ Clear state terlebih dahulu
+      // 1. Sign out dari Supabase (Wajib pertama agar session di server mati)
+      try {
+        const { error } = await supabase.auth.signOut();
+        if (error) throw error;
+        console.log('✅ Supabase signOut successful');
+      } catch (signOutError) {
+        console.warn('⚠️ Supabase SignOut error (non-critical):', signOutError);
+      }
+
+      // 2. Clear state
       setUser(null);
       setProfile(null);
       setIsAuthenticated(false);
       setIsAdmin(false);
 
-      // ✅ Clear localStorage
+      // 3. Clear localStorage secara menyeluruh
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      localStorage.removeItem('profile');
       localStorage.removeItem('pendingUserData');
 
-      // ✅ Sign out dari Supabase
-      try {
-        await supabase.auth.signOut();
-        console.log('✅ Logout successful');
-      } catch (signOutError) {
-        console.warn('⚠️ SignOut error (non-critical):', signOutError);
-      }
+      // Bersihkan juga key internal Supabase jika ada (prefix sb-...)
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('sb-')) {
+          localStorage.removeItem(key);
+        }
+      });
 
+      console.log('✅ All auth data cleared');
       toast.info('Anda telah logout');
+
       return { success: true };
 
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('❌ Logout error:', error);
 
-      // Tetap clear state meskipun ada error
+      // Fallback cleanup
       setUser(null);
       setProfile(null);
       setIsAuthenticated(false);
       setIsAdmin(false);
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      localStorage.removeItem('pendingUserData');
 
       return { success: true };
     } finally {
@@ -710,6 +759,7 @@ export const AuthProvider = ({ children }) => {
 
       // ✅ UPDATE profile state dengan data yang baru
       setProfile(updatedProfile);
+      localStorage.setItem('profile', JSON.stringify(updatedProfile));
       console.log('✅ Profile state updated:', updatedProfile);
 
       const { error: authError } = await supabase.auth.updateUser({
@@ -741,9 +791,9 @@ export const AuthProvider = ({ children }) => {
 
   const loginWithGoogle = async () => {
     try {
-      const redirectUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
-
-      console.log('🔐 Google login redirect URL:', redirectUrl);
+      // Gunakan window.location.origin agar selalu kembali ke domain yang sedang dibuka (localhost atau production)
+      const redirectUrl = window.location.origin;
+      console.log('🔐 Google Auth Redirect URL being sent:', `${redirectUrl}/`);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',

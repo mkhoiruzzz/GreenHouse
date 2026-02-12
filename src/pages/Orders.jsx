@@ -5,9 +5,9 @@ import { useNavigate } from 'react-router-dom';
 import { formatCurrency } from '../utils/formatCurrency';
 import { toast } from 'react-toastify';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseAdmin } from '../lib/supabase';
 
-const TrackingTimeline = ({ status }) => {
+const TrackingTimeline = ({ status, refundStatus }) => {
     const steps = [
         { id: 'pending', label: 'Pesanan Dibuat', icon: '📝' },
         { id: 'processing', label: 'Diproses', icon: '📦' },
@@ -15,9 +15,38 @@ const TrackingTimeline = ({ status }) => {
         { id: 'delivered', label: 'Sampai Tujuan', icon: '✅' }
     ];
 
-    const currentIdx = steps.findIndex(s => s.id === (status || 'pending').toLowerCase()) === -1
-        ? (status.toLowerCase() === 'selesai' || status.toLowerCase() === 'completed' ? 3 : 0)
-        : steps.findIndex(s => s.id === (status || 'pending').toLowerCase());
+    // ✅ Tambahkan langkah Refund berdasarkan status refund
+    if (refundStatus === 'approved') {
+        steps.push({ id: 'returned', label: 'Refund Selesai', icon: '💰' });
+    } else if (refundStatus === 'rejected') {
+        steps.push({ id: 'rejected', label: 'Refund Ditolak', icon: '❌' });
+    } else if (refundStatus === 'pending') {
+        steps.push({ id: 'refunding', label: 'Refund Diproses', icon: '⏳' });
+    } else {
+        // Fallback untuk status 'returned' manual tanpa record refundStatus yang jelas
+        const isReturned = (status || '').toLowerCase() === 'returned' || (status || '').toLowerCase() === 'dikembalikan';
+        if (isReturned) {
+            steps.push({ id: 'returned', label: 'Refund Selesai', icon: '💰' });
+        }
+    }
+
+    // Tentukan indeks saat ini
+    let currentIdx = steps.findIndex(s => s.id === (status || 'pending').toLowerCase());
+
+    if (currentIdx === -1) {
+        const lowerStatus = (status || '').toLowerCase();
+        if (lowerStatus === 'selesai' || lowerStatus === 'completed' || lowerStatus === 'delivered') currentIdx = 3;
+        else if (lowerStatus === 'returned' || lowerStatus === 'dikembalikan') currentIdx = steps.findIndex(s => s.id === 'returned');
+    }
+
+    // Jika ada refundStatus, prioritaskan index ke langkah refund tersebut
+    if (refundStatus) {
+        const targetId = refundStatus === 'approved' ? 'returned' : (refundStatus === 'rejected' ? 'rejected' : 'refunding');
+        const refundIdx = steps.findIndex(s => s.id === targetId);
+        if (refundIdx !== -1) currentIdx = refundIdx;
+    }
+
+    if (currentIdx === -1) currentIdx = 0;
 
     return (
         <div className="py-8 px-2">
@@ -51,7 +80,7 @@ const TrackingTimeline = ({ status }) => {
 };
 
 const Orders = () => {
-    const { user, isAuthenticated } = useAuth();
+    const { user, isAuthenticated, isAdmin } = useAuth();
     const navigate = useNavigate();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -60,20 +89,23 @@ const Orders = () => {
     const [showRefundModal, setShowRefundModal] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [uploadedFiles, setUploadedFiles] = useState([]);
-    const [reviewRating, setReviewRating] = useState(0);
-    const [reviewComment, setReviewComment] = useState(''); // NEW state
-    const [hoverRating, setHoverRating] = useState(0);
-    const [isEditingReview, setIsEditingReview] = useState(false); // Track if editing
+    const [itemReviews, setItemReviews] = useState({}); // Stores { productId: { rating, comment } }
+    const [isEditingReview, setIsEditingReview] = useState(false);
 
 
 
     useEffect(() => {
         if (isAuthenticated) {
+            if (isAdmin) {
+                toast.warning('Admin tidak memiliki riwayat pesanan pelanggan. Silakan gunakan akun Pelanggan.');
+                navigate('/admin');
+                return;
+            }
             fetchOrders();
         } else {
             navigate('/login');
         }
-    }, [isAuthenticated]);
+    }, [isAuthenticated, isAdmin, navigate]);
 
     const fetchOrders = async () => {
         try {
@@ -88,7 +120,7 @@ const Orders = () => {
 
             const { data: ordersData, error: ordersError } = await supabase
                 .from('orders')
-                .select('*')
+                .select('*, refunds(status)')
                 .eq('user_id', user.id)
                 .order('created_at', { ascending: false });
 
@@ -238,10 +270,18 @@ const Orders = () => {
                 provinsi: user?.user_metadata?.province || '-'
             };
 
+            const { data: refundData, error: refundError } = await supabase
+                .from('refunds')
+                .select('admin_note, status')
+                .eq('order_id', orderId)
+                .maybeSingle();
+
             setSelectedOrder({
                 ...orderData,
                 order_items: itemsWithProducts,
-                users: userData
+                users: userData,
+                refund_note: refundData?.admin_note || null,
+                refunds: refundData ? [refundData] : []
             });
 
         } catch (error) {
@@ -466,30 +506,42 @@ const Orders = () => {
     // ✅ Fungsi untuk menyelesaikan pesanan (Konfirmasi Pesanan Diterima)
     const handleReviewClick = async (order) => {
         setSelectedOrder(order);
-        setReviewRating(0);
-        setReviewComment('');
         setIsEditingReview(false);
-        setShowReviewModal(true);
+
+        // Initialize itemReviews with empty data for all products in this order
+        const initialReviews = {};
+        if (order.order_items) {
+            order.order_items.forEach(item => {
+                initialReviews[item.product_id] = { rating: 0, comment: '' };
+            });
+        }
 
         try {
-            // Check if review exists for this order
+            // Check for existing reviews for this order
             const { data, error } = await supabase
                 .from('reviews')
                 .select('*')
                 .eq('order_id', order.id)
-                .eq('user_id', user.id)
-                .limit(1);
+                .eq('user_id', user.id);
 
             if (data && data.length > 0) {
-                // Found existing review
-                const review = data[0];
-                setReviewRating(review.rating);
-                setReviewComment(review.comment || '');
+                // Found existing reviews, map them to our state
+                data.forEach(review => {
+                    if (initialReviews[review.product_id]) {
+                        initialReviews[review.product_id] = {
+                            rating: review.rating,
+                            comment: review.comment || ''
+                        };
+                    }
+                });
                 setIsEditingReview(true);
             }
         } catch (error) {
-            console.error('Error checking existing review:', error);
+            console.error('Error checking existing reviews:', error);
         }
+
+        setItemReviews(initialReviews);
+        setShowReviewModal(true);
     };
 
     const handleCompleteOrder = async (orderId) => {
@@ -664,9 +716,20 @@ const Orders = () => {
                                             })}
                                         </p>
                                     </div>
-                                    <span className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors duration-300 ${statusBadge.color}`}>
-                                        {statusBadge.text}
-                                    </span>
+                                    <div className="flex flex-col items-end gap-2">
+                                        <span className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors duration-300 ${statusBadge.color}`}>
+                                            {statusBadge.text}
+                                        </span>
+                                        {order.refunds?.[0] && (
+                                            <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider ${order.refunds[0].status === 'pending' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
+                                                order.refunds[0].status === 'approved' ? 'bg-green-100 text-green-700 border border-green-200' :
+                                                    'bg-red-100 text-red-700 border border-red-200'
+                                                }`}>
+                                                Refund: {order.refunds[0].status === 'pending' ? 'Menunggu' :
+                                                    order.refunds[0].status === 'approved' ? 'Disetujui' : 'Ditolak'}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div className="border-t pt-4 mb-4 border-gray-200">
@@ -691,16 +754,18 @@ const Orders = () => {
                                         Lihat Detail
                                     </button>
 
-                                    <button
-                                        onClick={() => {
-                                            const year = new Date(order.created_at).getFullYear();
-                                            const id = order.id.toString().padStart(5, '0');
-                                            navigate(`/track?id=GH-${year}-${id}`);
-                                        }}
-                                        className="px-6 py-3 rounded-lg text-sm font-semibold border-2 border-blue-500 text-blue-600 hover:bg-blue-50 transition-all flex items-center gap-2"
-                                    >
-                                        <span>🚚</span> Lacak
-                                    </button>
+                                    {!(order.status_pengiriman === 'delivered' || order.status_pengiriman === 'selesai' || order.status_pengiriman === 'completed' || order.status_pengiriman === 'returned') && (
+                                        <button
+                                            onClick={() => {
+                                                const year = new Date(order.created_at).getFullYear();
+                                                const id = order.id.toString().padStart(5, '0');
+                                                navigate(`/track?id=GH-${year}-${id}`);
+                                            }}
+                                            className="px-6 py-3 rounded-lg text-sm font-semibold border-2 border-blue-500 text-blue-600 hover:bg-blue-50 transition-all flex items-center gap-2"
+                                        >
+                                            <span>🚚</span> Lacak
+                                        </button>
+                                    )}
 
                                     {order.status_pembayaran === 'paid' && (
                                         <button
@@ -725,15 +790,28 @@ const Orders = () => {
                                                         {/* Check manually if reviewed? logic handled in click */}
                                                         Edit Ulasan
                                                     </button>
-                                                    <button
-                                                        className="px-4 py-3 border border-red-500 text-red-500 rounded-lg text-sm font-semibold hover:bg-red-50 transition-all"
-                                                        onClick={() => {
-                                                            setSelectedOrder(order);
-                                                            setShowRefundModal(true);
-                                                        }}
-                                                    >
-                                                        Retur
-                                                    </button>
+                                                    {(!order.refunds?.[0] || order.refunds[0].status === 'rejected') ? (
+                                                        <button
+                                                            className="px-4 py-3 border border-red-500 text-red-500 rounded-lg text-sm font-semibold hover:bg-red-50 transition-all flex items-center gap-2"
+                                                            onClick={() => {
+                                                                if (!order.order_items) {
+                                                                    fetchOrderDetail(order.id);
+                                                                } else {
+                                                                    setSelectedOrder(order);
+                                                                }
+                                                                setShowRefundModal(true);
+                                                            }}
+                                                        >
+                                                            {order.refunds?.[0]?.status === 'rejected' ? 'Retur Ulang' : 'Retur'}
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            disabled
+                                                            className="px-4 py-3 bg-gray-100 text-gray-400 border border-gray-200 rounded-lg text-sm font-semibold cursor-not-allowed"
+                                                        >
+                                                            {order.refunds[0].status === 'pending' ? 'Refund Diproses' : 'Sudah Diretur'}
+                                                        </button>
+                                                    )}
                                                 </>
                                             )}
                                         </>
@@ -807,7 +885,10 @@ const Orders = () => {
                                             </button>
                                         </span>
                                     </div>
-                                    <TrackingTimeline status={selectedOrder.status_pengiriman} />
+                                    <TrackingTimeline
+                                        status={selectedOrder.status_pengiriman}
+                                        refundStatus={selectedOrder.refunds?.[0]?.status}
+                                    />
                                 </div>
 
                                 {/* Status Section */}
@@ -841,6 +922,24 @@ const Orders = () => {
                                         {selectedOrder.alamat_pengiriman || 'Tidak ada alamat'}
                                     </p>
                                 </div>
+
+                                {/* Refund Information (NEW) */}
+                                {selectedOrder.refund_note && (
+                                    <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-xl">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-lg">ℹ️</span>
+                                            <h4 className="text-sm font-bold text-blue-800 uppercase tracking-wider">
+                                                Informasi Refund
+                                            </h4>
+                                        </div>
+                                        <p className="text-sm text-blue-700 leading-relaxed italic">
+                                            "{selectedOrder.refund_note}"
+                                        </p>
+                                        <p className="text-[10px] text-blue-500 mt-2 font-medium">
+                                            *Dana telah diselesaikan oleh Admin. Silakan cek rekening/e-wallet Anda.
+                                        </p>
+                                    </div>
+                                )}
 
                                 {/* Payment Method */}
                                 {selectedOrder.metode_pembayaran && (
@@ -946,98 +1045,132 @@ const Orders = () => {
                 {/* Review Modal */}
                 {showReviewModal && selectedOrder && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-                        <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
-                            <h2 className="text-xl font-bold mb-4 text-gray-900">Beri Ulasan Produk</h2>
+                        <div className="bg-white rounded-3xl max-w-2xl w-full p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h2 className="text-2xl font-black text-gray-900">Beri Ulasan Produk</h2>
+                                    <p className="text-sm text-gray-500">Order #{selectedOrder.id}</p>
+                                </div>
+                                <button
+                                    onClick={() => setShowReviewModal(false)}
+                                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                                >
+                                    <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
                             <form onSubmit={async (e) => {
                                 e.preventDefault();
-                                const formData = new FormData(e.target);
-                                // const comment = formData.get('comment'); // Use state instead
-
                                 try {
                                     setIsSubmitting(true);
 
-                                    if (reviewRating === 0) {
-                                        toast.error('Harap pilih rating bintang');
+                                    // Validate: all items must have a rating
+                                    const missingRating = selectedOrder.order_items.some(item => !itemReviews[item.product_id]?.rating);
+                                    if (missingRating) {
+                                        toast.error('Harap beri rating untuk semua produk');
                                         return;
                                     }
 
-                                    // Delete existing reviews for this order if editing (simplest way to update all items)
-                                    // OR use upsert. Since we loop items, let's delete first to be safe or upsert each.
-                                    // Upsert requires conflict constraint. Safe bet: Delete all for order then Insert.
-
-                                    // Strategy: Delete all reviews for this order by this user, then re-insert.
-                                    // This ensures clean slate for all items in the order.
+                                    // If editing, clean old reviews first to avoid conflicts or orphans
                                     if (isEditingReview) {
                                         await supabase.from('reviews').delete().match({ order_id: selectedOrder.id, user_id: user.id });
                                     }
 
-                                    for (const item of selectedOrder.order_items) {
-                                        const { error } = await supabase.from('reviews').insert({
-                                            user_id: user.id,
-                                            product_id: item.product_id,
-                                            order_id: selectedOrder.id,
-                                            rating: reviewRating,
-                                            comment: reviewComment
-                                        });
-                                        if (error) throw error;
-                                    }
+                                    // Insert new reviews for each product
+                                    const reviewData = selectedOrder.order_items.map(item => ({
+                                        user_id: user.id,
+                                        product_id: item.product_id,
+                                        order_id: selectedOrder.id,
+                                        rating: itemReviews[item.product_id].rating,
+                                        comment: itemReviews[item.product_id].comment
+                                    }));
+
+                                    const { error } = await supabase.from('reviews').insert(reviewData);
+                                    if (error) throw error;
+
                                     toast.success(isEditingReview ? 'Ulasan berhasil diperbarui!' : 'Terima kasih atas ulasannya!');
                                     setShowReviewModal(false);
                                     setSelectedOrder(null);
-                                    setReviewRating(0);
-                                    setReviewComment('');
+                                    setItemReviews({});
                                 } catch (error) {
-                                    console.error('Error submitting review:', error);
+                                    console.error('Error submitting reviews:', error);
                                     toast.error('Gagal mengirim ulasan');
                                 } finally {
                                     setIsSubmitting(false);
                                 }
-                            }}>
-                                <div className="mb-6">
-                                    <label className="block text-sm font-medium mb-3 text-center text-gray-700">Rating Produk</label>
-                                    <div className="flex justify-center gap-2">
-                                        {[1, 2, 3, 4, 5].map(num => (
-                                            <button
-                                                key={num}
-                                                type="button"
-                                                onMouseEnter={() => setHoverRating(num)}
-                                                onMouseLeave={() => setHoverRating(0)}
-                                                onClick={() => setReviewRating(num)}
-                                                className="transition-all duration-200 transform hover:scale-125 focus:outline-none"
-                                            >
-                                                <span className={`text-5xl transition-all duration-300 ${(hoverRating || reviewRating) >= num
-                                                    ? 'text-yellow-400 drop-shadow-md'
-                                                    : 'text-gray-300'
-                                                    }`}>
-                                                    ★
-                                                </span>
-                                            </button>
-                                        ))}
+                            }} className="space-y-8">
+                                {selectedOrder.order_items.map((item, idx) => (
+                                    <div key={item.product_id} className="p-6 rounded-2xl bg-gray-50 border border-gray-100 space-y-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-16 h-16 rounded-xl overflow-hidden shadow-sm bg-white">
+                                                {item.products?.gambar_url ? (
+                                                    <img src={item.products.gambar_url} alt="" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-2xl">🌿</div>
+                                                )}
+                                            </div>
+                                            <div className="flex-1">
+                                                <h3 className="font-bold text-gray-900 line-clamp-1">{item.products?.nama_produk}</h3>
+                                                <p className="text-xs text-gray-500">Kuantitas: {item.quantity}</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col items-center py-2">
+                                            <div className="flex gap-2">
+                                                {[1, 2, 3, 4, 5].map(star => (
+                                                    <button
+                                                        key={star}
+                                                        type="button"
+                                                        onClick={() => setItemReviews(prev => ({
+                                                            ...prev,
+                                                            [item.product_id]: { ...prev[item.product_id], rating: star }
+                                                        }))}
+                                                        className="transition-all duration-200 hover:scale-125 focus:outline-none"
+                                                    >
+                                                        <span className={`text-4xl ${itemReviews[item.product_id]?.rating >= star
+                                                            ? 'text-yellow-400 drop-shadow-sm'
+                                                            : 'text-gray-300'
+                                                            }`}>
+                                                            ★
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {itemReviews[item.product_id]?.rating > 0 && (
+                                                <p className="text-[10px] font-bold mt-2 text-emerald-600 uppercase tracking-widest">
+                                                    {['Sangat Buruk', 'Buruk', 'Cukup', 'Bagus', 'Sangat Puas'][itemReviews[item.product_id].rating - 1]}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        <textarea
+                                            value={itemReviews[item.product_id]?.comment || ''}
+                                            onChange={(e) => setItemReviews(prev => ({
+                                                ...prev,
+                                                [item.product_id]: { ...prev[item.product_id], comment: e.target.value }
+                                            }))}
+                                            className="w-full border border-gray-200 rounded-xl p-4 h-24 focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none text-sm text-gray-700 bg-white"
+                                            placeholder="Tulis ulasan untuk tanaman ini..."
+                                        />
                                     </div>
-                                    {reviewRating > 0 && (
-                                        <p className="text-center text-sm font-semibold mt-2 text-emerald-600 animate-pulse">
-                                            {reviewRating === 1 && 'Sangat Buruk 😞'}
-                                            {reviewRating === 2 && 'Buruk 😕'}
-                                            {reviewRating === 3 && 'Cukup OK 🙂'}
-                                            {reviewRating === 4 && 'Bagus! 😊'}
-                                            {reviewRating === 5 && 'Sangat Puas! 😍'}
-                                        </p>
-                                    )}
-                                </div>
-                                <div className="mb-6">
-                                    <label className="block text-sm font-medium mb-2 text-gray-700">Komentar</label>
-                                    <textarea
-                                        name="comment"
-                                        value={reviewComment}
-                                        onChange={(e) => setReviewComment(e.target.value)}
-                                        className="w-full border border-gray-200 rounded-xl p-3 h-32 focus:ring-2 focus:ring-emerald-500 transition-all outline-none text-gray-800"
-                                        placeholder="Apa pendapatmu tentang produk ini? (Opsional)"
-                                    ></textarea>
-                                </div>
-                                <div className="flex gap-3">
-                                    <button type="button" onClick={() => setShowReviewModal(false)} className="flex-1 py-3 border border-gray-200 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 transition-all">Batal</button>
-                                    <button type="submit" disabled={isSubmitting} className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-500/30 transition-all">
-                                        {isSubmitting ? 'Mengirim...' : 'Kirim Ulasan'}
+                                ))}
+
+                                <div className="flex gap-4 pt-4 sticky bottom-0 bg-white pb-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowReviewModal(false)}
+                                        className="flex-1 py-4 border border-gray-200 rounded-2xl font-bold text-gray-500 hover:bg-gray-50 transition-all"
+                                    >
+                                        Batal
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmitting}
+                                        className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black hover:bg-emerald-700 shadow-xl shadow-emerald-600/20 transition-all disabled:opacity-50"
+                                    >
+                                        {isSubmitting ? 'Mengirim...' : 'Kirim Semua Ulasan'}
                                     </button>
                                 </div>
                             </form>
@@ -1072,6 +1205,49 @@ const Orders = () => {
                                 </p>
                             </div>
 
+                            {/* Daftar Produk yang Diretur */}
+                            <div className="mb-6">
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-3 px-1">Produk yang akan diretur:</label>
+                                <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                                    {(selectedOrder.order_items || []).length > 0 ? (
+                                        selectedOrder.order_items.map((item, index) => (
+                                            <div key={index} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                                                <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200">
+                                                    {item.products?.gambar_url ? (
+                                                        <img
+                                                            src={item.products.gambar_url}
+                                                            alt={item.products.nama_produk}
+                                                            className="w-full h-full object-cover"
+                                                            onError={handleImageError}
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center bg-emerald-100 text-emerald-600">
+                                                            🌿
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex-grow min-w-0">
+                                                    <p className="font-bold text-[13px] text-gray-900 truncate">
+                                                        {item.products?.nama_produk || 'Produk'}
+                                                    </p>
+                                                    <p className="text-[10px] text-gray-500">
+                                                        {item.quantity} x {formatCurrency(item.harga_satuan)}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="animate-pulse flex space-x-4 p-3 bg-gray-50 rounded-xl">
+                                            <div className="rounded-lg bg-gray-200 h-10 w-10"></div>
+                                            <div className="flex-1 space-y-2 py-1">
+                                                <div className="h-2 bg-gray-200 rounded w-3/4"></div>
+                                                <div className="h-2 bg-gray-200 rounded w-1/2"></div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
                             <form onSubmit={async (e) => {
                                 e.preventDefault();
                                 const formData = new FormData(e.target);
@@ -1097,6 +1273,42 @@ const Orders = () => {
                                     });
 
                                     if (error) throw error;
+
+                                    // ✅ KIRIM NOTIFIKASI KE ADMIN (Bypass RLS dengan supabaseAdmin)
+                                    try {
+                                        // 1. Ambil semua admin
+                                        const { data: admins, error: adminError } = await supabaseAdmin
+                                            .from('profiles') // Menggunakan tabel profiles yang sinkron dengan users
+                                            .select('id')
+                                            .eq('role', 'admin');
+
+                                        if (adminError) throw adminError;
+
+                                        if (admins && admins.length > 0) {
+                                            // 2. Siapkan payload notifikasi
+                                            const notifications = admins.map(admin => ({
+                                                user_id: admin.id,
+                                                type: 'refund',
+                                                title: 'Pengajuan Refund Baru 💰',
+                                                message: `User mengajukan refund untuk Order #${selectedOrder.id}.`,
+                                                link: '/admin?tab=refunds',
+                                                order_id: selectedOrder.id,
+                                                is_read: false,
+                                                created_at: new Date().toISOString()
+                                            }));
+
+                                            // 3. Insert notifikasi batch
+                                            const { error: notifError } = await supabaseAdmin
+                                                .from('notifications')
+                                                .insert(notifications);
+
+                                            if (notifError) throw notifError;
+                                            console.log('✅ Notifikasi refund terkirim ke', admins.length, 'admin');
+                                        }
+                                    } catch (notifErr) {
+                                        console.warn('⚠️ Gagal kirim notif refund:', notifErr);
+                                        // Jangan throw error agar flow utama tetap sukses
+                                    }
 
                                     toast.success('Pengajuan refund berhasil dengan bukti!');
                                     setShowRefundModal(false);

@@ -218,7 +218,7 @@ const TrackOrder = () => {
                                         <p className="flex justify-between mt-2 pt-2 border-t border-gray-200">
                                             <span className="text-emerald-600 font-bold">Estimasi Tiba</span>
                                             <span className={`font-bold text-lg ${['selesai', 'delivered', 'completed'].includes(orderData.status_pengiriman?.toLowerCase())
-                                                    ? 'text-emerald-800' : 'text-emerald-600'
+                                                ? 'text-emerald-800' : 'text-emerald-600'
                                                 }`}>
                                                 {getEtaDescription(orderData.status_pengiriman)}
                                             </span>

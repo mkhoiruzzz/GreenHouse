@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabaseAdmin } from '../lib/supabase';
 import { toast } from 'react-toastify';
 import { formatCurrency } from '../utils/formatCurrency';
 
@@ -180,43 +180,45 @@ const AdminVouchers = () => {
             )}
 
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
-                <table className="w-full">
-                    <thead>
-                        <tr className="bg-gray-50 border-b text-xs text-gray-500 uppercase">
-                            <th className="px-6 py-4 text-left">Kode</th>
-                            <th className="px-6 py-4 text-left">Diskon</th>
-                            <th className="px-6 py-4 text-left">Syarat Min.</th>
-                            <th className="px-6 py-4 text-left">Status</th>
-                            <th className="px-6 py-4 text-center">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y text-sm">
-                        {vouchers.length === 0 ? (
-                            <tr><td colSpan="5" className="p-8 text-center text-gray-500">Belum ada voucher</td></tr>
-                        ) : vouchers.map(v => (
-                            <tr key={v.id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 font-bold text-green-700">{v.code}</td>
-                                <td className="px-6 py-4">
-                                    {v.discount_type === 'percentage' ? `${v.amount}%` : formatCurrency(v.amount)}
-                                </td>
-                                <td className="px-6 py-4 text-gray-500">
-                                    {v.min_purchase > 0 ? formatCurrency(v.min_purchase) : 'Tanpa Minimum'}
-                                </td>
-                                <td className="px-6 py-4">
-                                    <button
-                                        onClick={() => toggleStatus(v.id, v.is_active)}
-                                        className={`px-3 py-1 rounded-full text-xs font-bold ${v.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}
-                                    >
-                                        {v.is_active ? 'Aktif' : 'Non-aktif'}
-                                    </button>
-                                </td>
-                                <td className="px-6 py-4 text-center space-x-2">
-                                    <button onClick={() => deleteVoucher(v.id)} className="text-red-500 hover:bg-red-50 p-1 rounded">🗑️</button>
-                                </td>
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[640px]">
+                        <thead>
+                            <tr className="bg-gray-50 border-b text-xs text-gray-500 uppercase">
+                                <th className="px-6 py-4 text-left">Kode</th>
+                                <th className="px-6 py-4 text-left">Diskon</th>
+                                <th className="px-6 py-4 text-left">Syarat Min.</th>
+                                <th className="px-6 py-4 text-left">Status</th>
+                                <th className="px-6 py-4 text-center">Aksi</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y text-sm">
+                            {vouchers.length === 0 ? (
+                                <tr><td colSpan="5" className="p-8 text-center text-gray-500">Belum ada voucher</td></tr>
+                            ) : vouchers.map(v => (
+                                <tr key={v.id} className="hover:bg-gray-50">
+                                    <td className="px-6 py-4 font-bold text-green-700">{v.code}</td>
+                                    <td className="px-6 py-4">
+                                        {v.discount_type === 'percentage' ? `${v.amount}%` : formatCurrency(v.amount)}
+                                    </td>
+                                    <td className="px-6 py-4 text-gray-500">
+                                        {v.min_purchase > 0 ? formatCurrency(v.min_purchase) : 'Tanpa Minimum'}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <button
+                                            onClick={() => toggleStatus(v.id, v.is_active)}
+                                            className={`px-3 py-1 rounded-full text-xs font-bold ${v.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}
+                                        >
+                                            {v.is_active ? 'Aktif' : 'Non-aktif'}
+                                        </button>
+                                    </td>
+                                    <td className="px-6 py-4 text-center space-x-2">
+                                        <button onClick={() => deleteVoucher(v.id)} className="text-red-500 hover:bg-red-50 p-1 rounded">🗑️</button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );

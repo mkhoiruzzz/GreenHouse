@@ -4,14 +4,22 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/formatCurrency';
 import { toast } from 'react-toastify';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseAdmin } from '../lib/supabase';
 import { tripayService } from '../services/tripay';
 
 const Checkout = () => {
   const navigate = useNavigate();
   const location = useLocation(); // ✅ Added useLocation
   const { cartItems, clearCart } = useCart();
-  const { user } = useAuth();
+  const { user, profile, isAdmin, updateProfile } = useAuth();
+
+  // ✅ Restricted for Admin (Admin only manages, doesn't buy)
+  useEffect(() => {
+    if (isAdmin) {
+      toast.warning('Admin tidak diperbolehkan melakukan checkout. Silakan gunakan akun Pelanggan.');
+      navigate('/');
+    }
+  }, [isAdmin, navigate]);
 
   // ✅ NEW: Handle Buy Now item from state
   const buyNowItem = location.state?.buyNowItem;
@@ -46,12 +54,13 @@ const Checkout = () => {
     kota: '',
     provinsi: '',
     alamat_pengiriman: '',
-    kode_pos: '',
     no_telepon: '',
     metode_pengiriman: '',
     biaya_pengiriman: 0,
     catatan: ''
   });
+
+  const [savingAddress, setSavingAddress] = useState(false);
 
   // Fetch payment channels
   useEffect(() => {
@@ -71,61 +80,71 @@ const Checkout = () => {
     loadPaymentChannels();
   }, []);
 
-  // Fetch user profile and auto-fill
+  // ✅ Refactored: Instant hydration from AuthContext profile
   useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (!user?.id) return;
+    if (profile) {
+      console.log('⚡ Population from cached profile:', profile.full_name);
+      setUserProfile(profile);
+      setFormData(prev => ({
+        ...prev,
+        email: profile.email || user?.email || prev.email,
+        nama_lengkap: profile.full_name || '',
+        no_telepon: profile.phone || '',
+        alamat_pengiriman: profile.address || '',
+        kota: profile.city || '',
+        provinsi: profile.province || ''
+      }));
 
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-
-        if (error) {
-          console.error('Error fetching profile:', error);
-          setShowAddressForm(true); // No profile, show form
-          return;
+      // If profile is complete, hide the editing form automatically
+      if (profile.full_name && profile.address && profile.city && profile.phone) {
+        setShowAddressForm(false);
+        if (profile.city) {
+          fetchShippingRates(profile.city);
         }
-
-        if (data) {
-          setUserProfile(data);
-          setFormData(prev => ({
-            ...prev,
-            email: user.email || prev.email,
-            nama_lengkap: data.full_name || '',
-            no_telepon: data.phone || '',
-            alamat_pengiriman: data.address || '',
-            kota: data.city || '',
-            provinsi: data.province || ''
-          }));
-
-          // Profile lengkap, hide form
-          if (data.full_name && data.address && data.city && data.phone) {
-            setShowAddressForm(false);
-            // Auto fetch shipping rates
-            if (data.city) {
-              await fetchShippingRates(data.city);
-            }
-          } else {
-            setShowAddressForm(true);
-          }
-        }
-      } catch (error) {
-        console.error('Error:', error);
+      } else {
         setShowAddressForm(true);
       }
-    };
-
-    fetchUserProfile();
-  }, [user]);
+    } else if (!user) {
+      // If truly not logged in, ensure form is shown (though protected by route)
+      setShowAddressForm(true);
+    }
+  }, [profile, user]);
 
   const handleInputChange = async (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
 
     if (field === 'kota' && value.trim().length > 2) {
       await fetchShippingRates(value.trim());
+    }
+  };
+
+  const handleSaveAddress = async () => {
+    if (!formData.nama_lengkap || !formData.alamat_pengiriman || !formData.no_telepon || !formData.kota) {
+      toast.error('Harap lengkapi informasi pengiriman penting');
+      return;
+    }
+
+    try {
+      setSavingAddress(true);
+      const result = await updateProfile({
+        full_name: formData.nama_lengkap,
+        phone: formData.no_telepon,
+        address: formData.alamat_pengiriman,
+        city: formData.kota,
+        province: formData.provinsi
+      });
+
+      if (result.success !== false) {
+        toast.success('Alamat berhasil disimpan ke profil');
+        setShowAddressForm(false);
+      } else {
+        throw new Error(result.message || 'Gagal menyimpan alamat');
+      }
+    } catch (error) {
+      console.error('Save address error:', error);
+      toast.error('Gagal menyimpan alamat ke profil');
+    } finally {
+      setSavingAddress(false);
     }
   };
 
@@ -261,7 +280,7 @@ const Checkout = () => {
         status_pembayaran: 'unpaid',
         status_pengiriman: 'pending',
         metode_pembayaran: `tripay_${selectedPaymentMethod}`,
-        alamat_pengiriman: `${formData.alamat_pengiriman}, ${normalizedCity} ${formData.kode_pos}`,
+        alamat_pengiriman: `${formData.alamat_pengiriman}, ${normalizedCity}`,
         customer_name: formData.nama_lengkap,
         customer_email: formData.email,
         customer_phone: formData.no_telepon,
@@ -280,6 +299,7 @@ const Checkout = () => {
 
       // ✅ ADD PERSISTENT NOTIFICATION
       try {
+        // 1. Notif untuk pelanggan
         await supabase.from('notifications').insert({
           user_id: user.id,
           type: 'order',
@@ -288,8 +308,40 @@ const Checkout = () => {
           order_id: order.id,
           link: '/orders'
         });
+
+        // 2. Notif untuk Admin (Gunakan supabaseAdmin agar bypass RLS & Missing Profile)
+        try {
+          // Cari admin langsung dari auth users (listUsers perlu service role)
+          const { data: { users: allUsers }, error: authError } = await supabaseAdmin.auth.admin.listUsers();
+
+          if (!authError && allUsers) {
+            const admins = allUsers.filter(u =>
+              u.email === 'admin@example.com' ||
+              u.user_metadata?.role === 'admin'
+            );
+
+            if (admins.length > 0) {
+              const adminNotifs = admins.map(admin => ({
+                user_id: admin.id,
+                type: 'order',
+                title: 'Pesanan Baru Masuk! 🛒',
+                message: `Ada pesanan baru #${order.id} dari ${formData.nama_lengkap}.`,
+                order_id: order.id,
+                link: '/admin',
+                is_read: false
+              }));
+
+              await supabaseAdmin.from('notifications').insert(adminNotifs);
+              console.log('✅ Admin notified via supabaseAdmin');
+            }
+          } else {
+            console.error('⚠️ Error fetching admins:', authError);
+          }
+        } catch (adminErr) {
+          console.error('⚠️ Failed to notify admins:', adminErr);
+        }
       } catch (notifErr) {
-        console.error('⚠️ Failed to insert order notification:', notifErr);
+        console.error('⚠️ Failed to insert customer notification:', notifErr);
       }
 
       // Create order items
@@ -305,22 +357,6 @@ const Checkout = () => {
         .insert(orderItems);
 
       if (itemsError) throw itemsError;
-
-      // Update stock
-      for (const item of itemsToCheckout) {
-        const { data: product } = await supabase
-          .from('products')
-          .select('stok')
-          .eq('id', item.id)
-          .single();
-
-        if (product) {
-          await supabase
-            .from('products')
-            .update({ stok: product.stok - item.quantity })
-            .eq('id', item.id);
-        }
-      }
 
       // Create Tripay transaction
       const tripayItems = [
@@ -360,8 +396,8 @@ const Checkout = () => {
         customer_email: formData.email,
         customer_phone: formData.no_telepon,
         order_items: tripayItems,
-        callback_url: `https://${window.location.hostname}/api/tripay/webhook`,
-        return_url: `https://${window.location.hostname}/order-success`
+        callback_url: `${window.location.origin}/api/tripay/webhook`,
+        return_url: `${window.location.origin}/order-success`
       };
 
       const paymentResponse = await tripayService.createTransaction(tripayData);
@@ -463,7 +499,7 @@ const Checkout = () => {
                       <p className="text-sm text-gray-700 font-medium mb-1">{formData.no_telepon}</p>
                       <p className="text-sm text-gray-600">
                         {formData.alamat_pengiriman}<br />
-                        {formData.kota}, {formData.provinsi} {formData.kode_pos}
+                        {formData.kota}, {formData.provinsi}
                       </p>
                     </div>
                   </div>
@@ -520,16 +556,6 @@ const Checkout = () => {
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Kode Pos</label>
-                      <input
-                        type="text"
-                        value={formData.kode_pos}
-                        onChange={(e) => handleInputChange('kode_pos', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-green-500"
-                      />
-                    </div>
-
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2">Alamat Lengkap *</label>
                       <textarea
@@ -542,12 +568,41 @@ const Checkout = () => {
                     </div>
                   </div>
 
-                  {!showAddressForm && (
+                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={handleSaveAddress}
+                      disabled={savingAddress}
+                      className="flex-1 bg-green-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-green-700 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                    >
+                      {savingAddress ? 'Menyimpan...' : ' Simpan Alamat'}
+                    </button>
+                    {!profile && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAddressForm(false)}
+                        className="flex-1 bg-gray-100 text-gray-700 px-6 py-2.5 rounded-lg font-bold hover:bg-gray-200 transition-all active:scale-95"
+                      >
+                        Batal
+                      </button>
+                    )}
+                    {profile && !showAddressForm && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAddressForm(false)}
+                        className="flex-1 bg-gray-100 text-gray-700 px-6 py-2.5 rounded-lg font-bold hover:bg-gray-200 transition-all active:scale-95"
+                      >
+                        Ganti Alamat
+                      </button>
+                    )}
+                  </div>
+
+                  {userProfile && (
                     <button
                       onClick={() => setShowAddressForm(false)}
-                      className="text-gray-600 hover:text-gray-800 text-sm"
+                      className="text-gray-600 hover:text-gray-800 text-sm mt-2 flex items-center gap-1"
                     >
-                      ← Kembali
+                      ← Kembali ke Alamat Tersimpan
                     </button>
                   )}
                 </div>
@@ -560,7 +615,7 @@ const Checkout = () => {
                 <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
                   <span className="text-white font-bold text-sm">✓</span>
                 </div>
-                <h3 className="font-bold text-gray-900">Toko Tanaman</h3>
+                <h3 className="font-bold text-gray-900">Green House</h3>
               </div>
 
               {/* Product Items */}

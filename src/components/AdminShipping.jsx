@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseAdmin } from '../lib/supabase';
 import { toast } from 'react-toastify';
 import { formatCurrency } from '../utils/formatCurrency';
 
@@ -25,7 +25,7 @@ const AdminShipping = () => {
     const fetchShippingRates = async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
+            const { data, error } = await supabaseAdmin
                 .from('shipping_rates')
                 .select('*')
                 .order('city', { ascending: true });
@@ -100,7 +100,7 @@ const AdminShipping = () => {
             };
 
             if (editingRate) {
-                const { error } = await supabase
+                const { error } = await supabaseAdmin
                     .from('shipping_rates')
                     .update(payload)
                     .eq('id', editingRate.id);
@@ -108,7 +108,7 @@ const AdminShipping = () => {
                 if (error) throw error;
                 toast.success('Kurir berhasil diperbarui');
             } else {
-                const { error } = await supabase
+                const { error } = await supabaseAdmin
                     .from('shipping_rates')
                     .insert([payload]);
 
@@ -136,7 +136,7 @@ const AdminShipping = () => {
         if (!confirm('Yakin ingin menghapus kurir ini?')) return;
 
         try {
-            const { error } = await supabase
+            const { error } = await supabaseAdmin
                 .from('shipping_rates')
                 .delete()
                 .eq('id', id);
@@ -161,7 +161,7 @@ const AdminShipping = () => {
 
     const toggleActive = async (id, currentStatus) => {
         try {
-            const { error } = await supabase
+            const { error } = await supabaseAdmin
                 .from('shipping_rates')
                 .update({ is_active: !currentStatus })
                 .eq('id', id);
@@ -221,65 +221,67 @@ const AdminShipping = () => {
                         <p className="text-sm text-gray-400 mt-2">Tambahkan tarif pertama Anda di tab ini</p>
                     </div>
                 ) : (
-                    <table className="w-full">
-                        <thead className="bg-gray-50 border-b border-gray-100">
-                            <tr>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Provinsi</th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Kota</th>
-                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">Jumlah Kurir</th>
-                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">Rentang Harga</th>
-                                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {cityGroups.map((group, idx) => {
-                                const costs = group.rates.map(r => parseFloat(r.cost));
-                                const minCost = Math.min(...costs);
-                                const maxCost = Math.max(...costs);
-                                const activeCouriers = group.rates.filter(r => r.is_active).length;
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[640px]">
+                            <thead className="bg-gray-50 border-b border-gray-100">
+                                <tr>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Provinsi</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Kota</th>
+                                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">Jumlah Kurir</th>
+                                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">Rentang Harga</th>
+                                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {cityGroups.map((group, idx) => {
+                                    const costs = group.rates.map(r => parseFloat(r.cost));
+                                    const minCost = Math.min(...costs);
+                                    const maxCost = Math.max(...costs);
+                                    const activeCouriers = group.rates.filter(r => r.is_active).length;
 
-                                return (
-                                    <tr
-                                        key={idx}
-                                        className="hover:bg-gray-50 cursor-pointer transition-colors"
-                                        onClick={() => handleCityClick(group)}
-                                    >
-                                        <td className="px-6 py-4 text-sm text-gray-900">{group.province}</td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-semibold text-gray-900">{group.city}</span>
-                                                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                                                    {activeCouriers} aktif
+                                    return (
+                                        <tr
+                                            key={idx}
+                                            className="hover:bg-gray-50 cursor-pointer transition-colors"
+                                            onClick={() => handleCityClick(group)}
+                                        >
+                                            <td className="px-6 py-4 text-sm text-gray-900">{group.province}</td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-semibold text-gray-900">{group.city}</span>
+                                                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                                                        {activeCouriers} aktif
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
+                                                    {group.rates.length} kurir
                                                 </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
-                                                {group.rates.length} kurir
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-center text-sm font-semibold text-gray-900">
-                                            {minCost === maxCost
-                                                ? formatCurrency(minCost)
-                                                : `${formatCurrency(minCost)} - ${formatCurrency(maxCost)}`
-                                            }
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleCityClick(group);
-                                                }}
-                                                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
-                                            >
-                                                Detail Kurir →
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                                            </td>
+                                            <td className="px-6 py-4 text-center text-sm font-semibold text-gray-900">
+                                                {minCost === maxCost
+                                                    ? formatCurrency(minCost)
+                                                    : `${formatCurrency(minCost)} - ${formatCurrency(maxCost)}`
+                                                }
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleCityClick(group);
+                                                    }}
+                                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                                                >
+                                                    Detail Kurir →
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
             </div>
 

@@ -154,6 +154,7 @@ Terima kasih 🙏
 
       // 📟 INSERT PERSISTENT NOTIFICATION
       try {
+        // 1. Notif untuk pelanggan
         await supabase.from("notifications").insert({
           user_id: order.user_id,
           type: "payment",
@@ -162,7 +163,23 @@ Terima kasih 🙏
           order_id: order.id,
           link: "/orders"
         });
-        console.log("✅ Persistent notification inserted");
+
+        // 2. Notif untuk Admin (Semua Admin) - Pakai SERVICE ROLE agar bypass RLS
+        const { data: { users: allUsers } } = await supabase.auth.admin.listUsers();
+        const admins = allUsers.filter(u => u.email === 'admin@example.com' || u.user_metadata?.role === 'admin');
+
+        if (admins && admins.length > 0) {
+          const adminNotifs = admins.map(admin => ({
+            user_id: admin.id,
+            type: 'payment',
+            title: 'Pembayaran Diterima! 💰',
+            message: `Pesanan #${order.id} telah dibayar. Segera proses pengiriman!`,
+            order_id: order.id,
+            link: '/admin'
+          }));
+          await supabase.from('notifications').insert(adminNotifs);
+        }
+        console.log("✅ Persistent notifications inserted (Customer & Admin)");
       } catch (notifErr) {
         console.error("⚠️ Failed to insert notification:", notifErr.message);
       }

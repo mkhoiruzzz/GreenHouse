@@ -89,14 +89,12 @@ const Product = () => {
     }
   }, [categories, filters.category]);
 
-  // ✅ Fetch products saat filters berubah, tapi hindari infinite loop
+  // ✅ Fetch products saat filters berubah, tapi hindari double-fetch di awal
   useEffect(() => {
-    // Skip jika masih menunggu categories untuk konversi category name
+    // Jika masih menunggu konversi kategori dari URL, jangan fetch dulu agar tidak double
     if (filters.category && isNaN(Number(filters.category)) && categories.length === 0) {
       console.log('⏳ Waiting for categories to convert category name...');
-      // Tetap panggil fetchProducts jika kategori bukan ID agar tidak hang,
-      // tapi mungkin datanya belum terfilter kategori dengan benar.
-      // Sebaiknya tunggu categories, tapi pastikan categories coba di-fetch lagi jika gagal.
+      return;
     }
 
     fetchProducts();
@@ -400,7 +398,7 @@ const Product = () => {
 
 
             {/* Products Grid/List */}
-            {loading ? (
+            {loading && products.length === 0 ? (
               <div className={
                 viewMode === 'grid'
                   ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
@@ -411,11 +409,10 @@ const Product = () => {
                 ))}
               </div>
             ) : products.length > 0 ? (
-              <div className={
-                viewMode === 'grid'
-                  ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
-                  : "space-y-4"
-              }>
+              <div className={`transition-opacity duration-300 ${loading ? 'opacity-50' : 'opacity-100'} ${viewMode === 'grid'
+                ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+                : "space-y-4"
+                }`}>
                 {products.map((product) => (
                   <ProductCard
                     key={`${product.id}-${product.gambar_url}`}  // ✅ YANG BARU

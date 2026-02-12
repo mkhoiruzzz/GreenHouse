@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseAdmin } from '../lib/supabase';
 import { toast } from 'react-toastify';
 import { formatCurrency } from '../utils/formatCurrency';
 
@@ -7,6 +7,8 @@ const AdminRefunds = () => {
     const [refunds, setRefunds] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedProof, setSelectedProof] = useState(null);
+    const [selectedRefund, setSelectedRefund] = useState(null); // For Approval Modal
+    const [adminNote, setAdminNote] = useState('');
 
     useEffect(() => {
         fetchRefunds();
@@ -15,7 +17,7 @@ const AdminRefunds = () => {
     const fetchRefunds = async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
+            const { data, error } = await supabaseAdmin
                 .from('refunds')
                 .select(`
                     *,
@@ -34,18 +36,21 @@ const AdminRefunds = () => {
         }
     };
 
-    const handleUpdateStatus = async (id, newStatus, orderId) => {
+    const handleUpdateStatus = async (id, newStatus, orderId, note = '') => {
         try {
-            const { error: refundError } = await supabase
+            const updatePayload = { status: newStatus };
+            if (note) updatePayload.admin_note = note;
+
+            const { error: refundError } = await supabaseAdmin
                 .from('refunds')
-                .update({ status: newStatus })
+                .update(updatePayload)
                 .eq('id', id);
 
             if (refundError) throw refundError;
 
             // Optional: If approved, update order status to 'returned'
             if (newStatus === 'approved') {
-                const { error: orderError } = await supabase
+                const { error: orderError } = await supabaseAdmin
                     .from('orders')
                     .update({ status_pengiriman: 'returned' })
                     .eq('id', orderId);
@@ -56,6 +61,8 @@ const AdminRefunds = () => {
             }
 
             toast.success(`Permintaan refund berhasil di-${newStatus}`);
+            setSelectedRefund(null);
+            setAdminNote('');
             fetchRefunds();
 
             // ✅ Kirim notifikasi ke user via database
@@ -68,7 +75,7 @@ const AdminRefunds = () => {
                     type: 'refund',
                     title: isApproved ? 'Refund Disetujui ✅' : 'Refund Ditolak ❌',
                     message: isApproved
-                        ? `Pengajuan refund pesanan #${refundData.order_id} telah disetujui.`
+                        ? `Pengajuan refund pesanan #${refundData.order_id} telah disetujui.${note ? ` Catatan: ${note}` : ''}`
                         : `Mohon maaf, pengajuan refund pesanan #${refundData.order_id} ditolak.`,
                     order_id: refundData.order_id,
                     link: '/orders'
@@ -103,7 +110,7 @@ const AdminRefunds = () => {
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
+                    <table className="w-full min-w-[768px] text-sm text-left">
                         <thead className="bg-gray-50 border-b border-gray-100">
                             <tr>
                                 <th className="px-6 py-4 font-bold text-gray-600 uppercase">Pelanggan</th>
@@ -136,6 +143,11 @@ const AdminRefunds = () => {
                                         </td>
                                         <td className="px-6 py-4 max-w-xs">
                                             <p className="line-clamp-2 italic text-gray-600">"{refund.reason}"</p>
+                                            {refund.admin_note && (
+                                                <div className="mt-2 p-2 bg-blue-50 border border-blue-100 rounded text-[10px] text-blue-700">
+                                                    <strong>Catatan Admin:</strong> {refund.admin_note}
+                                                </div>
+                                            )}
                                             <div className="text-[10px] text-gray-400 mt-1">
                                                 Diajukan: {new Date(refund.created_at).toLocaleString('id-ID')}
                                             </div>
@@ -166,20 +178,26 @@ const AdminRefunds = () => {
                                             {refund.status === 'pending' ? (
                                                 <div className="flex gap-2 justify-center">
                                                     <button
-                                                        onClick={() => handleUpdateStatus(refund.id, 'approved', refund.order_id)}
-                                                        className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all title='Setujui'"
+                                                        onClick={() => setSelectedRefund(refund)}
+                                                        className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all"
+                                                        title="Setujui & Tambah Catatan"
                                                     >
                                                         ✅
                                                     </button>
                                                     <button
-                                                        onClick={() => handleUpdateStatus(refund.id, 'rejected', refund.order_id)}
-                                                        className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all title='Tolak'"
+                                                        onClick={() => {
+                                                            if (window.confirm('Tolak permintaan refund ini?')) {
+                                                                handleUpdateStatus(refund.id, 'rejected', refund.order_id);
+                                                            }
+                                                        }}
+                                                        className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all"
+                                                        title="Tolak"
                                                     >
                                                         ❌
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <span className="text-xs text-gray-400">Diproses</span>
+                                                <span className="text-xs text-gray-400">Tuntas</span>
                                             )}
                                         </td>
                                     </tr>
@@ -189,6 +207,48 @@ const AdminRefunds = () => {
                     </table>
                 </div>
             </div>
+
+            {/* Approval Modal with Admin Note */}
+            {selectedRefund && (
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
+                        <h4 className="text-lg font-bold mb-4 flex items-center gap-2">
+                            ✅ Setujui Pengembalian Dana
+                        </h4>
+                        <p className="text-sm text-gray-600 mb-4">
+                            Berikan bukti transfer atau catatan penyelesaian agar pelanggan tahu dana telah dikembalikan.
+                        </p>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Catatan Admin (Opsional)</label>
+                                <textarea
+                                    value={adminNote}
+                                    onChange={(e) => setAdminNote(e.target.value)}
+                                    className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-green-500 outline-none h-24"
+                                    placeholder="Contoh: Dana telah ditransfer ke BCA xxxx atau Ref: 123456"
+                                ></textarea>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        setSelectedRefund(null);
+                                        setAdminNote('');
+                                    }}
+                                    className="flex-1 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-all"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    onClick={() => handleUpdateStatus(selectedRefund.id, 'approved', selectedRefund.order_id, adminNote)}
+                                    className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-lg shadow-green-500/20 transition-all"
+                                >
+                                    Konfirmasi & Selesai
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Proof Lightbox */}
             {selectedProof && (

@@ -29,12 +29,17 @@ import TrackOrder from './pages/TrackOrder'
 const AppContent = () => {
   const location = useLocation();
   const isAdminPath = location.pathname.startsWith('/admin');
+  const isAuthPage = ['/login', '/register'].includes(location.pathname);
+  const isInvoicePage = location.pathname.startsWith('/invoice');
   const isNoFooterPage = ['/cart', '/checkout', '/order-success', '/orders', '/profile', '/contact', '/track'].includes(location.pathname);
+
+  const showNav = !isAdminPath && !isAuthPage && !isInvoicePage;
+  const showFooter = !isAdminPath && !isAuthPage && !isInvoicePage && !isNoFooterPage;
 
   return (
     <div className="App">
-      <Navbar />
-      <CartDrawer />
+      {showNav && <Navbar />}
+      {showNav && <CartDrawer />}
       <main className="min-h-screen flex flex-col">
         <Routes>
           <Route path="/" element={<Home />} />
@@ -57,7 +62,7 @@ const AppContent = () => {
           <Route path="/track" element={<TrackOrder />} />
         </Routes>
       </main>
-      {!isAdminPath && !isNoFooterPage && <Footer />}
+      {showFooter && <Footer />}
       <ToastContainer position="bottom-right" />
     </div>
   );

@@ -14,7 +14,7 @@ const ProductDetail = () => {
   const { addToCart } = useCart();
   const location = useLocation();
   const [product, setProduct] = useState(null);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isAdmin } = useAuth();
   const [relatedProducts, setRelatedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingRelated, setLoadingRelated] = useState(false);
@@ -389,25 +389,33 @@ const ProductDetail = () => {
                     </div>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <button
-                      onClick={handleBuyNow}
-                      disabled={product.stok === 0}
-                      className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-all duration-300 text-sm md:text-base flex items-center justify-center gap-2 ${product.stok === 0 ? 'bg-gray-400 cursor-not-allowed text-gray-200' : 'bg-orange-600 hover:bg-orange-700 text-white shadow-md'}`}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                      {product.stok === 0 ? 'Stok Habis' : 'Beli Sekarang'}
-                    </button>
+                  {!isAdmin ? (
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <button
+                        onClick={handleBuyNow}
+                        disabled={product.stok === 0}
+                        className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-all duration-300 text-sm md:text-base flex items-center justify-center gap-2 ${product.stok === 0 ? 'bg-gray-400 cursor-not-allowed text-gray-200' : 'bg-orange-600 hover:bg-orange-700 text-white shadow-md'}`}
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        {product.stok === 0 ? 'Stok Habis' : 'Beli Sekarang'}
+                      </button>
 
-                    <button
-                      onClick={handleAddToCart}
-                      disabled={product.stok === 0}
-                      className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-all duration-300 text-sm md:text-base flex items-center justify-center gap-2 border-2 ${product.stok === 0 ? 'bg-gray-400 cursor-not-allowed text-gray-200' : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'}`}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                      {product.stok === 0 ? 'Stok Habis' : 'Tambah ke Keranjang'}
-                    </button>
-                  </div>
+                      <button
+                        onClick={handleAddToCart}
+                        disabled={product.stok === 0}
+                        className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-all duration-300 text-sm md:text-base flex items-center justify-center gap-2 border-2 ${product.stok === 0 ? 'bg-gray-400 cursor-not-allowed text-gray-200' : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'}`}
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                        {product.stok === 0 ? 'Stok Habis' : 'Tambah ke Keranjang'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-full bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+                      <p className="text-amber-700 font-bold flex items-center justify-center gap-2">
+                        <span>🛡️</span> Anda masuk sebagai Admin. Fitur belanja dinonaktifkan.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -14,7 +14,7 @@ const CartDrawer = () => {
         updateCartQuantity,
         cartTotal
     } = useCart();
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, isAdmin } = useAuth();
     const navigate = useNavigate();
     const [recommendations, setRecommendations] = useState([]);
     const [loadingRecs, setLoadingRecs] = useState(false);
@@ -171,12 +171,20 @@ const CartDrawer = () => {
                                 </div>
                                 <p className="text-xs text-gray-500 mb-6 italic">Ongkos kirim dan pajak dihitung saat checkout.</p>
                                 <div className="space-y-3">
-                                    <button
-                                        onClick={handleCheckout}
-                                        className="w-full flex items-center justify-center rounded-xl border border-transparent bg-emerald-600 px-6 py-4 text-base font-bold text-white shadow-xl hover:bg-emerald-700 transition-all hover:scale-[1.02] active:scale-95 shadow-emerald-200"
-                                    >
-                                        Checkout Sekarang
-                                    </button>
+                                    {!isAdmin ? (
+                                        <button
+                                            onClick={handleCheckout}
+                                            className="w-full flex items-center justify-center rounded-xl border border-transparent bg-emerald-600 px-6 py-4 text-base font-bold text-white shadow-xl hover:bg-emerald-700 transition-all hover:scale-[1.02] active:scale-95 shadow-emerald-200"
+                                        >
+                                            Checkout Sekarang
+                                        </button>
+                                    ) : (
+                                        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-center">
+                                            <p className="text-amber-700 text-sm font-bold flex items-center justify-center gap-2">
+                                                <span>⚠️</span> Akun Admin tidak dapat belanja
+                                            </p>
+                                        </div>
+                                    )}
                                     <Link
                                         to="/cart"
                                         onClick={handleClose}

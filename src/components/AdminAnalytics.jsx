@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabaseAdmin } from '../lib/supabase';
 import { toast } from 'react-toastify';
 import { formatCurrency } from '../utils/formatCurrency';
 import {
@@ -45,7 +45,7 @@ const AdminAnalytics = () => {
             setLoading(true);
 
             // 1. Fetch ALL orders
-            const { data: allOrders, error: ordersError } = await supabase
+            const { data: allOrders, error: ordersError } = await supabaseAdmin
                 .from('orders')
                 .select('*')
                 .order('created_at', { ascending: true });
@@ -179,7 +179,7 @@ const AdminAnalytics = () => {
             }
 
             // --- PRODUCT ANALYTICS (Filtered by Range) ---
-            const { data: orderItems, error: itemsError } = await supabase
+            const { data: orderItems, error: itemsError } = await supabaseAdmin
                 .from('order_items')
                 .select(`
                   *,

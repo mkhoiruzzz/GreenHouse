@@ -27,6 +27,28 @@ const Navbar = () => {
   const { cartCount, toggleCartDrawer } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
+  const [showCart, setShowCart] = useState(true);
+
+  // Update cart visibility based on current path or user role
+  useEffect(() => {
+    if (location.pathname.startsWith('/admin') || isAdmin) {
+      setShowCart(false);
+    } else {
+      setShowCart(true);
+    }
+  }, [location.pathname, isAdmin]);
+
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
 
   // Close profile dropdown when clicking outside
   useEffect(() => {
@@ -89,7 +111,7 @@ const Navbar = () => {
   );
 
   return (
-    <nav className="bg-green-600/80 backdrop-blur-md text-white sticky top-0 w-full z-50 border-b border-white/10 shadow-lg transition-all duration-300">
+    <nav className="bg-green-600 text-white sticky top-0 w-full z-[100] border-b border-white/10 shadow-lg transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo dan Hamburger Button */}
@@ -97,17 +119,17 @@ const Navbar = () => {
             {/* Hamburger Button */}
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="md:hidden flex flex-col justify-center items-center w-10 h-10 rounded-lg hover:bg-white/10 transition duration-200"
+              className={`md:hidden flex flex-col justify-center items-center w-10 h-10 rounded-lg hover:bg-white/10 transition duration-200 relative z-[101] ${isOpen ? 'invisible' : ''}`}
               aria-label="Toggle menu"
             >
-              {isOpen ? <FiX className="text-2xl" /> : <FiMenu className="text-2xl" />}
+              <FiMenu className="text-2xl" />
             </button>
 
             {/* Logo */}
             <Link to="/" className="flex items-center space-x-2 text-xl md:text-2xl font-bold text-yellow-300 group">
               <span className="text-2xl group-hover:scale-110 transition-transform">🌱</span>
-              <span className="hidden sm:block tracking-tight">Toko Tanaman</span>
-              <span className="sm:hidden text-base">Toko Tanaman</span>
+              <span className="hidden sm:block tracking-tight">Green House</span>
+              <span className="sm:hidden text-base">Green House</span>
             </Link>
           </div>
 
@@ -139,18 +161,20 @@ const Navbar = () => {
             {isAuthenticated && <NotificationBell />}
 
             {/* Cart Indicator */}
-            <button
-              onClick={() => toggleCartDrawer(true)}
-              className="relative hover:text-yellow-300 transition duration-200 p-2"
-              aria-label="Keranjang Belanja"
-            >
-              <FiShoppingCart className="text-2xl" />
-              {cartCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
-                  {cartCount}
-                </span>
-              )}
-            </button>
+            {showCart && (
+              <button
+                onClick={() => toggleCartDrawer(true)}
+                className="relative hover:text-yellow-300 transition duration-200 p-2"
+                aria-label="Keranjang Belanja"
+              >
+                <FiShoppingCart className="text-2xl" />
+                {cartCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
+                    {cartCount}
+                  </span>
+                )}
+              </button>
+            )}
 
             {/* Profile Dropdown or Login Button */}
             {isAuthenticated ? (
@@ -190,14 +214,16 @@ const Navbar = () => {
                       <span>Profile Saya</span>
                     </Link>
 
-                    <Link
-                      to="/orders"
-                      className="flex items-center space-x-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-600 transition duration-150"
-                      onClick={() => setIsProfileOpen(false)}
-                    >
-                      <FiPackage className="text-lg" />
-                      <span>Pesanan Saya</span>
-                    </Link>
+                    {!isAdmin && (
+                      <Link
+                        to="/orders"
+                        className="flex items-center space-x-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-600 transition duration-150"
+                        onClick={() => setIsProfileOpen(false)}
+                      >
+                        <FiPackage className="text-lg" />
+                        <span>Pesanan Saya</span>
+                      </Link>
+                    )}
 
                     {isAdmin && (
                       <Link
@@ -237,13 +263,13 @@ const Navbar = () => {
         {/* Sidebar Overlay */}
         {isOpen && (
           <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-40"
+            className="fixed inset-0 bg-black bg-opacity-50 z-[90]"
             onClick={closeMenu}
           ></div>
         )}
 
         {/* Sidebar Panel */}
-        <div className={`fixed top-0 left-0 h-full w-80 bg-green-600/95 backdrop-blur-xl shadow-2xl transform transition-all duration-500 z-50 overflow-y-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'} border-r border-white/10`}>
+        <div className={`fixed top-0 left-0 h-full w-80 bg-green-600 shadow-2xl transform transition-all duration-500 z-[95] overflow-y-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'} border-r border-white/10`}>
           <div className="flex flex-col h-full">
             {/* HEADER SIDEBAR */}
             <div className="p-6 border-b border-white/10">
@@ -254,7 +280,7 @@ const Navbar = () => {
                   onClick={closeMenu}
                 >
                   <span className="group-hover:rotate-12 transition-transform duration-300">🌱</span>
-                  <span className="tracking-tight">Toko Tanaman</span>
+                  <span className="tracking-tight">Green House</span>
                 </Link>
                 <button
                   onClick={closeMenu}
@@ -292,7 +318,7 @@ const Navbar = () => {
               ) : (
                 <div className="text-center py-4">
                   <p className="text-green-200 mb-3">
-                    Selamat datang di Toko Tanaman
+                    Selamat datang di Green House
                   </p>
                   <div className="flex space-x-2">
                     <Link
@@ -367,9 +393,9 @@ const Navbar = () => {
             {/* FOOTER SIDEBAR */}
             <div className="p-4 border-t border-green-500">
               <div className="text-center text-green-200 text-sm">
-                <p>🌿 Toko Tanaman</p>
+                <p>🌿 Green House</p>
                 <p className="text-xs mt-1">
-                  Toko Tanaman Hias Terlengkap
+                  Green House Hias Terlengkap
                 </p>
               </div>
             </div>

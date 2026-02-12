@@ -7,7 +7,7 @@ import { toast } from 'react-toastify';
 
 const Cart = () => {
   const { cartItems, removeFromCart, updateCartQuantity, clearCart, cartTotal } = useCart();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [imageErrors, setImageErrors] = useState({});
 
@@ -207,12 +207,20 @@ const Cart = () => {
                 </div>
               </div>
 
-              <button
-                onClick={handleCheckout}
-                className="w-full bg-emerald-600 text-white py-2 rounded-lg font-semibold hover:bg-emerald-700 transition-all duration-300 mb-2 text-sm hover:shadow-lg"
-              >
-                🛒 Checkout
-              </button>
+              {!isAdmin ? (
+                <button
+                  onClick={handleCheckout}
+                  className="w-full bg-emerald-600 text-white py-2 rounded-lg font-semibold hover:bg-emerald-700 transition-all duration-300 mb-2 text-sm hover:shadow-lg"
+                >
+                  🛒 Checkout
+                </button>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center mb-2">
+                  <p className="text-amber-700 text-xs font-bold">
+                    ⚠️ Akun Admin tidak dapat melakukan checkout
+                  </p>
+                </div>
+              )}
 
               <button
                 onClick={() => navigate('/products')}

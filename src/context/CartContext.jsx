@@ -1,5 +1,6 @@
-// src/context/CartContext.jsx - ENHANCED FOR MOBILE
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
 const CartContext = createContext();
 
@@ -159,6 +160,122 @@ const initialState = {
 export const CartProvider = ({ children }) => {
   const [state, dispatch] = useReducer(cartReducer, initialState);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = React.useState(false);
+  const { user, isAuthenticated } = useAuth();
+  const isInitialMount = useRef(true);
+  const isSyncing = useRef(false);
+  const prevAuth = useRef(isAuthenticated);
+
+  // ✅ CLEAR CART ON LOGOUT
+  useEffect(() => {
+    // Detect transition from true to false (logout)
+    if (prevAuth.current && !isAuthenticated) {
+      console.log('🚪 Logout detected in CartContext, clearing cart...');
+      clearCart();
+    }
+    prevAuth.current = isAuthenticated;
+  }, [isAuthenticated]);
+
+  // ✅ SYNC WITH SUPABASE
+  useEffect(() => {
+    const syncCart = async () => {
+      if (!isAuthenticated || !user || isSyncing.current) return;
+
+      try {
+        isSyncing.current = true;
+        console.log('🔄 Syncing cart to Supabase...');
+
+        // 1. Delete existing items for user
+        await supabase
+          .from('cart_items')
+          .delete()
+          .eq('user_id', user.id);
+
+        // 2. Insert current local items
+        if (state.cartItems.length > 0) {
+          const itemsToSync = state.cartItems.map(item => ({
+            user_id: user.id,
+            product_id: item.id,
+            quantity: item.quantity
+          }));
+
+          const { error } = await supabase
+            .from('cart_items')
+            .insert(itemsToSync);
+
+          if (error) throw error;
+        }
+
+        console.log('✅ Cart synced to Supabase');
+      } catch (error) {
+        console.warn('⚠️ Sync to Supabase failed:', error.message);
+      } finally {
+        isSyncing.current = false;
+      }
+    };
+
+    // Debounce sync to avoid too many writes
+    if (!isInitialMount.current) {
+      const timeout = setTimeout(syncCart, 2000);
+      return () => clearTimeout(timeout);
+    }
+  }, [state.cartItems, user, isAuthenticated]);
+
+  // ✅ LOAD FROM SUPABASE ON LOGIN
+  useEffect(() => {
+    const loadFromSupabase = async () => {
+      if (!isAuthenticated || !user) return;
+
+      try {
+        console.log('📥 Loading cart from Supabase...');
+        const { data, error } = await supabase
+          .from('cart_items')
+          .select(`
+            quantity,
+            product_id,
+            products:product_id (*)
+          `)
+          .eq('user_id', user.id);
+
+        if (error) throw error;
+
+        if (data) {
+          const supabaseItems = data.map(item => ({
+            ...item.products,
+            quantity: item.quantity,
+            addedAt: new Date().toISOString()
+          }));
+
+          const mergedItems = [...state.cartItems];
+
+          supabaseItems.forEach(sItem => {
+            const index = mergedItems.findIndex(mItem => mItem.id === sItem.id);
+            if (index !== -1) {
+              mergedItems[index] = sItem;
+            } else {
+              mergedItems.push(sItem);
+            }
+          });
+
+          dispatch({ type: 'LOAD_CART', payload: mergedItems });
+          console.log(`✅ Cart loaded/merged from Supabase: ${mergedItems.length} items`);
+        } else {
+          // If no data in Supabase, we still want to set items (maybe keep local gas)
+          dispatch({ type: 'LOAD_CART', payload: state.cartItems });
+          console.log('✅ Supabase cart empty, keeping local items');
+        }
+      } catch (error) {
+        console.error('❌ Failed to load from Supabase:', error.message);
+      } finally {
+        isInitialMount.current = false;
+      }
+    };
+
+    if (isAuthenticated) {
+      loadFromSupabase();
+    } else {
+      isInitialMount.current = false;
+    }
+  }, [isAuthenticated]);
 
   // ✅ LOAD CART DARI STORAGE SAAT KOMPONEN MOUNT
   useEffect(() => {
@@ -252,22 +369,16 @@ export const CartProvider = ({ children }) => {
     console.log('✏️ Updated cart quantity:', productId, 'x', quantity);
   };
 
+  // ✅ CLEAR CART DARI STORAGE
   const clearCart = () => {
     dispatch({ type: 'CLEAR_CART' });
     storage.removeItem('plantique_cart');
     console.log('🛒 Cart cleared');
   };
 
+  // ✅ TOGGLE CART DRAWER
   const toggleCartDrawer = (isOpen) => {
     setIsCartDrawerOpen(prevState => isOpen !== undefined ? isOpen : !prevState);
-  };
-
-  const getCartTotal = () => {
-    return cartTotal;
-  };
-
-  const getCartCount = () => {
-    return cartCount;
   };
 
   return (
@@ -280,8 +391,6 @@ export const CartProvider = ({ children }) => {
       removeFromCart,
       updateCartQuantity,
       clearCart,
-      getCartTotal,
-      getCartCount,
       isCartDrawerOpen,
       toggleCartDrawer
     }}>

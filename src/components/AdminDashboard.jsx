@@ -1,6 +1,6 @@
 // AdminDashboard.jsx
 import React, { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { toast } from "react-toastify";
@@ -17,6 +17,7 @@ import AdminRefunds from "./AdminRefunds";
 const AdminDashboard = () => {
   const { user, logout, isAdmin, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [activeTab, setActiveTab] = useState("dashboard");
   const [products, setProducts] = useState([]);
@@ -31,6 +32,7 @@ const AdminDashboard = () => {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const emptyProduct = {
     nama_produk: "",
@@ -54,6 +56,15 @@ const AdminDashboard = () => {
       navigate("/", { replace: true });
     }
   }, [isAdmin, authLoading, navigate]);
+
+  // Handle URL query param for tab switching
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const tabParam = searchParams.get('tab');
+    if (tabParam) {
+      setActiveTab(tabParam);
+    }
+  }, [location.search]);
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -85,6 +96,18 @@ const AdminDashboard = () => {
       fetchCategories();
     }
   }, [fetchProducts, fetchCategories, isAdmin, authLoading]);
+
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isMobileMenuOpen]);
 
   if (authLoading) {
     return (
@@ -258,94 +281,154 @@ const AdminDashboard = () => {
     return sMatch && cMatch;
   });
 
+  const closeMobileMenu = () => setIsMobileMenuOpen(false);
+
   return (
-    <div className="min-h-screen bg-gray-50 flex font-sans">
-      <aside className="w-64 bg-white shadow-xl flex flex-col z-10 transition-all duration-300">
-        <div className="p-6 border-b border-gray-100 flex items-center justify-center">
+    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row font-sans">
+      {/* Mobile Navbar */}
+      <div className="md:hidden bg-white border-b border-gray-200 sticky top-0 z-[100] shadow-sm">
+        <div className="flex items-center justify-between px-4 py-3">
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors relative z-[101]"
+          >
+            <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <h1 className="text-lg font-bold text-green-700 flex items-center gap-2">
+            🌿 GreenHouse
+          </h1>
+          <div className="w-10"></div> {/* Spacer for centering */}
+        </div>
+      </div>
+
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-[90] md:hidden"
+          onClick={closeMobileMenu}
+        ></div>
+      )}
+
+      {/* Sidebar - Desktop & Mobile Drawer */}
+      <aside className={`
+        fixed md:static inset-y-0 left-0 z-[95]
+        w-64 bg-white shadow-xl flex flex-col
+        transform transition-transform duration-300 ease-in-out
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+      `}>
+        <div className="p-6 border-b border-gray-100 flex items-center justify-between md:justify-center">
           <h1 className="text-2xl font-bold text-green-700 tracking-tight flex items-center gap-2">
             🌿 GreenHouse
           </h1>
+          <button
+            onClick={closeMobileMenu}
+            className="md:hidden text-gray-500 hover:text-gray-700 text-2xl"
+          >
+            ✕
+          </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
-          <button
-            onClick={() => setActiveTab("dashboard")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "dashboard" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
-          >
+        <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-6">
+          {/* Section: Manajemen Utama */}
+          <div>
+            <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Manajemen Utama</p>
+            <div className="space-y-1">
+              <button
+                onClick={() => { setActiveTab("dashboard"); closeMobileMenu(); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "dashboard" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+              >
+                Dashboard
+              </button>
+              <button
+                onClick={() => { setActiveTab("analytics"); closeMobileMenu(); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "analytics" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+              >
+                Analitik
+              </button>
+              <button
+                onClick={() => { setActiveTab("products"); closeMobileMenu(); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "products" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+              >
+                Produk
+              </button>
+              <button
+                onClick={() => { setActiveTab("categories"); closeMobileMenu(); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "categories" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+              >
+                Kategori
+              </button>
+              <button
+                onClick={() => { setActiveTab("orders"); navigate('/admin?tab=orders'); closeMobileMenu(); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "orders" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+              >
+                Pesanan
+              </button>
+              <button
+                onClick={() => { setActiveTab("users"); closeMobileMenu(); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "users" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+              >
+                Pengguna
+              </button>
+            </div>
+          </div>
 
-            Dashboard
-          </button>
-          <button
-            onClick={() => setActiveTab("products")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "products" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
-          >
+          {/* Section: Operasional & Promosi */}
+          <div>
+            <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Operasional & Promosi</p>
+            <div className="space-y-1">
+              <button
+                onClick={() => { setActiveTab("shipping"); closeMobileMenu(); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "shipping" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+              >
+                Pengiriman
+              </button>
+              <button
+                onClick={() => { setActiveTab("vouchers"); closeMobileMenu(); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "vouchers" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+              >
+                Voucher
+              </button>
+              <button
+                onClick={() => { setActiveTab("refunds"); closeMobileMenu(); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "refunds" ? "bg-red-50 text-red-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
+              >
+                Retur & Refund
+              </button>
+            </div>
+          </div>
 
-            Produk
-          </button>
-          <button
-            onClick={() => setActiveTab("categories")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "categories" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
-          >
-
-            Kategori
-          </button>
-          <button
-            onClick={() => setActiveTab("orders")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "orders" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
-          >
-
-            Pesanan
-          </button>
-          <button
-            onClick={() => setActiveTab("users")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "users" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
-          >
-            Pengguna
-          </button>
-          <button
-            onClick={() => setActiveTab("analytics")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "analytics" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
-          >
-
-            Analitik
-          </button>
-          <button
-            onClick={() => setActiveTab("shipping")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "shipping" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
-          >
-
-            Pengiriman
-          </button>
-          <button
-            onClick={() => setActiveTab("vouchers")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "vouchers" ? "bg-green-50 text-green-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
-          >
-
-            Voucher
-          </button>
-          <button
-            onClick={() => setActiveTab("refunds")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${activeTab === "refunds" ? "bg-red-50 text-red-700 shadow-sm translate-x-1" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
-          >
-
-            Retur & Refund
-          </button>
+          {/* Section: Akun */}
+          <div className="pt-4 border-t border-gray-100">
+            <button
+              onClick={() => {
+                if (window.confirm("Apakah Anda yakin ingin keluar dari dashboard admin?")) {
+                  logout();
+                  navigate("/");
+                }
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-bold text-red-600 hover:bg-red-50"
+            >
+              <span>🚪 Logout</span>
+            </button>
+          </div>
         </nav>
       </aside>
 
-      <main className="flex-1 flex flex-col overflow-hidden h-screen">
-        <header className="bg-white border-b border-gray-200 px-8 py-4 flex justify-between items-center shadow-sm z-0">
+      <main className={`flex-1 flex flex-col overflow-hidden h-screen ${isMobileMenuOpen ? 'pointer-events-none md:pointer-events-auto' : ''}`}>
+        <header className="bg-white border-b border-gray-200 px-4 md:px-8 py-4 flex justify-between items-center shadow-sm">
           <div>
-            <h2 className="text-xl font-bold text-gray-800 capitalize">
+            <h2 className="text-lg md:text-xl font-bold text-gray-800 capitalize">
               {activeTab}
             </h2>
-            <p className="text-sm text-gray-500">
+            <p className="text-xs md:text-sm text-gray-500">
               Selamat datang kembali, Admin
             </p>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50">
           <div className="max-w-7xl mx-auto space-y-6">
             {activeTab === "dashboard" && <AdminOverview onSwitchTab={setActiveTab} />}
             {activeTab === "orders" && <AdminOrders />}
@@ -358,19 +441,19 @@ const AdminDashboard = () => {
 
             {activeTab === "products" && (
               <>
-                <div className="flex justify-between items-center mb-6">
-                  <div className="flex gap-4">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                  <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
                     <input
                       type="text"
                       placeholder="Cari produk..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="px-4 py-2 border rounded-lg text-sm w-64"
+                      className="px-4 py-2 border rounded-lg text-sm w-full md:w-64"
                     />
                     <select
                       value={filterCategory}
                       onChange={(e) => setFilterCategory(e.target.value)}
-                      className="px-4 py-2 border rounded-lg text-sm"
+                      className="px-4 py-2 border rounded-lg text-sm w-full md:w-auto"
                     >
                       <option value="">Semua Kategori</option>
                       {categories.map((c) => (
@@ -380,7 +463,7 @@ const AdminDashboard = () => {
                   </div>
                   <button
                     onClick={() => { setShowAddProduct(true); setShowEditProduct(false); setImagePreview(null); }}
-                    className="bg-green-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-green-700"
+                    className="bg-green-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-green-700 w-full md:w-auto"
                   >
                     + Tambah Produk
                   </button>
@@ -414,35 +497,37 @@ const AdminDashboard = () => {
                 )}
 
                 <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-gray-50 border-b">
-                        <th className="px-6 py-4 text-left font-semibold text-gray-500 uppercase">Produk</th>
-                        <th className="px-6 py-4 text-left font-semibold text-gray-500 uppercase">Harga</th>
-                        <th className="px-6 py-4 text-center font-semibold text-gray-500 uppercase">Stok</th>
-                        <th className="px-6 py-4 text-center font-semibold text-gray-500 uppercase">Aksi</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {filteredProducts.map((p) => (
-                        <tr key={p.id}>
-                          <td className="px-6 py-4 flex items-center gap-4">
-                            <img src={p.gambar_url} alt="" className="w-12 h-12 object-cover rounded" />
-                            <div>
-                              <p className="font-semibold">{p.nama_produk}</p>
-                              <p className="text-xs text-gray-500">{p.categories?.name_kategori}</p>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">Rp {Number(p.harga).toLocaleString()}</td>
-                          <td className="px-6 py-4 text-center">{p.stok}</td>
-                          <td className="px-6 py-4 text-center">
-                            <button onClick={() => { setEditProduct(p); setShowEditProduct(true); setImagePreview(p.gambar_url); }} className="text-blue-600 mr-2">✏️</button>
-                            <button onClick={() => handleDeleteProduct(p.id, p)} className="text-red-600">🗑️</button>
-                          </td>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[640px] text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 border-b">
+                          <th className="px-6 py-4 text-left font-semibold text-gray-500 uppercase">Produk</th>
+                          <th className="px-6 py-4 text-left font-semibold text-gray-500 uppercase">Harga</th>
+                          <th className="px-6 py-4 text-center font-semibold text-gray-500 uppercase">Stok</th>
+                          <th className="px-6 py-4 text-center font-semibold text-gray-500 uppercase">Aksi</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y">
+                        {filteredProducts.map((p) => (
+                          <tr key={p.id}>
+                            <td className="px-6 py-4 flex items-center gap-4">
+                              <img src={p.gambar_url} alt="" className="w-12 h-12 object-cover rounded" />
+                              <div>
+                                <p className="font-semibold">{p.nama_produk}</p>
+                                <p className="text-xs text-gray-500">{p.categories?.name_kategori}</p>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">Rp {Number(p.harga).toLocaleString()}</td>
+                            <td className="px-6 py-4 text-center">{p.stok}</td>
+                            <td className="px-6 py-4 text-center">
+                              <button onClick={() => { setEditProduct(p); setShowEditProduct(true); setImagePreview(p.gambar_url); }} className="text-blue-600 mr-2">✏️</button>
+                              <button onClick={() => handleDeleteProduct(p.id, p)} className="text-red-600">🗑️</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </>
             )}

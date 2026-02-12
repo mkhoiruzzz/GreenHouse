@@ -1,6 +1,6 @@
 // AdminOrders.jsx - Order Management untuk Admin
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseAdmin } from '../lib/supabase';
 import { toast } from 'react-toastify';
 import { formatCurrency } from '../utils/formatCurrency';
 
@@ -11,15 +11,17 @@ const AdminOrders = () => {
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [filterStatus, setFilterStatus] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
 
     useEffect(() => {
         fetchOrders();
-    }, [filterStatus]);
+    }, [filterStatus, startDate, endDate]);
 
     const fetchOrders = async () => {
         try {
             setLoading(true);
-            let query = supabase
+            let query = supabaseAdmin
                 .from('orders')
                 .select(`
           *,
@@ -37,6 +39,14 @@ const AdminOrders = () => {
                 query = query.eq('status_pembayaran', filterStatus);
             }
 
+            if (startDate) {
+                query = query.gte('created_at', `${startDate}T00:00:00`);
+            }
+
+            if (endDate) {
+                query = query.lte('created_at', `${endDate}T23:59:59`);
+            }
+
             const { data, error } = await query;
 
             if (error) throw error;
@@ -45,7 +55,7 @@ const AdminOrders = () => {
             const ordersWithUsers = await Promise.all(
                 (data || []).map(async (order) => {
                     try {
-                        const { data: userData } = await supabase
+                        const { data: userData } = await supabaseAdmin
                             .from('profiles')
                             .select('*')
                             .eq('id', order.user_id)
@@ -104,6 +114,39 @@ const AdminOrders = () => {
             }
 
             toast.success(`Status ${field === 'status_pembayaran' ? 'Pembayaran' : 'Pengiriman'} diperbarui ke: ${getStatusLabel(value)}`);
+
+            // ✅ REDUCE STOCK IF PAID (For Manual/System Updates)
+            if (field === 'status_pembayaran' && (value === 'paid' || value === 'lunas')) {
+                const orderToUpdate = orders.find(o => o.id === orderId) || selectedOrder;
+
+                // Only reduce if it wasn't already paid to prevent double reduction
+                if (orderToUpdate && orderToUpdate.status_pembayaran !== 'paid' && orderToUpdate.status_pembayaran !== 'lunas') {
+                    console.log('📦 Reducing stock for order items (Admin Update)...');
+                    const { data: items } = await supabaseAdmin
+                        .from('order_items')
+                        .select('product_id, quantity')
+                        .eq('order_id', orderId);
+
+                    if (items) {
+                        for (const item of items) {
+                            const { data: product } = await supabaseAdmin
+                                .from('products')
+                                .select('stok')
+                                .eq('id', item.product_id)
+                                .single();
+
+                            if (product) {
+                                await supabaseAdmin
+                                    .from('products')
+                                    .update({ stok: Math.max(0, product.stok - item.quantity) })
+                                    .eq('id', item.product_id);
+                            }
+                        }
+                        console.log('✅ Stock reduction completed from Admin Dashboard');
+                    }
+                }
+            }
+
             fetchOrders();
 
             // ✅ Kirim notifikasi ke user via database
@@ -255,23 +298,63 @@ const AdminOrders = () => {
             {/* Filters */}
             <div className="bg-white rounded-xl shadow-md p-4 border border-gray-100">
                 <div className="flex flex-col md:flex-row gap-4">
-                    <input
-                        type="text"
-                        placeholder="🔍 Cari pesanan (nama, email, reference)..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white text-gray-900"
-                    />
-                    <select
-                        value={filterStatus}
-                        onChange={(e) => setFilterStatus(e.target.value)}
-                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white text-gray-900"
-                    >
-                        <option value="all">Semua Status</option>
-                        <option value="paid">Telah Dibayar</option>
-                        <option value="unpaid">Belum Bayar</option>
-                        <option value="expired">Kedaluwarsa</option>
-                    </select>
+                    <div className="flex-1 flex flex-col">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 tracking-wider">Pencarian</label>
+                        <input
+                            type="text"
+                            placeholder="Cari nama, email, reference..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white text-sm text-gray-900"
+                        />
+                    </div>
+                    <div className="flex flex-col">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 tracking-wider">Status</label>
+                        <select
+                            value={filterStatus}
+                            onChange={(e) => setFilterStatus(e.target.value)}
+                            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white text-sm text-gray-900 outline-none"
+                        >
+                            <option value="all">Semua Status</option>
+                            <option value="paid">Telah Dibayar</option>
+                            <option value="unpaid">Belum Bayar</option>
+                            <option value="expired">Kedaluwarsa</option>
+                        </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <div className="flex flex-col">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Dari</label>
+                            <input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white text-sm"
+                            />
+                        </div>
+                        <div className="flex flex-col">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Sampai</label>
+                            <input
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white text-sm"
+                            />
+                        </div>
+                        {(filterStatus !== 'all' || searchTerm || startDate || endDate) && (
+                            <button
+                                onClick={() => {
+                                    setFilterStatus('all');
+                                    setSearchTerm('');
+                                    setStartDate('');
+                                    setEndDate('');
+                                }}
+                                className="mt-4 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 underline flex items-center gap-1"
+                            >
+                                <span>🔄</span> Reset
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -292,7 +375,7 @@ const AdminOrders = () => {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full">
+                        <table className="w-full min-w-[640px]">
                             <thead className="bg-gray-50">
                                 <tr>
                                     <th className="p-4 text-left text-sm font-bold text-gray-700">ID</th>

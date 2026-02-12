@@ -9,7 +9,6 @@ const ProductCard = ({ product, viewMode }) => {
   const [currentImageUrl, setCurrentImageUrl] = useState(urlFromProduct);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const [isLoading, setIsLoading] = useState(!!urlFromProduct);
 
   const loadingTimeoutRef = useRef(null);
 
@@ -37,23 +36,7 @@ const ProductCard = ({ product, viewMode }) => {
     if (newImageUrl !== currentImageUrl) {
       setImageLoaded(false);
       setImageError(false);
-      setIsLoading(true);
       setCurrentImageUrl(newImageUrl);
-
-      loadingTimeoutRef.current = setTimeout(() => {
-        setIsLoading(false);
-        if (!imageLoaded && !imageError) {
-          setImageLoaded(true);
-        }
-      }, 5000);
-    } else if (isLoading) {
-      // If URL is same but still loading (e.g. initial mount with URL), start timeout
-      loadingTimeoutRef.current = setTimeout(() => {
-        setIsLoading(false);
-        if (!imageLoaded && !imageError) {
-          setImageLoaded(true);
-        }
-      }, 5000);
     }
 
     return () => {
@@ -137,7 +120,6 @@ const ProductCard = ({ product, viewMode }) => {
   const handleImageLoad = () => {
     setImageLoaded(true);
     setImageError(false);
-    setIsLoading(false);
 
     // Clear timeout since image loaded successfully
     if (loadingTimeoutRef.current) {
@@ -148,7 +130,6 @@ const ProductCard = ({ product, viewMode }) => {
   const handleImageError = () => {
     setImageError(true);
     setImageLoaded(false);
-    setIsLoading(false);
 
     // Clear timeout
     if (loadingTimeoutRef.current) {
@@ -169,21 +150,11 @@ const ProductCard = ({ product, viewMode }) => {
 
     return (
       <div className="relative w-full h-full">
-        {/* ✅ SKELETON: Hanya tampil jika isLoading = true */}
-        {isLoading && !imageLoaded && !imageError && (
-          <div className="absolute inset-0 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center z-10">
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
-              <span className="text-xs text-gray-500">Loading...</span>
-            </div>
-          </div>
-        )}
-
-        {/* ✅ IMAGE: Selalu render, tapi atur opacity */}
+        {/* ✅ IMAGE: Selalu render, atur opacity untuk transisi smooth */}
         <img
           src={imageUrl}
           alt={product.nama_produk || 'Gambar produk'}
-          className={`w-full h-full object-cover rounded-lg transition-all duration-500 ${imageLoaded || !isLoading ? 'opacity-100' : 'opacity-0'
+          className={`w-full h-full object-cover rounded-lg transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-70'
             } hover:scale-105`}
           onLoad={handleImageLoad}
           onError={handleImageError}
