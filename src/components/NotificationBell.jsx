@@ -84,7 +84,7 @@ const NotificationBell = () => {
                 id: `vouch-${v.id}`,
                 user_id: user.id,
                 type: 'voucher',
-                title: 'Voucher Baru! ',
+                title: 'Voucher Baru! 🏷️',
                 message: `Gunakan kode ${v.code} untuk diskon ${v.discount_type === 'percentage' ? v.amount + '%' : 'Rp ' + v.amount.toLocaleString()}.`,
                 link: '/products',
                 is_read: false, // Will be calculated by timestamp

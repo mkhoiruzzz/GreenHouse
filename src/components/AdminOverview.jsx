@@ -22,7 +22,7 @@ const AdminOverview = ({ onSwitchTab }) => {
         try {
             setLoading(true);
 
-            // 1. Fetch Orders for Revenue and Recent Activities
+     
             const { data: orders, error: ordersError } = await supabase
                 .from("orders")
                 .select("*")

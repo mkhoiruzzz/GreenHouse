@@ -28,7 +28,6 @@ const ProductCard = ({ product, viewMode }) => {
     if (!newImageUrl) {
       setImageLoaded(false);
       setImageError(true);
-      setIsLoading(false);
       setCurrentImageUrl('');
       return;
     }

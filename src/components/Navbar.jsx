@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { supabase } from '../lib/supabase';
 import NotificationBell from './NotificationBell';
 import {
   FiHome,
@@ -22,7 +23,13 @@ const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const profileRef = useRef(null);
+  const searchRef = useRef(null);
+  const mobileSearchRef = useRef(null);
   const { user, profile, logout, isAuthenticated, isAdmin } = useAuth();
   const { cartCount, toggleCartDrawer } = useCart();
   const navigate = useNavigate();
@@ -56,10 +63,64 @@ const Navbar = () => {
       if (profileRef.current && !profileRef.current.contains(event.target)) {
         setIsProfileOpen(false);
       }
+
+      const isOutsideDesktop = !searchRef.current || !searchRef.current.contains(event.target);
+      const isOutsideMobile = !mobileSearchRef.current || !mobileSearchRef.current.contains(event.target);
+
+      if (isOutsideDesktop && isOutsideMobile) {
+        setShowSearchDropdown(false);
+        // Do not close the mobile search overlay entirely, just the dropdown results
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Debounced live search
+  useEffect(() => {
+    if (!searchQuery.trim() || searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      setShowSearchDropdown(false);
+      setIsSearching(false);
+      return;
+    }
+
+    // Show dropdown immediately with loading state
+    setShowSearchDropdown(true);
+    setIsSearching(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .select(`
+            id,
+            nama_produk,
+            harga,
+            gambar_url,
+            categories:categories(name_kategori)
+          `)
+          .ilike('nama_produk', `%${searchQuery.trim()}%`)
+          .limit(6);
+
+        if (error) {
+          console.error('Search error:', error);
+          setSearchResults([]);
+        } else {
+          setSearchResults(data || []);
+        }
+      } catch (err) {
+        console.error('Search error:', err);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 350);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
 
   // Sync search input with URL search parameter
   useEffect(() => {
@@ -88,12 +149,19 @@ const Navbar = () => {
 
   const handleSearch = (e) => {
     e.preventDefault();
+    setShowSearchDropdown(false);
     if (searchQuery.trim()) {
       navigate(`/products?search=${encodeURIComponent(searchQuery.trim())}`);
     } else {
-      // If search is empty, go to base products page to clear search filter
       navigate('/products');
     }
+  };
+
+  const handleResultClick = (productId) => {
+    setShowSearchDropdown(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    navigate(`/product/${productId}`);
   };
 
   const isActive = (path) => location.pathname === path;
@@ -118,7 +186,12 @@ const Navbar = () => {
           <div className="flex items-center space-x-4">
             {/* Hamburger Button */}
             <button
-              onClick={() => setIsOpen(!isOpen)}
+              onClick={() => {
+                setIsOpen(!isOpen);
+                if (!isOpen) {
+                  setIsMobileSearchOpen(false); // Close search if opening sidebar
+                }
+              }}
               className={`md:hidden flex flex-col justify-center items-center w-10 h-10 rounded-lg hover:bg-white/10 transition duration-200 relative z-[101] ${isOpen ? 'invisible' : ''}`}
               aria-label="Toggle menu"
             >
@@ -143,38 +216,214 @@ const Navbar = () => {
 
           {/* Right Side Controls */}
           <div className="flex items-center space-x-2 md:space-x-4">
-            {/* Search Bar */}
-            <form onSubmit={handleSearch} className="hidden lg:block relative group">
-              <input
-                type="text"
-                placeholder="Cari tanaman..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-white/10 text-white text-sm rounded-full py-1.5 pl-4 pr-10 w-32 focus:w-56 transition-all duration-500 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 placeholder-green-100/50 backdrop-blur-sm border border-white/10"
-              />
-              <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-green-100/70 group-focus-within:text-yellow-300 transition-colors">
-                <FiSearch />
-              </button>
-            </form>
+            {/* Search Bar with Autocomplete */}
+            <div ref={searchRef} className="hidden lg:block relative">
+              <form onSubmit={handleSearch} className="relative group">
+                <input
+                  type="text"
+                  placeholder="Cari tanaman..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => searchResults.length > 0 && setShowSearchDropdown(true)}
+                  className="bg-white/10 text-white text-sm rounded-full py-1.5 pl-4 pr-10 w-32 focus:w-64 transition-all duration-500 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 placeholder-green-100/50 backdrop-blur-sm border border-white/10"
+                />
+                <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-green-100/70 group-focus-within:text-yellow-300 transition-colors">
+                  {isSearching
+                    ? <span className="w-4 h-4 border-2 border-yellow-300/50 border-t-yellow-300 rounded-full animate-spin inline-block" />
+                    : <FiSearch />}
+                </button>
+              </form>
+
+              {/* Search Dropdown — tampil saat mengetik */}
+              {(showSearchDropdown || isSearching) && searchQuery.trim().length >= 1 && (
+                <div className="absolute top-full mt-2 right-0 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden" style={{ zIndex: 9999 }}>
+
+                  {/* Loading state */}
+                  {isSearching && (
+                    <div className="px-4 py-6 flex items-center justify-center gap-2 text-gray-400">
+                      <span className="w-4 h-4 border-2 border-green-300 border-t-green-600 rounded-full animate-spin" />
+                      <span className="text-sm">Mencari produk...</span>
+                    </div>
+                  )}
+
+                  {/* Results */}
+                  {!isSearching && searchResults.length > 0 && (
+                    <>
+                      <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between">
+                        <p className="text-xs text-gray-400 font-medium">Hasil Pencarian</p>
+                        <p className="text-xs text-green-600 font-semibold">{searchResults.length} produk</p>
+                      </div>
+
+                      <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
+                        {searchResults.map((product) => (
+                          <button
+                            key={product.id}
+                            onClick={() => handleResultClick(product.id)}
+                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-green-50 transition-colors duration-150 text-left group"
+                          >
+                            {/* Product Image */}
+                            <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0 border border-gray-200">
+                              <img
+                                src={product.gambar_url}
+                                alt={product.nama_produk}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = 'https://placehold.co/48x48/4ade80/ffffff?text=No+Img';
+                                }}
+                              />
+                            </div>
+
+                            {/* Product Info */}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-gray-800 truncate group-hover:text-green-700">
+                                {product.nama_produk}
+                              </p>
+                              <p className="text-xs text-gray-400 truncate">
+                                {product.categories?.name_kategori || 'Tanaman'}
+                              </p>
+                              <p className="text-xs font-bold text-green-600 mt-0.5">
+                                {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(product.harga)}
+                              </p>
+                            </div>
+
+                            <span className="text-gray-300 group-hover:text-green-500 transition-colors text-lg flex-shrink-0">›</span>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* See All */}
+                      <button
+                        onClick={() => { setShowSearchDropdown(false); navigate(`/products?search=${encodeURIComponent(searchQuery.trim())}`); }}
+                        className="w-full px-4 py-3 text-sm text-center text-green-600 font-semibold hover:bg-green-50 border-t border-gray-100 transition-colors"
+                      >
+                        Lihat semua hasil untuk &ldquo;{searchQuery}&rdquo;
+                      </button>
+                    </>
+                  )}
+
+                  {/* No results */}
+                  {!isSearching && searchResults.length === 0 && showSearchDropdown && (
+                    <div className="px-4 py-6 text-center">
+                      <p className="text-2xl mb-1">🌱</p>
+                      <p className="text-sm text-gray-500">Produk tidak ditemukan</p>
+                      <p className="text-xs text-gray-400 mt-1">Coba kata kunci lain</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Notification Bell */}
             {isAuthenticated && <NotificationBell />}
 
-            {/* Cart Indicator */}
-            {showCart && (
+            {/* Mobile Search Toggle Icon */}
+            <div className="lg:hidden" ref={mobileSearchRef}>
               <button
-                onClick={() => toggleCartDrawer(true)}
-                className="relative hover:text-yellow-300 transition duration-200 p-2"
-                aria-label="Keranjang Belanja"
+                onClick={() => {
+                  setIsMobileSearchOpen(!isMobileSearchOpen);
+                  if (!isMobileSearchOpen) {
+                    setIsOpen(false); // Close sidebar if opening search
+                  }
+                }}
+                className="p-2 text-white hover:text-yellow-300 transition-colors rounded-full"
+                aria-label="Toggle mobile search"
               >
-                <FiShoppingCart className="text-2xl" />
-                {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
-                    {cartCount}
-                  </span>
-                )}
+                {isMobileSearchOpen ? <FiX className="text-xl" /> : <FiSearch className="text-xl" />}
               </button>
-            )}
+
+              {/* Mobile Search Popup Overlay */}
+              {isMobileSearchOpen && (
+                <div className="absolute top-16 left-0 w-full bg-green-600 shadow-xl border-t border-white/10 p-4 z-[105]">
+                  <form onSubmit={(e) => { handleSearch(e); setIsMobileSearchOpen(false); }} className="relative">
+                    <input
+                      type="text"
+                      autoFocus
+                      placeholder="Cari tanaman..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onFocus={() => searchResults.length > 0 && setShowSearchDropdown(true)}
+                      className="w-full bg-white/10 text-white text-sm rounded-xl py-3 pl-4 pr-12 focus:outline-none focus:ring-2 focus:ring-yellow-300/50 placeholder-green-100/50 backdrop-blur-sm border border-white/20"
+                    />
+                    <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-white p-2">
+                      {isSearching
+                        ? <span className="w-5 h-5 border-2 border-yellow-300/50 border-t-yellow-300 rounded-full animate-spin inline-block" />
+                        : <FiSearch className="text-lg" />}
+                    </button>
+                  </form>
+
+                  {/* Mobile Search Dropdown in Popup */}
+                  {(showSearchDropdown || isSearching) && searchQuery.trim().length >= 1 && (
+                    <div className="mt-2 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden max-h-[calc(100vh-140px)] flex flex-col">
+
+                      {/* Loading */}
+                      {isSearching && (
+                        <div className="px-4 py-6 flex items-center justify-center gap-2 text-gray-400">
+                          <span className="w-4 h-4 border-2 border-green-300 border-t-green-600 rounded-full animate-spin" />
+                          <span className="text-sm">Mencari...</span>
+                        </div>
+                      )}
+
+                      {/* Results */}
+                      {!isSearching && searchResults.length > 0 && (
+                        <>
+                          <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+                            <p className="text-xs text-gray-400 font-medium">Hasil Pencarian</p>
+                            <p className="text-xs text-green-600 font-semibold">{searchResults.length} produk</p>
+                          </div>
+
+                          <div className="overflow-y-auto divide-y divide-gray-50 flex-1">
+                            {searchResults.map((product) => (
+                              <button
+                                key={product.id}
+                                onClick={() => { handleResultClick(product.id); setIsMobileSearchOpen(false); }}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-green-50 transition-colors text-left group"
+                              >
+                                <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0 border border-gray-200">
+                                  <img
+                                    src={product.gambar_url}
+                                    alt={product.nama_produk}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                    onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/48x48/4ade80/ffffff?text=No+Img'; }}
+                                  />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-gray-800 truncate group-hover:text-green-700">{product.nama_produk}</p>
+                                  <p className="text-xs text-gray-400 truncate">
+                                    {product.categories?.name_kategori || 'Tanaman'}
+                                  </p>
+                                  <p className="text-xs font-bold text-green-600 mt-0.5">
+                                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(product.harga)}
+                                  </p>
+                                </div>
+                                <span className="text-gray-300 group-hover:text-green-500 transition-colors text-lg flex-shrink-0">›</span>
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            onClick={() => { setShowSearchDropdown(false); navigate(`/products?search=${encodeURIComponent(searchQuery.trim())}`); setIsMobileSearchOpen(false); }}
+                            className="w-full px-4 py-3 text-sm text-center text-green-600 font-semibold hover:bg-green-50 border-t border-gray-100 transition-colors flex-shrink-0"
+                          >
+                            Lihat semua hasil untuk &ldquo;{searchQuery}&rdquo;
+                          </button>
+                        </>
+                      )}
+
+                      {/* No results */}
+                      {!isSearching && searchResults.length === 0 && showSearchDropdown && (
+                        <div className="px-4 py-8 text-center flex-shrink-0">
+                          <p className="text-3xl mb-2">🌱</p>
+                          <p className="text-sm text-gray-500">Produk tidak ditemukan</p>
+                          <p className="text-xs text-gray-400 mt-1">Coba kata kunci lain</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+
 
             {/* Profile Dropdown or Login Button */}
             {isAuthenticated ? (
@@ -215,14 +464,31 @@ const Navbar = () => {
                     </Link>
 
                     {!isAdmin && (
-                      <Link
-                        to="/orders"
-                        className="flex items-center space-x-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-600 transition duration-150"
-                        onClick={() => setIsProfileOpen(false)}
-                      >
-                        <FiPackage className="text-lg" />
-                        <span>Pesanan Saya</span>
-                      </Link>
+                      <>
+                        <button
+                          onClick={() => { toggleCartDrawer(true); setIsProfileOpen(false); }}
+                          className="flex items-center space-x-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-600 transition duration-150"
+                        >
+                          <span className="relative">
+                            <FiShoppingCart className="text-lg" />
+                            {cartCount > 0 && (
+                              <span className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">
+                                {cartCount}
+                              </span>
+                            )}
+                          </span>
+                          <span>Keranjang Saya</span>
+                        </button>
+
+                        <Link
+                          to="/orders"
+                          className="flex items-center space-x-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-600 transition duration-150"
+                          onClick={() => setIsProfileOpen(false)}
+                        >
+                          <FiPackage className="text-lg" />
+                          <span>Pesanan Saya</span>
+                        </Link>
+                      </>
                     )}
 
                     {isAdmin && (
@@ -339,6 +605,8 @@ const Navbar = () => {
                 </div>
               )}
             </div>
+
+
 
             {/* MENU NAVIGASI */}
             <div className="flex-1 p-4 space-y-2">
